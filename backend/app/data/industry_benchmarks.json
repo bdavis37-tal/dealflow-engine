@@ -1,0 +1,222 @@
+{
+  "Software / SaaS": {
+    "typical_ebitda_margin": 0.22,
+    "typical_gross_margin": 0.72,
+    "typical_sga_pct_revenue": 0.35,
+    "typical_working_capital_pct_revenue": -0.05,
+    "typical_capex_pct_revenue": 0.03,
+    "typical_da_pct_revenue": 0.05,
+    "ev_ebitda_multiple_range": { "low": 12, "median": 20, "high": 35 },
+    "typical_revenue_growth_rate": 0.18,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Healthcare Services": {
+    "typical_ebitda_margin": 0.14,
+    "typical_gross_margin": 0.38,
+    "typical_sga_pct_revenue": 0.18,
+    "typical_working_capital_pct_revenue": 0.08,
+    "typical_capex_pct_revenue": 0.04,
+    "typical_da_pct_revenue": 0.04,
+    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
+    "typical_revenue_growth_rate": 0.08,
+    "typical_debt_capacity_turns_ebitda": 4.5
+  },
+  "Manufacturing": {
+    "typical_ebitda_margin": 0.12,
+    "typical_gross_margin": 0.28,
+    "typical_sga_pct_revenue": 0.12,
+    "typical_working_capital_pct_revenue": 0.15,
+    "typical_capex_pct_revenue": 0.05,
+    "typical_da_pct_revenue": 0.05,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
+    "typical_revenue_growth_rate": 0.04,
+    "typical_debt_capacity_turns_ebitda": 4.0
+  },
+  "Professional Services / Consulting": {
+    "typical_ebitda_margin": 0.18,
+    "typical_gross_margin": 0.55,
+    "typical_sga_pct_revenue": 0.25,
+    "typical_working_capital_pct_revenue": 0.12,
+    "typical_capex_pct_revenue": 0.02,
+    "typical_da_pct_revenue": 0.02,
+    "ev_ebitda_multiple_range": { "low": 7, "median": 10, "high": 15 },
+    "typical_revenue_growth_rate": 0.07,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "HVAC / Mechanical Contracting": {
+    "typical_ebitda_margin": 0.10,
+    "typical_gross_margin": 0.30,
+    "typical_sga_pct_revenue": 0.16,
+    "typical_working_capital_pct_revenue": 0.08,
+    "typical_capex_pct_revenue": 0.03,
+    "typical_da_pct_revenue": 0.03,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 7, "high": 10 },
+    "typical_revenue_growth_rate": 0.05,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Construction": {
+    "typical_ebitda_margin": 0.08,
+    "typical_gross_margin": 0.20,
+    "typical_sga_pct_revenue": 0.10,
+    "typical_working_capital_pct_revenue": 0.05,
+    "typical_capex_pct_revenue": 0.04,
+    "typical_da_pct_revenue": 0.04,
+    "ev_ebitda_multiple_range": { "low": 4, "median": 6, "high": 9 },
+    "typical_revenue_growth_rate": 0.04,
+    "typical_debt_capacity_turns_ebitda": 3.0
+  },
+  "Restaurants / Food Service": {
+    "typical_ebitda_margin": 0.13,
+    "typical_gross_margin": 0.65,
+    "typical_sga_pct_revenue": 0.40,
+    "typical_working_capital_pct_revenue": -0.03,
+    "typical_capex_pct_revenue": 0.04,
+    "typical_da_pct_revenue": 0.05,
+    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
+    "typical_revenue_growth_rate": 0.04,
+    "typical_debt_capacity_turns_ebitda": 4.5
+  },
+  "Retail": {
+    "typical_ebitda_margin": 0.09,
+    "typical_gross_margin": 0.35,
+    "typical_sga_pct_revenue": 0.24,
+    "typical_working_capital_pct_revenue": 0.06,
+    "typical_capex_pct_revenue": 0.03,
+    "typical_da_pct_revenue": 0.03,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
+    "typical_revenue_growth_rate": 0.03,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Financial Services": {
+    "typical_ebitda_margin": 0.28,
+    "typical_gross_margin": 0.70,
+    "typical_sga_pct_revenue": 0.35,
+    "typical_working_capital_pct_revenue": 0.02,
+    "typical_capex_pct_revenue": 0.02,
+    "typical_da_pct_revenue": 0.02,
+    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
+    "typical_revenue_growth_rate": 0.07,
+    "typical_debt_capacity_turns_ebitda": 3.0
+  },
+  "Oil & Gas Services": {
+    "typical_ebitda_margin": 0.16,
+    "typical_gross_margin": 0.35,
+    "typical_sga_pct_revenue": 0.12,
+    "typical_working_capital_pct_revenue": 0.12,
+    "typical_capex_pct_revenue": 0.08,
+    "typical_da_pct_revenue": 0.10,
+    "ev_ebitda_multiple_range": { "low": 4, "median": 7, "high": 11 },
+    "typical_revenue_growth_rate": 0.05,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Transportation / Logistics": {
+    "typical_ebitda_margin": 0.11,
+    "typical_gross_margin": 0.25,
+    "typical_sga_pct_revenue": 0.10,
+    "typical_working_capital_pct_revenue": 0.04,
+    "typical_capex_pct_revenue": 0.06,
+    "typical_da_pct_revenue": 0.07,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
+    "typical_revenue_growth_rate": 0.05,
+    "typical_debt_capacity_turns_ebitda": 4.0
+  },
+  "Real Estate Services": {
+    "typical_ebitda_margin": 0.20,
+    "typical_gross_margin": 0.60,
+    "typical_sga_pct_revenue": 0.30,
+    "typical_working_capital_pct_revenue": 0.05,
+    "typical_capex_pct_revenue": 0.02,
+    "typical_da_pct_revenue": 0.02,
+    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
+    "typical_revenue_growth_rate": 0.06,
+    "typical_debt_capacity_turns_ebitda": 4.0
+  },
+  "Technology Hardware": {
+    "typical_ebitda_margin": 0.18,
+    "typical_gross_margin": 0.45,
+    "typical_sga_pct_revenue": 0.18,
+    "typical_working_capital_pct_revenue": 0.14,
+    "typical_capex_pct_revenue": 0.05,
+    "typical_da_pct_revenue": 0.05,
+    "ev_ebitda_multiple_range": { "low": 7, "median": 11, "high": 17 },
+    "typical_revenue_growth_rate": 0.07,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Pharmaceuticals": {
+    "typical_ebitda_margin": 0.30,
+    "typical_gross_margin": 0.70,
+    "typical_sga_pct_revenue": 0.25,
+    "typical_working_capital_pct_revenue": 0.20,
+    "typical_capex_pct_revenue": 0.06,
+    "typical_da_pct_revenue": 0.08,
+    "ev_ebitda_multiple_range": { "low": 10, "median": 16, "high": 25 },
+    "typical_revenue_growth_rate": 0.08,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Telecommunications": {
+    "typical_ebitda_margin": 0.35,
+    "typical_gross_margin": 0.58,
+    "typical_sga_pct_revenue": 0.15,
+    "typical_working_capital_pct_revenue": -0.02,
+    "typical_capex_pct_revenue": 0.16,
+    "typical_da_pct_revenue": 0.18,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 11 },
+    "typical_revenue_growth_rate": 0.03,
+    "typical_debt_capacity_turns_ebitda": 5.0
+  },
+  "Agriculture": {
+    "typical_ebitda_margin": 0.10,
+    "typical_gross_margin": 0.22,
+    "typical_sga_pct_revenue": 0.08,
+    "typical_working_capital_pct_revenue": 0.18,
+    "typical_capex_pct_revenue": 0.05,
+    "typical_da_pct_revenue": 0.04,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
+    "typical_revenue_growth_rate": 0.03,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Media / Entertainment": {
+    "typical_ebitda_margin": 0.20,
+    "typical_gross_margin": 0.55,
+    "typical_sga_pct_revenue": 0.25,
+    "typical_working_capital_pct_revenue": 0.03,
+    "typical_capex_pct_revenue": 0.04,
+    "typical_da_pct_revenue": 0.06,
+    "ev_ebitda_multiple_range": { "low": 8, "median": 13, "high": 20 },
+    "typical_revenue_growth_rate": 0.05,
+    "typical_debt_capacity_turns_ebitda": 4.0
+  },
+  "Insurance": {
+    "typical_ebitda_margin": 0.15,
+    "typical_gross_margin": 0.45,
+    "typical_sga_pct_revenue": 0.25,
+    "typical_working_capital_pct_revenue": 0.05,
+    "typical_capex_pct_revenue": 0.02,
+    "typical_da_pct_revenue": 0.02,
+    "ev_ebitda_multiple_range": { "low": 7, "median": 11, "high": 16 },
+    "typical_revenue_growth_rate": 0.05,
+    "typical_debt_capacity_turns_ebitda": 3.0
+  },
+  "Staffing / Recruiting": {
+    "typical_ebitda_margin": 0.06,
+    "typical_gross_margin": 0.20,
+    "typical_sga_pct_revenue": 0.12,
+    "typical_working_capital_pct_revenue": 0.08,
+    "typical_capex_pct_revenue": 0.01,
+    "typical_da_pct_revenue": 0.01,
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
+    "typical_revenue_growth_rate": 0.06,
+    "typical_debt_capacity_turns_ebitda": 3.5
+  },
+  "Waste Management": {
+    "typical_ebitda_margin": 0.25,
+    "typical_gross_margin": 0.40,
+    "typical_sga_pct_revenue": 0.12,
+    "typical_working_capital_pct_revenue": 0.02,
+    "typical_capex_pct_revenue": 0.10,
+    "typical_da_pct_revenue": 0.12,
+    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 17 },
+    "typical_revenue_growth_rate": 0.04,
+    "typical_debt_capacity_turns_ebitda": 5.0
+  }
+}

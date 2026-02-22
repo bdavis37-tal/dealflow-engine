@@ -1,0 +1,100 @@
+{
+  "description": "Highly leveraged deal. $500M target, 80% debt financed, multi-tranche. Tests circularity solver and IRR.",
+  "input": {
+    "acquirer": {
+      "company_name": "PE Sponsor Corp",
+      "revenue": 1000000000,
+      "ebitda": 200000000,
+      "net_income": 100000000,
+      "total_debt": 150000000,
+      "cash_on_hand": 80000000,
+      "shares_outstanding": 50000000,
+      "share_price": 30.00,
+      "tax_rate": 0.25,
+      "depreciation": 30000000,
+      "capex": 25000000,
+      "working_capital": 80000000,
+      "industry": "Manufacturing"
+    },
+    "target": {
+      "company_name": "Industrial Target Co",
+      "revenue": 250000000,
+      "ebitda": 45000000,
+      "net_income": 22000000,
+      "total_debt": 30000000,
+      "cash_on_hand": 10000000,
+      "tax_rate": 0.25,
+      "depreciation": 8000000,
+      "capex": 6000000,
+      "working_capital": 25000000,
+      "industry": "Manufacturing",
+      "acquisition_price": 500000000,
+      "revenue_growth_rate": 0.04
+    },
+    "structure": {
+      "cash_percentage": 0.10,
+      "stock_percentage": 0.10,
+      "debt_percentage": 0.80,
+      "debt_tranches": [
+        {
+          "name": "First Lien Term Loan",
+          "amount": 250000000,
+          "interest_rate": 0.07,
+          "term_years": 7,
+          "amortization_type": "straight_line"
+        },
+        {
+          "name": "Second Lien",
+          "amount": 100000000,
+          "interest_rate": 0.095,
+          "term_years": 7,
+          "amortization_type": "interest_only"
+        },
+        {
+          "name": "Mezzanine",
+          "amount": 50000000,
+          "interest_rate": 0.12,
+          "term_years": 5,
+          "amortization_type": "bullet"
+        }
+      ],
+      "transaction_fees_pct": 0.015,
+      "advisory_fees": 3000000
+    },
+    "ppa": {
+      "asset_writeup": 20000000,
+      "asset_writeup_useful_life": 15,
+      "identifiable_intangibles": 50000000,
+      "intangible_useful_life": 12
+    },
+    "synergies": {
+      "cost_synergies": [
+        {
+          "category": "Manufacturing consolidation",
+          "annual_amount": 15000000,
+          "phase_in_years": 3,
+          "cost_to_achieve": 20000000,
+          "is_revenue": false
+        },
+        {
+          "category": "G&A elimination",
+          "annual_amount": 10000000,
+          "phase_in_years": 2,
+          "cost_to_achieve": 5000000,
+          "is_revenue": false
+        }
+      ],
+      "revenue_synergies": []
+    },
+    "mode": "deep",
+    "projection_years": 7
+  },
+  "expected": {
+    "entry_multiple_approx": 11.1,
+    "circularity_solver_should_converge": true,
+    "total_debt_at_close": 400000000,
+    "initial_leverage_approx": 1.6,
+    "irr_scenarios_populated": true,
+    "year1_interest_expense_positive": true
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "description": "Mixed financing deal. $200M target, 50/30/20 cash/stock/debt split, $15M cost synergies over 3 years.",
+  "input": {
+    "acquirer": {
+      "company_name": "GlobalTech Inc",
+      "revenue": 500000000,
+      "ebitda": 90000000,
+      "net_income": 50000000,
+      "total_debt": 60000000,
+      "cash_on_hand": 120000000,
+      "shares_outstanding": 25000000,
+      "share_price": 40.00,
+      "tax_rate": 0.25,
+      "depreciation": 12000000,
+      "capex": 10000000,
+      "working_capital": 45000000,
+      "industry": "Professional Services / Consulting"
+    },
+    "target": {
+      "company_name": "NicheCo",
+      "revenue": 80000000,
+      "ebitda": 14000000,
+      "net_income": 7500000,
+      "total_debt": 5000000,
+      "cash_on_hand": 3000000,
+      "tax_rate": 0.25,
+      "depreciation": 2000000,
+      "capex": 1500000,
+      "working_capital": 8000000,
+      "industry": "Professional Services / Consulting",
+      "acquisition_price": 200000000,
+      "revenue_growth_rate": 0.07
+    },
+    "structure": {
+      "cash_percentage": 0.50,
+      "stock_percentage": 0.30,
+      "debt_percentage": 0.20,
+      "debt_tranches": [
+        {
+          "name": "Term Loan A",
+          "amount": 40000000,
+          "interest_rate": 0.075,
+          "term_years": 7,
+          "amortization_type": "straight_line"
+        }
+      ],
+      "transaction_fees_pct": 0.02,
+      "advisory_fees": 1000000
+    },
+    "ppa": {
+      "asset_writeup": 5000000,
+      "asset_writeup_useful_life": 15,
+      "identifiable_intangibles": 20000000,
+      "intangible_useful_life": 10
+    },
+    "synergies": {
+      "cost_synergies": [
+        {
+          "category": "Back-office consolidation",
+          "annual_amount": 8000000,
+          "phase_in_years": 3,
+          "cost_to_achieve": 5000000,
+          "is_revenue": false
+        },
+        {
+          "category": "Facility consolidation",
+          "annual_amount": 4000000,
+          "phase_in_years": 2,
+          "cost_to_achieve": 2000000,
+          "is_revenue": false
+        },
+        {
+          "category": "Procurement savings",
+          "annual_amount": 3000000,
+          "phase_in_years": 3,
+          "cost_to_achieve": 500000,
+          "is_revenue": false
+        }
+      ],
+      "revenue_synergies": []
+    },
+    "mode": "deep",
+    "projection_years": 5
+  },
+  "expected": {
+    "entry_multiple_approx": 14.3,
+    "total_annual_synergies": 15000000,
+    "year3_synergies_fully_phased_in": true,
+    "year1_net_income_positive": true,
+    "new_shares_issued_positive": true
+  }
+}

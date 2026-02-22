@@ -1,0 +1,110 @@
+import React, { useState } from 'react'
+import { ArrowRight } from 'lucide-react'
+import GuidedInput from '../inputs/GuidedInput'
+import CurrencyInput from '../inputs/CurrencyInput'
+import type { AcquirerProfile, TargetProfile, FlowStep } from '../../types/deal'
+
+interface Step1Props {
+  acquirer: Partial<AcquirerProfile>
+  target: Partial<TargetProfile>
+  onUpdateAcquirer: (updates: Partial<AcquirerProfile>) => void
+  onUpdateTarget: (updates: Partial<TargetProfile>) => void
+  onNext: () => void
+}
+
+export default function Step1_DealOverview({
+  acquirer,
+  target,
+  onUpdateAcquirer,
+  onUpdateTarget,
+  onNext,
+}: Step1Props) {
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const validate = () => {
+    const errs: Record<string, string> = {}
+    if (!acquirer.company_name?.trim()) errs.acq_name = 'Required'
+    if (!target.company_name?.trim()) errs.tgt_name = 'Required'
+    if (!target.acquisition_price || target.acquisition_price <= 0) errs.price = 'Required'
+    setErrors(errs)
+    return Object.keys(errs).length === 0
+  }
+
+  const handleNext = () => {
+    if (validate()) onNext()
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto animate-slide-up">
+      <div className="mb-10">
+        <h1 className="text-3xl font-bold text-slate-100 mb-3">
+          Let's model your deal.
+        </h1>
+        <p className="text-slate-400 text-lg">
+          Tell us about the companies involved. Don't worry about being precise yet —
+          we'll ask for more detail in the next steps.
+        </p>
+      </div>
+
+      <div className="space-y-8">
+        {/* Acquirer */}
+        <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            The Buyer (Your Company)
+          </h2>
+          <GuidedInput
+            label="Company name"
+            value={acquirer.company_name ?? ''}
+            onChange={v => onUpdateAcquirer({ company_name: v })}
+            placeholder="e.g. Acme Corp"
+            help="The company making the acquisition."
+            error={errors.acq_name}
+            required
+          />
+        </div>
+
+        {/* Target */}
+        <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            The Target (Company You're Buying)
+          </h2>
+          <GuidedInput
+            label="Company name or description"
+            value={target.company_name ?? ''}
+            onChange={v => onUpdateTarget({ company_name: v })}
+            placeholder="e.g. 'Beta LLC' or 'a $30M HVAC company in Texas'"
+            help="The company you're acquiring. Can be a name or a description."
+            error={errors.tgt_name}
+            required
+          />
+          <CurrencyInput
+            label="Approximate deal size (total price)"
+            value={target.acquisition_price ?? 0}
+            onChange={v => onUpdateTarget({ acquisition_price: v })}
+            placeholder="$50,000,000"
+            help="The total enterprise value you expect to pay, including assumed debt. Your best estimate is fine."
+            error={errors.price}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <button
+          onClick={handleNext}
+          className="
+            w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl
+            bg-blue-600 hover:bg-blue-500 text-white font-semibold text-base
+            transition-all shadow-lg shadow-blue-900/30
+          "
+        >
+          Let's Model This Deal
+          <ArrowRight size={18} />
+        </button>
+        <p className="text-center text-xs text-slate-500 mt-3">
+          Your data stays in your browser. Nothing is stored on our servers.
+        </p>
+      </div>
+    </div>
+  )
+}
