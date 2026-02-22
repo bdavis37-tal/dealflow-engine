@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes import router
 from .api.ai_routes import router as ai_router
+from .api.startup_routes import router as startup_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(ai_router)
+app.include_router(startup_router)
 
 
 @app.get("/")

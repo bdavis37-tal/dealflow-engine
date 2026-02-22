@@ -1,0 +1,609 @@
+{
+  "_meta": {
+    "description": "Startup valuation benchmarks by vertical and stage. Sources: Carta State of Pre-Seed Q3 2025, PitchBook-NVCA Venture Monitor, Equidam Startup Valuation Delta H1 2025, Aventis Advisors SaaS Multiples 2025.",
+    "updated": "2025-Q3",
+    "monetary_unit": "USD millions",
+    "percentages": "decimals"
+  },
+  "verticals": {
+    "ai_ml_infrastructure": {
+      "label": "AI / ML Infrastructure",
+      "description": "Foundation models, GPU compute, AI tooling, MLOps platforms",
+      "pre_seed": {
+        "valuation_p25": 5.0,
+        "valuation_p50": 10.0,
+        "valuation_p75": 18.0,
+        "valuation_p95": 40.0,
+        "safe_cap_median": 12.0,
+        "round_size_median": 0.75,
+        "typical_dilution": 0.12,
+        "check_size_range": [0.1, 2.0],
+        "traction_bar": "Working prototype or novel research; team with AI/ML PhD or big-tech pedigree",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 15.0,
+        "valuation_p50": 28.0,
+        "valuation_p75": 55.0,
+        "valuation_p95": 120.0,
+        "round_size_median": 5.0,
+        "typical_dilution": 0.17,
+        "check_size_range": [2.0, 10.0],
+        "arr_multiple_p25": 20.0,
+        "arr_multiple_p50": 35.0,
+        "arr_multiple_p75": 60.0,
+        "traction_bar": "$500K–$2M ARR or strong named pilots with large enterprises",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 50.0,
+        "valuation_p50": 90.0,
+        "valuation_p75": 180.0,
+        "round_size_median": 15.0,
+        "typical_dilution": 0.18,
+        "arr_multiple_p25": 25.0,
+        "arr_multiple_p50": 40.0,
+        "arr_multiple_p75": 60.0,
+        "arr_required_min": 1.0,
+        "arr_required_typical": 2.5,
+        "yoy_growth_expected": 3.0
+      }
+    },
+    "ai_enabled_saas": {
+      "label": "AI-Enabled SaaS",
+      "description": "Vertical SaaS with meaningful AI differentiation, not thin wrappers",
+      "pre_seed": {
+        "valuation_p25": 4.0,
+        "valuation_p50": 8.0,
+        "valuation_p75": 15.0,
+        "valuation_p95": 30.0,
+        "safe_cap_median": 10.0,
+        "round_size_median": 0.65,
+        "typical_dilution": 0.12,
+        "check_size_range": [0.1, 1.5],
+        "traction_bar": "MVP with early beta users; AI capability must be demonstrably differentiated",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 12.0,
+        "valuation_p50": 22.0,
+        "valuation_p75": 40.0,
+        "valuation_p95": 80.0,
+        "round_size_median": 3.5,
+        "typical_dilution": 0.18,
+        "check_size_range": [1.5, 6.0],
+        "arr_multiple_p25": 10.0,
+        "arr_multiple_p50": 18.0,
+        "arr_multiple_p75": 28.0,
+        "traction_bar": "$200K–$1M ARR with strong retention; AI must reduce churn or expand revenue",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 35.0,
+        "valuation_p50": 60.0,
+        "valuation_p75": 110.0,
+        "round_size_median": 12.0,
+        "typical_dilution": 0.18,
+        "arr_multiple_p25": 10.0,
+        "arr_multiple_p50": 18.0,
+        "arr_multiple_p75": 25.0,
+        "arr_required_min": 1.5,
+        "arr_required_typical": 3.0,
+        "yoy_growth_expected": 2.5
+      }
+    },
+    "b2b_saas": {
+      "label": "B2B SaaS (Traditional)",
+      "description": "Classic software-as-a-service businesses without deep AI differentiation",
+      "pre_seed": {
+        "valuation_p25": 3.0,
+        "valuation_p50": 6.0,
+        "valuation_p75": 12.0,
+        "valuation_p95": 22.0,
+        "safe_cap_median": 8.0,
+        "round_size_median": 0.6,
+        "typical_dilution": 0.12,
+        "check_size_range": [0.1, 1.0],
+        "traction_bar": "Working MVP with 2–5 paying customers or LOIs; $5K–$20K MRR justifies top quartile",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 9.0,
+        "valuation_p50": 16.0,
+        "valuation_p75": 28.0,
+        "valuation_p95": 55.0,
+        "round_size_median": 3.0,
+        "typical_dilution": 0.20,
+        "check_size_range": [1.0, 4.0],
+        "arr_multiple_p25": 5.0,
+        "arr_multiple_p50": 9.0,
+        "arr_multiple_p75": 15.0,
+        "traction_bar": "$20K–$150K MRR ($240K–$1.8M ARR); 80%+ gross margin; NRR > 100%",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 25.0,
+        "valuation_p50": 45.0,
+        "valuation_p75": 80.0,
+        "round_size_median": 10.0,
+        "typical_dilution": 0.20,
+        "arr_multiple_p25": 3.0,
+        "arr_multiple_p50": 6.0,
+        "arr_multiple_p75": 12.0,
+        "arr_required_min": 1.0,
+        "arr_required_typical": 2.5,
+        "yoy_growth_expected": 2.5
+      }
+    },
+    "fintech": {
+      "label": "Fintech",
+      "description": "Payments, lending, insurance tech, banking infrastructure, crypto/DeFi",
+      "pre_seed": {
+        "valuation_p25": 2.5,
+        "valuation_p50": 5.5,
+        "valuation_p75": 10.0,
+        "valuation_p95": 20.0,
+        "safe_cap_median": 8.0,
+        "round_size_median": 0.65,
+        "typical_dilution": 0.14,
+        "check_size_range": [0.1, 1.25],
+        "traction_bar": "Regulatory clarity is critical; working demo or beta with compliance framework outlined",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 8.0,
+        "valuation_p50": 14.0,
+        "valuation_p75": 25.0,
+        "valuation_p95": 50.0,
+        "round_size_median": 3.5,
+        "typical_dilution": 0.18,
+        "check_size_range": [1.5, 5.0],
+        "arr_multiple_p25": 4.0,
+        "arr_multiple_p50": 7.0,
+        "arr_multiple_p75": 12.0,
+        "traction_bar": "$1M–$5M GMV or $200K+ ARR; compliance licenses where required; strong NRR",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 25.0,
+        "valuation_p50": 45.0,
+        "valuation_p75": 80.0,
+        "round_size_median": 12.0,
+        "typical_dilution": 0.18,
+        "arr_multiple_p25": 4.0,
+        "arr_multiple_p50": 7.0,
+        "arr_multiple_p75": 12.0,
+        "arr_required_min": 1.0,
+        "arr_required_typical": 2.5,
+        "yoy_growth_expected": 2.5
+      }
+    },
+    "healthtech": {
+      "label": "Healthcare / HealthTech",
+      "description": "Digital health, clinical SaaS, health data platforms, med-device software",
+      "pre_seed": {
+        "valuation_p25": 3.5,
+        "valuation_p50": 7.0,
+        "valuation_p75": 14.0,
+        "valuation_p95": 30.0,
+        "safe_cap_median": 10.0,
+        "round_size_median": 0.75,
+        "typical_dilution": 0.17,
+        "check_size_range": [0.1, 1.5],
+        "traction_bar": "Clinical validation path outlined; at least 1 health system pilot or advisory engagement",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 10.0,
+        "valuation_p50": 18.0,
+        "valuation_p75": 35.0,
+        "valuation_p95": 70.0,
+        "round_size_median": 5.0,
+        "typical_dilution": 0.19,
+        "check_size_range": [2.0, 7.0],
+        "arr_multiple_p25": 5.0,
+        "arr_multiple_p50": 9.0,
+        "arr_multiple_p75": 14.0,
+        "traction_bar": "$250K–$1M ARR; HIPAA compliance; 2+ health system customers",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 30.0,
+        "valuation_p50": 55.0,
+        "valuation_p75": 100.0,
+        "round_size_median": 14.0,
+        "typical_dilution": 0.19,
+        "arr_multiple_p25": 5.0,
+        "arr_multiple_p50": 9.0,
+        "arr_multiple_p75": 14.0,
+        "arr_required_min": 1.5,
+        "arr_required_typical": 3.0,
+        "yoy_growth_expected": 2.5
+      }
+    },
+    "biotech_pharma": {
+      "label": "Biotech / Pharma",
+      "description": "Drug discovery, diagnostics, therapeutics, CRO/CDMO tools",
+      "pre_seed": {
+        "valuation_p25": 4.0,
+        "valuation_p50": 8.0,
+        "valuation_p75": 16.0,
+        "valuation_p95": 35.0,
+        "safe_cap_median": 12.0,
+        "round_size_median": 1.0,
+        "typical_dilution": 0.19,
+        "check_size_range": [0.25, 2.0],
+        "traction_bar": "Preclinical data or in-silico validation; platform IP filed or provisional; academic co-founders common",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 12.0,
+        "valuation_p50": 22.0,
+        "valuation_p75": 45.0,
+        "valuation_p95": 90.0,
+        "round_size_median": 6.0,
+        "typical_dilution": 0.20,
+        "check_size_range": [3.0, 10.0],
+        "arr_multiple_p25": null,
+        "arr_multiple_p50": null,
+        "arr_multiple_p75": null,
+        "traction_bar": "IND filing or equivalent regulatory milestone; lead compound identified; partnership LOI",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 35.0,
+        "valuation_p50": 70.0,
+        "valuation_p75": 150.0,
+        "round_size_median": 20.0,
+        "typical_dilution": 0.20,
+        "arr_multiple_p25": null,
+        "arr_multiple_p50": null,
+        "arr_multiple_p75": null,
+        "arr_required_min": null,
+        "arr_required_typical": null,
+        "yoy_growth_expected": null
+      }
+    },
+    "deep_tech_hardware": {
+      "label": "Deep Tech / Hardware",
+      "description": "Robotics, advanced materials, quantum, photonics, semiconductor IP",
+      "pre_seed": {
+        "valuation_p25": 3.5,
+        "valuation_p50": 8.0,
+        "valuation_p75": 16.0,
+        "valuation_p95": 35.0,
+        "safe_cap_median": 10.0,
+        "round_size_median": 0.9,
+        "typical_dilution": 0.18,
+        "check_size_range": [0.25, 2.0],
+        "traction_bar": "Working prototype; core IP filed; technical team with relevant PhDs or patents",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 10.0,
+        "valuation_p50": 18.0,
+        "valuation_p75": 35.0,
+        "valuation_p95": 75.0,
+        "round_size_median": 5.0,
+        "typical_dilution": 0.20,
+        "check_size_range": [2.0, 7.0],
+        "arr_multiple_p25": 8.0,
+        "arr_multiple_p50": 15.0,
+        "arr_multiple_p75": 25.0,
+        "traction_bar": "Beta units shipped; $500K+ committed ARR or signed pilot contracts",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 30.0,
+        "valuation_p50": 55.0,
+        "valuation_p75": 100.0,
+        "round_size_median": 15.0,
+        "typical_dilution": 0.20,
+        "arr_multiple_p25": 8.0,
+        "arr_multiple_p50": 14.0,
+        "arr_multiple_p75": 22.0,
+        "arr_required_min": 0.5,
+        "arr_required_typical": 1.5,
+        "yoy_growth_expected": 2.0
+      }
+    },
+    "consumer": {
+      "label": "Consumer",
+      "description": "Consumer apps, marketplaces, social, e-commerce, DTC",
+      "pre_seed": {
+        "valuation_p25": 1.5,
+        "valuation_p50": 3.5,
+        "valuation_p75": 7.0,
+        "valuation_p95": 15.0,
+        "safe_cap_median": 6.0,
+        "round_size_median": 0.5,
+        "typical_dilution": 0.14,
+        "check_size_range": [0.05, 0.75],
+        "traction_bar": "D30 retention > 40%; viral coefficient > 1.0; or strong waitlist with email engagement",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 6.0,
+        "valuation_p50": 12.0,
+        "valuation_p75": 22.0,
+        "valuation_p95": 45.0,
+        "round_size_median": 2.0,
+        "typical_dilution": 0.22,
+        "check_size_range": [0.5, 3.0],
+        "arr_multiple_p25": 2.0,
+        "arr_multiple_p50": 5.0,
+        "arr_multiple_p75": 9.0,
+        "traction_bar": "10K+ DAU with strong retention; or $100K+ MRR; cohort data is essential",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 18.0,
+        "valuation_p50": 35.0,
+        "valuation_p75": 65.0,
+        "round_size_median": 8.0,
+        "typical_dilution": 0.22,
+        "arr_multiple_p25": 2.0,
+        "arr_multiple_p50": 4.0,
+        "arr_multiple_p75": 8.0,
+        "arr_required_min": 0.5,
+        "arr_required_typical": 1.5,
+        "yoy_growth_expected": 3.0
+      }
+    },
+    "climate_energy": {
+      "label": "Climate / Energy",
+      "description": "Clean energy, carbon markets, grid tech, sustainable materials, AgriTech",
+      "pre_seed": {
+        "valuation_p25": 3.0,
+        "valuation_p50": 7.0,
+        "valuation_p75": 14.0,
+        "valuation_p95": 28.0,
+        "safe_cap_median": 9.0,
+        "round_size_median": 0.8,
+        "typical_dilution": 0.16,
+        "check_size_range": [0.15, 1.5],
+        "traction_bar": "Pilot site or offtake LOI; technical co-founder with energy domain expertise",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 9.0,
+        "valuation_p50": 16.0,
+        "valuation_p75": 30.0,
+        "valuation_p95": 60.0,
+        "round_size_median": 4.0,
+        "typical_dilution": 0.19,
+        "check_size_range": [1.5, 6.0],
+        "arr_multiple_p25": 5.0,
+        "arr_multiple_p50": 9.0,
+        "arr_multiple_p75": 15.0,
+        "traction_bar": "Commercial pilot under contract; pathway to utility-scale deployment; grant funding validates technology",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 28.0,
+        "valuation_p50": 50.0,
+        "valuation_p75": 90.0,
+        "round_size_median": 15.0,
+        "typical_dilution": 0.19,
+        "arr_multiple_p25": 5.0,
+        "arr_multiple_p50": 9.0,
+        "arr_multiple_p75": 15.0,
+        "arr_required_min": 0.5,
+        "arr_required_typical": 2.0,
+        "yoy_growth_expected": 2.5
+      }
+    },
+    "marketplace": {
+      "label": "Marketplace",
+      "description": "Two-sided platforms, gig economy, B2B procurement, vertical marketplaces",
+      "pre_seed": {
+        "valuation_p25": 2.0,
+        "valuation_p50": 5.0,
+        "valuation_p75": 10.0,
+        "valuation_p95": 22.0,
+        "safe_cap_median": 7.0,
+        "round_size_median": 0.6,
+        "typical_dilution": 0.14,
+        "check_size_range": [0.1, 1.0],
+        "traction_bar": "$50K+ GMV/month; both sides showing organic growth; clear take rate model",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 7.0,
+        "valuation_p50": 13.0,
+        "valuation_p75": 24.0,
+        "valuation_p95": 50.0,
+        "round_size_median": 3.0,
+        "typical_dilution": 0.20,
+        "check_size_range": [1.0, 4.0],
+        "arr_multiple_p25": 3.0,
+        "arr_multiple_p50": 6.0,
+        "arr_multiple_p75": 12.0,
+        "traction_bar": "$500K+ GMV/month; NRR > 110%; strong cohort retention on both sides",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 20.0,
+        "valuation_p50": 38.0,
+        "valuation_p75": 70.0,
+        "round_size_median": 10.0,
+        "typical_dilution": 0.20,
+        "arr_multiple_p25": 3.0,
+        "arr_multiple_p50": 6.0,
+        "arr_multiple_p75": 12.0,
+        "arr_required_min": 0.75,
+        "arr_required_typical": 2.0,
+        "yoy_growth_expected": 3.0
+      }
+    },
+    "vertical_saas": {
+      "label": "Vertical / Industry SaaS",
+      "description": "Domain-specific SaaS for legal, construction, real estate, logistics, etc.",
+      "pre_seed": {
+        "valuation_p25": 3.0,
+        "valuation_p50": 6.5,
+        "valuation_p75": 13.0,
+        "valuation_p95": 25.0,
+        "safe_cap_median": 8.5,
+        "round_size_median": 0.65,
+        "typical_dilution": 0.13,
+        "check_size_range": [0.1, 1.25],
+        "traction_bar": "Domain expert founder; 3–5 paying design partners; clear workflow displacement",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 9.0,
+        "valuation_p50": 17.0,
+        "valuation_p75": 30.0,
+        "valuation_p95": 60.0,
+        "round_size_median": 3.5,
+        "typical_dilution": 0.19,
+        "check_size_range": [1.5, 5.0],
+        "arr_multiple_p25": 5.0,
+        "arr_multiple_p50": 9.0,
+        "arr_multiple_p75": 14.0,
+        "traction_bar": "$250K–$1M ARR; high NRR driven by deep workflow integration; proprietary data moat",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 25.0,
+        "valuation_p50": 48.0,
+        "valuation_p75": 85.0,
+        "round_size_median": 12.0,
+        "typical_dilution": 0.19,
+        "arr_multiple_p25": 6.0,
+        "arr_multiple_p50": 10.0,
+        "arr_multiple_p75": 16.0,
+        "arr_required_min": 1.0,
+        "arr_required_typical": 2.5,
+        "yoy_growth_expected": 2.5
+      }
+    },
+    "developer_tools": {
+      "label": "Developer Tools / Infrastructure",
+      "description": "APIs, SDKs, DevOps, security tooling, data infrastructure",
+      "pre_seed": {
+        "valuation_p25": 4.0,
+        "valuation_p50": 9.0,
+        "valuation_p75": 18.0,
+        "valuation_p95": 35.0,
+        "safe_cap_median": 11.0,
+        "round_size_median": 0.7,
+        "typical_dilution": 0.12,
+        "check_size_range": [0.1, 1.5],
+        "traction_bar": "Open-source traction (1K+ GitHub stars) or 50+ active API users; strong technical team",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 12.0,
+        "valuation_p50": 22.0,
+        "valuation_p75": 42.0,
+        "valuation_p95": 85.0,
+        "round_size_median": 4.0,
+        "typical_dilution": 0.17,
+        "check_size_range": [2.0, 7.0],
+        "arr_multiple_p25": 7.0,
+        "arr_multiple_p50": 14.0,
+        "arr_multiple_p75": 22.0,
+        "traction_bar": "$500K–$2M ARR; PLG (product-led growth) with clear land-and-expand motion; high NRR",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 35.0,
+        "valuation_p50": 65.0,
+        "valuation_p75": 120.0,
+        "round_size_median": 15.0,
+        "typical_dilution": 0.18,
+        "arr_multiple_p25": 8.0,
+        "arr_multiple_p50": 15.0,
+        "arr_multiple_p75": 25.0,
+        "arr_required_min": 1.0,
+        "arr_required_typical": 3.0,
+        "yoy_growth_expected": 3.0
+      }
+    }
+  },
+  "market_wide_medians": {
+    "pre_seed": {
+      "valuation_median": 7.7,
+      "safe_cap_median": 15.0,
+      "round_size_median": 0.7,
+      "typical_dilution": 0.13,
+      "safe_pct_of_rounds": 0.92,
+      "post_money_safe_pct": 0.87
+    },
+    "seed": {
+      "valuation_pre_money_median": 16.0,
+      "valuation_post_money_median": 20.0,
+      "round_size_median": 3.0,
+      "typical_dilution": 0.20,
+      "down_round_pct": 0.18
+    },
+    "series_a": {
+      "valuation_pre_money_median": 49.3,
+      "round_size_median": 10.0,
+      "typical_dilution": 0.19,
+      "seed_to_series_a_conversion_rate": 0.20,
+      "avg_months_seed_to_series_a": 24
+    }
+  },
+  "berkus_regional_premiums": {
+    "bay_area": 1.8,
+    "new_york": 1.5,
+    "boston": 1.3,
+    "seattle": 1.3,
+    "austin": 1.1,
+    "los_angeles": 1.2,
+    "chicago": 1.0,
+    "other_us": 0.9,
+    "international": 0.8
+  },
+  "scorecard_weights": {
+    "management_team": 0.30,
+    "market_size": 0.25,
+    "product_technology": 0.15,
+    "competitive_environment": 0.10,
+    "marketing_sales_channels": 0.10,
+    "additional_financing_needed": 0.05,
+    "other_factors": 0.05
+  },
+  "risk_factor_summation": {
+    "adjustment_per_step_usd_millions": 0.25,
+    "max_steps": 2,
+    "categories": [
+      "Management",
+      "Stage of Business",
+      "Legislation / Political",
+      "Manufacturing / Operations",
+      "Sales / Marketing",
+      "Funding / Capital Raising",
+      "Competition",
+      "Technology",
+      "Litigation",
+      "International",
+      "Reputation",
+      "Exit Potential"
+    ]
+  },
+  "nrr_multiple_lookup": {
+    "below_80": {"min": 1.5, "max": 3.0, "label": "< 80% NRR — churn risk, significant discount"},
+    "80_to_99": {"min": 3.0, "max": 5.0, "label": "80–99% NRR — below par; erosion without expansion"},
+    "100_to_109": {"min": 5.0, "max": 8.0, "label": "100–109% NRR — solid; meeting SaaS baseline"},
+    "110_to_119": {"min": 8.0, "max": 12.0, "label": "110–119% NRR — strong expansion; top quartile"},
+    "120_to_139": {"min": 12.0, "max": 20.0, "label": "120–139% NRR — excellent; premium multiple"},
+    "140_plus": {"min": 20.0, "max": 40.0, "label": "140%+ NRR — elite; can double multiple vs. 100% NRR"}
+  },
+  "burn_multiple_bands": {
+    "exceptional": {"max": 1.0, "label": "< 1.0x — top 10%; strong valuation premium"},
+    "great": {"max": 1.5, "label": "1.0–1.5x — above average; slight premium"},
+    "average": {"max": 2.5, "label": "1.5–2.5x — typical; median multiple"},
+    "red_flag": {"min": 2.5, "label": "> 2.5x — investor red flag; significant discount"}
+  },
+  "rule_of_40_bands": {
+    "elite": {"min": 60, "label": "60%+ — elite; top 5% of SaaS; highest ARR multiples"},
+    "excellent": {"min": 50, "label": "50–60% — excellent; top 10%; double-digit ARR multiple"},
+    "strong": {"min": 40, "label": "40–50% — strong; passes Series A bar; premium multiple"},
+    "average": {"min": 20, "label": "20–40% — acceptable for early stage; median multiple"},
+    "below_bar": {"min": 0, "label": "< 20% — challenging; requires exceptional team or market story"}
+  }
+}
