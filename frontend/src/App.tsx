@@ -22,7 +22,13 @@ import StartupStep5_Review from './components/flow/startup/StartupStep5_Review'
 import StartupDashboard from './components/output/startup/StartupDashboard'
 import type { StartupFlowStep } from './types/startup'
 
-type AppMode = 'ma' | 'startup'
+// VC Investor flow
+import { useVCState } from './hooks/useVCState'
+import VCFundSetup from './components/vc/VCFundSetup'
+import VCQuickScreen from './components/vc/VCQuickScreen'
+import VCDashboard from './components/vc/VCDashboard'
+
+type AppMode = 'ma' | 'startup' | 'vc'
 
 // ---------------------------------------------------------------------------
 // Mode selector bar
@@ -34,7 +40,7 @@ function AppModeSelector({ active, onChange }: { active: AppMode; onChange: (m: 
         <button
           onClick={() => onChange('ma')}
           className={`
-            flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all
+            flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all
             ${active === 'ma'
               ? 'bg-blue-600 text-white shadow'
               : 'text-slate-400 hover:text-slate-200'
@@ -46,7 +52,7 @@ function AppModeSelector({ active, onChange }: { active: AppMode; onChange: (m: 
         <button
           onClick={() => onChange('startup')}
           className={`
-            flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all
+            flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all
             ${active === 'startup'
               ? 'bg-purple-600 text-white shadow'
               : 'text-slate-400 hover:text-slate-200'
@@ -54,6 +60,18 @@ function AppModeSelector({ active, onChange }: { active: AppMode; onChange: (m: 
           `}
         >
           Startup Valuation
+        </button>
+        <button
+          onClick={() => onChange('vc')}
+          className={`
+            flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all
+            ${active === 'vc'
+              ? 'bg-emerald-600 text-white shadow'
+              : 'text-slate-400 hover:text-slate-200'
+            }
+          `}
+        >
+          VC Investor
         </button>
       </div>
     </div>
@@ -86,16 +104,10 @@ function StartupShell({
             <span className="text-slate-600 text-sm">·</span>
             <span className="text-purple-400 text-sm font-medium">Startup Valuation</span>
           </div>
-          <div className="flex gap-2 p-1 bg-slate-800/60 border border-slate-700 rounded-xl">
-            <button
-              onClick={() => onModeChange('ma')}
-              className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all"
-            >
-              M&A
-            </button>
-            <button className="py-1.5 px-3 rounded-lg text-xs font-medium bg-purple-600 text-white">
-              Startup
-            </button>
+          <div className="flex gap-1 p-1 bg-slate-800/60 border border-slate-700 rounded-xl">
+            <button onClick={() => onModeChange('ma')} className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">M&A</button>
+            <button className="py-1.5 px-3 rounded-lg text-xs font-medium bg-purple-600 text-white">Startup</button>
+            <button onClick={() => onModeChange('vc')} className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">VC</button>
           </div>
         </div>
       </header>
@@ -140,6 +152,73 @@ function StartupShell({
 }
 
 // ---------------------------------------------------------------------------
+// VC shell (emerald branding)
+// ---------------------------------------------------------------------------
+function VCShell({
+  children,
+  onModeChange,
+  step,
+  totalSteps,
+}: {
+  children: React.ReactNode
+  onModeChange: (m: AppMode) => void
+  step?: number
+  totalSteps?: number
+}) {
+  return (
+    <div className="min-h-screen bg-navy-900 text-slate-100 font-sans">
+      <header className="border-b border-slate-800 bg-navy-800/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">DE</span>
+            </div>
+            <span className="font-semibold text-slate-100 text-sm">Dealflow Engine</span>
+            <span className="text-slate-600 text-sm">·</span>
+            <span className="text-emerald-400 text-sm font-medium">VC Investor</span>
+          </div>
+          <div className="flex gap-1 p-1 bg-slate-800/60 border border-slate-700 rounded-xl">
+            <button onClick={() => onModeChange('ma')} className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">M&A</button>
+            <button onClick={() => onModeChange('startup')} className="py-1.5 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 transition-all">Startup</button>
+            <button className="py-1.5 px-3 rounded-lg text-xs font-medium bg-emerald-600 text-white">VC</button>
+          </div>
+        </div>
+      </header>
+
+      {step != null && totalSteps != null && (
+        <div className="border-b border-slate-800 bg-navy-800/40">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3">
+            <div className="flex items-center gap-2">
+              {Array.from({ length: totalSteps }, (_, i) => i + 1).map(s => (
+                <div key={s} className="flex items-center gap-2">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold
+                    ${step === s ? 'bg-emerald-600 text-white' : step > s ? 'bg-emerald-900/40 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                    {s}
+                  </div>
+                  {s < totalSteps && <div className={`w-8 h-px ${step > s ? 'bg-emerald-600' : 'bg-slate-700'}`} />}
+                </div>
+              ))}
+              <span className="ml-3 text-xs text-slate-500">
+                {step === 1 ? 'Fund Profile' : step === 2 ? 'Deal Screen' : 'Results'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">{children}</main>
+
+      <footer className="border-t border-slate-800 mt-20 py-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between text-2xs text-slate-500">
+          <span>Dealflow Engine — MIT License — Open Source</span>
+          <a href="https://github.com/bdavis37-tal/dealflow-engine" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">GitHub →</a>
+        </div>
+      </footer>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main App
 // ---------------------------------------------------------------------------
 export default function App() {
@@ -172,6 +251,17 @@ export default function App() {
     reset: resetStartup,
     runValuation,
   } = useStartupState()
+
+  // VC state
+  const {
+    state: vcState,
+    setStep: setVCStep,
+    updateFund,
+    updateDeal: updateVCDeal,
+    resetDeal: resetVCDeal,
+    resetAll: resetVC,
+    runEvaluation,
+  } = useVCState()
 
   const { step, mode, acquirer, target, structure, ppa, synergies, output } = state
 
@@ -260,6 +350,48 @@ export default function App() {
           />
         )}
       </StartupShell>
+    )
+  }
+
+  // ---------------------------------------------------------------------------
+  // VC Investor flow
+  // ---------------------------------------------------------------------------
+  if (appMode === 'vc') {
+    // Results view
+    if (vcState.output && !vcState.isLoading) {
+      return (
+        <VCShell onModeChange={setAppMode}>
+          <VCDashboard
+            output={vcState.output}
+            fund={vcState.fund}
+            onNewDeal={resetVCDeal}
+            onReset={resetVC}
+          />
+        </VCShell>
+      )
+    }
+
+    return (
+      <VCShell onModeChange={setAppMode} step={vcState.step} totalSteps={2}>
+        {vcState.step === 1 && (
+          <VCFundSetup
+            fund={vcState.fund}
+            onUpdate={updateFund}
+            onNext={() => setVCStep(2)}
+          />
+        )}
+        {(vcState.step === 2 || vcState.isLoading) && (
+          <VCQuickScreen
+            deal={vcState.deal}
+            fund={vcState.fund}
+            onUpdate={updateVCDeal}
+            onBack={() => setVCStep(1)}
+            onRun={runEvaluation}
+            isLoading={vcState.isLoading}
+            error={vcState.error}
+          />
+        )}
+      </VCShell>
     )
   }
 

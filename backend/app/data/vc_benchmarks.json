@@ -1,0 +1,631 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "source": "Carta 2024 State of Private Markets, Cambridge Associates, AngelList, PitchBook, First Round Capital Research",
+    "updated": "2025-Q4",
+    "notes": "All monetary values in USD millions. Rates as decimals. Medians where noted."
+  },
+
+  "time_to_next_round": {
+    "_source": "Carta 2024 / AngelList / PitchBook",
+    "pre_seed_to_seed": {
+      "median_days": 420,
+      "p25_days": 270,
+      "p75_days": 600,
+      "note": "Pre-seed to seed: typically 14-20 months"
+    },
+    "seed_to_series_a": {
+      "median_days": 766,
+      "p25_days": 480,
+      "p75_days": 1100,
+      "note": "Seed to A: median 25 months (Carta 2024). Many companies never raise A."
+    },
+    "series_a_to_b": {
+      "median_days": 540,
+      "p25_days": 360,
+      "p75_days": 730,
+      "note": "A to B: median 18 months"
+    },
+    "series_b_to_c": {
+      "median_days": 480,
+      "p25_days": 330,
+      "p75_days": 660,
+      "note": "B to C: median 16 months"
+    },
+    "series_c_to_exit": {
+      "median_days": 900,
+      "p25_days": 540,
+      "p75_days": 1500,
+      "note": "C to exit: highly variable, 18-60 months"
+    }
+  },
+
+  "stage_transition_probabilities": {
+    "_source": "Cambridge Associates, First Round Capital State of Seed 2024, Correlation Ventures",
+    "pre_seed_to_seed": 0.45,
+    "seed_to_series_a": 0.26,
+    "series_a_to_b": 0.50,
+    "series_b_to_c": 0.60,
+    "series_c_to_exit": 0.70,
+    "seed_to_any_exit": 0.12,
+    "seed_to_failure": 0.62,
+    "notes": {
+      "seed_to_a_range": "20-30% (Cambridge median: 26%)",
+      "power_law": "Top decile of seed companies generate ~65% of returns",
+      "vintage_context": "2021 vintage: transition rates depressed ~15% vs historical due to valuation reset"
+    }
+  },
+
+  "dilution_per_round": {
+    "_source": "Carta State of Private Markets 2024",
+    "pre_seed": {
+      "median_dilution": 0.18,
+      "p25_dilution": 0.12,
+      "p75_dilution": 0.25,
+      "typical_raise_range_usd_m": [0.25, 2.0],
+      "note": "Pre-seed: founder-friendly SAFEs; dilution lower"
+    },
+    "seed": {
+      "median_dilution": 0.205,
+      "p25_dilution": 0.15,
+      "p75_dilution": 0.28,
+      "typical_raise_range_usd_m": [1.0, 5.0],
+      "note": "Carta 2024: seed median dilution 20.5%"
+    },
+    "series_a": {
+      "median_dilution": 0.20,
+      "p25_dilution": 0.15,
+      "p75_dilution": 0.25,
+      "typical_raise_range_usd_m": [5.0, 20.0],
+      "note": "Series A: 18-22% typical"
+    },
+    "series_b": {
+      "median_dilution": 0.18,
+      "p25_dilution": 0.14,
+      "p75_dilution": 0.22,
+      "typical_raise_range_usd_m": [15.0, 50.0],
+      "note": "Series B: 15-22% typical"
+    },
+    "series_c": {
+      "median_dilution": 0.15,
+      "p25_dilution": 0.10,
+      "p75_dilution": 0.20,
+      "typical_raise_range_usd_m": [30.0, 100.0],
+      "note": "Series C+: dilution compresses as company matures"
+    },
+    "ipo_lockup_dilution": {
+      "median_dilution": 0.12,
+      "range": [0.08, 0.18],
+      "note": "IPO option pool + underwriter overallotment; assumes no additional dilutive rounds"
+    }
+  },
+
+  "exit_multiples": {
+    "_source": "PitchBook 2024, Carta, Goldman Sachs TMT Precedent Transactions",
+    "global": {
+      "ma_exit_arr_multiple": {
+        "p25": 3.0, "median": 5.5, "p75": 9.0, "p90": 15.0,
+        "note": "SaaS M&A: 3-9x ARR typical; premium for high-growth"
+      },
+      "ipo_arr_multiple": {
+        "p25": 8.0, "median": 12.0, "p75": 20.0, "p90": 35.0,
+        "note": "IPO valuations 2022-2024; premium for category leaders"
+      },
+      "secondary_arr_multiple_discount": 0.15,
+      "note": "Secondaries typically 10-20% discount to primary round price"
+    }
+  },
+
+  "burn_multiple_benchmarks": {
+    "_source": "David Sacks / Craft Ventures, a16z internal data",
+    "definition": "Net Burn / Net New ARR — lower is better",
+    "exceptional": { "max": 0.5, "description": "Best-in-class efficiency; Series A fundable" },
+    "good": { "min": 0.5, "max": 1.0, "description": "Efficient growth; strong Series A" },
+    "fair": { "min": 1.0, "max": 1.5, "description": "Acceptable; watch trajectory" },
+    "poor": { "min": 1.5, "max": 2.0, "description": "Inefficient; Series A difficult" },
+    "very_poor": { "min": 2.0, "description": "Unsustainable; restructure required" }
+  },
+
+  "rule_of_40_benchmarks": {
+    "definition": "Revenue Growth % + EBITDA Margin % >= 40",
+    "excellent": { "min": 60, "description": "Top-quartile SaaS; premium valuation justified" },
+    "strong": { "min": 40, "max": 60, "description": "Rule of 40 satisfied; institutional quality" },
+    "fair": { "min": 25, "max": 40, "description": "Below rule of 40; growing into efficiency" },
+    "weak": { "max": 25, "description": "Rule of 40 miss; re-examine unit economics" }
+  },
+
+  "fund_construction": {
+    "_source": "Cambridge Associates, First Round Capital, a16z",
+    "typical_seed_fund": {
+      "size_range_usd_m": [50, 200],
+      "portfolio_count": [25, 40],
+      "initial_check_range_usd_m": [0.5, 3.0],
+      "reserve_ratio": 0.40,
+      "target_ownership_pct": 0.10,
+      "deployment_period_years": 3,
+      "management_fee_pct": 0.02,
+      "carry_pct": 0.20
+    },
+    "typical_series_a_fund": {
+      "size_range_usd_m": [200, 750],
+      "portfolio_count": [20, 30],
+      "initial_check_range_usd_m": [5, 25],
+      "reserve_ratio": 0.50,
+      "target_ownership_pct": 0.15,
+      "deployment_period_years": 4,
+      "management_fee_pct": 0.02,
+      "carry_pct": 0.20
+    },
+    "power_law_returns": {
+      "top_1_pct_deals_drive_returns_pct": 0.65,
+      "top_5_pct_deals_drive_returns_pct": 0.80,
+      "expected_home_runs_per_fund": 2.5,
+      "note": "Horsley Bridge data: top 6% of deals return 60% of capital"
+    }
+  },
+
+  "verticals": {
+    "ai_ml_infrastructure": {
+      "label": "AI / ML Infrastructure",
+      "description": "Foundation models, MLOps, GPU cloud, AI tooling",
+      "exit_multiples": {
+        "bear": 3.0,
+        "base": 10.0,
+        "bull": 25.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 12.0,
+        "p25_post_money": 7.0,
+        "p75_post_money": 20.0,
+        "median_raise_usd_m": 2.5,
+        "median_arr_multiple": null,
+        "traction_bar": "Strong technical team; prototype or research; some design partners"
+      },
+      "seed": {
+        "median_post_money_usd_m": 40.0,
+        "p25_post_money": 20.0,
+        "p75_post_money": 80.0,
+        "median_raise_usd_m": 6.0,
+        "median_arr_usd_m": 0.5,
+        "median_arr_multiple": 80.0,
+        "traction_bar": "$200K-$1M ARR; 5-15 paying customers; 3x YoY growth"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 150.0,
+        "p25_post_money": 80.0,
+        "p75_post_money": 300.0,
+        "median_raise_usd_m": 20.0,
+        "median_arr_usd_m": 3.0,
+        "median_arr_multiple": 50.0,
+        "traction_bar": "$2M-$5M ARR; 120%+ NRR; clear enterprise sales motion"
+      }
+    },
+
+    "ai_enabled_saas": {
+      "label": "AI-Enabled SaaS",
+      "description": "Vertical SaaS with AI layer; AI-native B2B apps",
+      "exit_multiples": {
+        "bear": 3.0,
+        "base": 8.0,
+        "bull": 20.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 10.0,
+        "p25_post_money": 6.0,
+        "p75_post_money": 18.0,
+        "median_raise_usd_m": 2.0,
+        "median_arr_multiple": null,
+        "traction_bar": "MVP or beta; design partners; team with domain expertise"
+      },
+      "seed": {
+        "median_post_money_usd_m": 30.0,
+        "p25_post_money": 15.0,
+        "p75_post_money": 60.0,
+        "median_raise_usd_m": 4.0,
+        "median_arr_usd_m": 0.5,
+        "median_arr_multiple": 60.0,
+        "traction_bar": "$300K-$1M ARR; 15+ customers; early NRR signal"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 100.0,
+        "p25_post_money": 60.0,
+        "p75_post_money": 200.0,
+        "median_raise_usd_m": 15.0,
+        "median_arr_usd_m": 2.5,
+        "median_arr_multiple": 40.0,
+        "traction_bar": "$2M-$4M ARR; 115%+ NRR; repeatable sales process"
+      }
+    },
+
+    "b2b_saas": {
+      "label": "B2B SaaS",
+      "description": "Traditional B2B software; workflow, productivity, operations",
+      "exit_multiples": {
+        "bear": 2.5,
+        "base": 5.0,
+        "bull": 12.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 7.0,
+        "p25_post_money": 4.0,
+        "p75_post_money": 12.0,
+        "median_raise_usd_m": 1.5,
+        "median_arr_multiple": null,
+        "traction_bar": "Working product; 2-5 design partners; clear ICP"
+      },
+      "seed": {
+        "median_post_money_usd_m": 18.0,
+        "p25_post_money": 10.0,
+        "p75_post_money": 35.0,
+        "median_raise_usd_m": 3.0,
+        "median_arr_usd_m": 0.4,
+        "median_arr_multiple": 45.0,
+        "traction_bar": "$300K-$800K ARR; 10-25 paying customers; 110%+ NRR"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 70.0,
+        "p25_post_money": 40.0,
+        "p75_post_money": 130.0,
+        "median_raise_usd_m": 12.0,
+        "median_arr_usd_m": 2.0,
+        "median_arr_multiple": 35.0,
+        "traction_bar": "$1.5M-$3M ARR; 110%+ NRR; 2-3 AEs, pipeline visibility"
+      }
+    },
+
+    "fintech": {
+      "label": "Fintech",
+      "description": "Payments, lending, banking infrastructure, wealthtech, insurtech",
+      "exit_multiples": {
+        "bear": 2.0,
+        "base": 5.0,
+        "bull": 10.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 8.0,
+        "p25_post_money": 5.0,
+        "p75_post_money": 14.0,
+        "median_raise_usd_m": 1.5,
+        "median_arr_multiple": null,
+        "traction_bar": "Regulatory strategy clear; team with banking/fintech background"
+      },
+      "seed": {
+        "median_post_money_usd_m": 22.0,
+        "p25_post_money": 12.0,
+        "p75_post_money": 45.0,
+        "median_raise_usd_m": 4.0,
+        "median_arr_usd_m": 0.5,
+        "median_arr_multiple": 44.0,
+        "traction_bar": "$400K ARR or $10M+ GMV; regulatory licenses filed"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 90.0,
+        "p25_post_money": 50.0,
+        "p75_post_money": 180.0,
+        "median_raise_usd_m": 18.0,
+        "median_arr_usd_m": 3.0,
+        "median_arr_multiple": 30.0,
+        "traction_bar": "$2M ARR or $50M+ GMV; full regulatory compliance; enterprise traction"
+      }
+    },
+
+    "healthtech": {
+      "label": "Healthtech",
+      "description": "Digital health, care delivery, EHR, healthcare SaaS",
+      "exit_multiples": {
+        "bear": 2.0,
+        "base": 4.5,
+        "bull": 10.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 7.0,
+        "p25_post_money": 4.0,
+        "p75_post_money": 12.0,
+        "median_raise_usd_m": 1.5,
+        "median_arr_multiple": null,
+        "traction_bar": "Clinical validation path; HIPAA compliance plan; 1-2 provider LOIs"
+      },
+      "seed": {
+        "median_post_money_usd_m": 20.0,
+        "p25_post_money": 10.0,
+        "p75_post_money": 40.0,
+        "median_raise_usd_m": 3.5,
+        "median_arr_usd_m": 0.4,
+        "median_arr_multiple": 50.0,
+        "traction_bar": "$300K ARR; 2-5 health system pilots; HIPAA-compliant infrastructure"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 75.0,
+        "p25_post_money": 40.0,
+        "p75_post_money": 150.0,
+        "median_raise_usd_m": 15.0,
+        "median_arr_usd_m": 2.0,
+        "median_arr_multiple": 38.0,
+        "traction_bar": "$1.5M ARR; published clinical outcomes; reimbursement pathway"
+      }
+    },
+
+    "biotech_pharma": {
+      "label": "Biotech / Pharma",
+      "description": "Drug discovery, platform biology, diagnostics, med devices",
+      "exit_multiples": {
+        "bear": 1.5,
+        "base": 5.0,
+        "bull": 15.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 15.0,
+        "p25_post_money": 8.0,
+        "p75_post_money": 30.0,
+        "median_raise_usd_m": 3.0,
+        "median_arr_multiple": null,
+        "traction_bar": "IND-enabling studies; peer-reviewed publications; strong scientific SAB"
+      },
+      "seed": {
+        "median_post_money_usd_m": 45.0,
+        "p25_post_money": 20.0,
+        "p75_post_money": 90.0,
+        "median_raise_usd_m": 8.0,
+        "median_arr_usd_m": null,
+        "median_arr_multiple": null,
+        "traction_bar": "Phase 1 initiated or IND filed; platform validated in vivo"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 120.0,
+        "p25_post_money": 70.0,
+        "p75_post_money": 250.0,
+        "median_raise_usd_m": 30.0,
+        "median_arr_usd_m": null,
+        "median_arr_multiple": null,
+        "traction_bar": "Phase 1 POC data; strategic partnership; platform with 2+ programs"
+      }
+    },
+
+    "deep_tech_hardware": {
+      "label": "Deep Tech / Hardware",
+      "description": "Semiconductors, robotics, quantum, photonics, advanced materials",
+      "exit_multiples": {
+        "bear": 2.0,
+        "base": 4.0,
+        "bull": 10.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 10.0,
+        "p25_post_money": 5.0,
+        "p75_post_money": 20.0,
+        "median_raise_usd_m": 2.0,
+        "median_arr_multiple": null,
+        "traction_bar": "Technical proof-of-concept; strong IP; world-class technical team"
+      },
+      "seed": {
+        "median_post_money_usd_m": 25.0,
+        "p25_post_money": 12.0,
+        "p75_post_money": 50.0,
+        "median_raise_usd_m": 5.0,
+        "median_arr_usd_m": 0.2,
+        "median_arr_multiple": 125.0,
+        "traction_bar": "Working prototype; 1-3 LOIs; regulatory pathway defined"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 80.0,
+        "p25_post_money": 40.0,
+        "p75_post_money": 160.0,
+        "median_raise_usd_m": 20.0,
+        "median_arr_usd_m": 1.0,
+        "median_arr_multiple": 80.0,
+        "traction_bar": "Production-ready; first commercial contracts; manufacturing scale-up plan"
+      }
+    },
+
+    "consumer": {
+      "label": "Consumer",
+      "description": "Consumer apps, media, social, gaming, DTC e-commerce",
+      "exit_multiples": {
+        "bear": 1.5,
+        "base": 4.0,
+        "bull": 12.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 6.0,
+        "p25_post_money": 3.0,
+        "p75_post_money": 12.0,
+        "median_raise_usd_m": 1.0,
+        "median_arr_multiple": null,
+        "traction_bar": "1K+ DAU with strong retention (D7 > 20%); viral loop hypothesis"
+      },
+      "seed": {
+        "median_post_money_usd_m": 15.0,
+        "p25_post_money": 8.0,
+        "p75_post_money": 35.0,
+        "median_raise_usd_m": 2.5,
+        "median_arr_usd_m": 0.3,
+        "median_arr_multiple": 50.0,
+        "traction_bar": "100K+ MAU; 5% D30 retention; $2+ LTV:CAC"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 60.0,
+        "p25_post_money": 30.0,
+        "p75_post_money": 120.0,
+        "median_raise_usd_m": 12.0,
+        "median_arr_usd_m": 2.0,
+        "median_arr_multiple": 30.0,
+        "traction_bar": "1M+ MAU; monetization live; clear path to 10M MAU"
+      }
+    },
+
+    "climate_energy": {
+      "label": "Climate / Energy",
+      "description": "Clean energy, carbon, electrification, sustainable agriculture",
+      "exit_multiples": {
+        "bear": 2.0,
+        "base": 4.5,
+        "bull": 10.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 9.0,
+        "p25_post_money": 5.0,
+        "p75_post_money": 18.0,
+        "median_raise_usd_m": 2.0,
+        "median_arr_multiple": null,
+        "traction_bar": "Technical team; energy/climate policy expertise; pilot site identified"
+      },
+      "seed": {
+        "median_post_money_usd_m": 25.0,
+        "p25_post_money": 12.0,
+        "p75_post_money": 50.0,
+        "median_raise_usd_m": 5.0,
+        "median_arr_usd_m": 0.3,
+        "median_arr_multiple": 83.0,
+        "traction_bar": "$250K ARR; pilot deployed; policy/regulatory strategy clear"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 80.0,
+        "p25_post_money": 40.0,
+        "p75_post_money": 150.0,
+        "median_raise_usd_m": 20.0,
+        "median_arr_usd_m": 2.0,
+        "median_arr_multiple": 40.0,
+        "traction_bar": "$1.5M ARR; ITC/IRA incentive clarity; 3+ enterprise contracts"
+      }
+    },
+
+    "marketplace": {
+      "label": "Marketplace",
+      "description": "Two-sided marketplaces; labor, supply chain, B2B procurement",
+      "exit_multiples": {
+        "bear": 2.0,
+        "base": 5.0,
+        "bull": 12.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 7.0,
+        "p25_post_money": 4.0,
+        "p75_post_money": 14.0,
+        "median_raise_usd_m": 1.5,
+        "median_arr_multiple": null,
+        "traction_bar": "First transactions; supply and demand sides seeded; take rate defined"
+      },
+      "seed": {
+        "median_post_money_usd_m": 20.0,
+        "p25_post_money": 10.0,
+        "p75_post_money": 40.0,
+        "median_raise_usd_m": 4.0,
+        "median_arr_usd_m": 0.3,
+        "median_arr_multiple": 67.0,
+        "traction_bar": "$2M+ GMV/mo; 5-10% take rate; supply-side liquidity in 1 geography"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 75.0,
+        "p25_post_money": 40.0,
+        "p75_post_money": 150.0,
+        "median_raise_usd_m": 15.0,
+        "median_arr_usd_m": 1.5,
+        "median_arr_multiple": 50.0,
+        "traction_bar": "$15M+ GMV/mo; defensible supply; 2nd geography live"
+      }
+    },
+
+    "vertical_saas": {
+      "label": "Vertical SaaS",
+      "description": "Industry-specific SaaS: legal, real estate, construction, logistics, etc.",
+      "exit_multiples": {
+        "bear": 2.5,
+        "base": 5.5,
+        "bull": 12.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 6.0,
+        "p25_post_money": 3.5,
+        "p75_post_money": 11.0,
+        "median_raise_usd_m": 1.2,
+        "median_arr_multiple": null,
+        "traction_bar": "Domain expertise; 2-5 design partners in target vertical; workflow mapped"
+      },
+      "seed": {
+        "median_post_money_usd_m": 16.0,
+        "p25_post_money": 9.0,
+        "p75_post_money": 30.0,
+        "median_raise_usd_m": 2.5,
+        "median_arr_usd_m": 0.4,
+        "median_arr_multiple": 40.0,
+        "traction_bar": "$300K-$600K ARR; net revenue retention >105%; 20+ customers"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 65.0,
+        "p25_post_money": 35.0,
+        "p75_post_money": 120.0,
+        "median_raise_usd_m": 12.0,
+        "median_arr_usd_m": 2.0,
+        "median_arr_multiple": 33.0,
+        "traction_bar": "$1.5M-$3M ARR; vertical-specific integrations; geographic expansion ready"
+      }
+    },
+
+    "developer_tools": {
+      "label": "Developer Tools",
+      "description": "DevOps, security, observability, APIs, dev productivity",
+      "exit_multiples": {
+        "bear": 3.0,
+        "base": 7.0,
+        "bull": 18.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 9.0,
+        "p25_post_money": 5.0,
+        "p75_post_money": 18.0,
+        "median_raise_usd_m": 2.0,
+        "median_arr_multiple": null,
+        "traction_bar": "Open source traction (500+ GitHub stars) OR 5+ design partners paying"
+      },
+      "seed": {
+        "median_post_money_usd_m": 25.0,
+        "p25_post_money": 14.0,
+        "p75_post_money": 55.0,
+        "median_raise_usd_m": 4.5,
+        "median_arr_usd_m": 0.5,
+        "median_arr_multiple": 50.0,
+        "traction_bar": "$300K-$1M ARR; PLG motion with enterprise upsell; 2K+ GitHub stars"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 90.0,
+        "p25_post_money": 50.0,
+        "p75_post_money": 180.0,
+        "median_raise_usd_m": 18.0,
+        "median_arr_usd_m": 3.0,
+        "median_arr_multiple": 30.0,
+        "traction_bar": "$2M-$4M ARR; enterprise deals alongside PLG; security review passing"
+      }
+    }
+  },
+
+  "comparable_rounds_2024_2025": {
+    "_source": "PitchBook, Crunchbase, public announcements — illustrative benchmarks only",
+    "ai_seed_rounds_2024": {
+      "median_post_money_usd_m": 45.0,
+      "note": "AI infrastructure seed rounds trading at significant premium vs. other verticals"
+    },
+    "b2b_saas_seed_2024": {
+      "median_post_money_usd_m": 18.0,
+      "note": "Compression from 2021 highs; returning to 2019-era multiples"
+    },
+    "down_round_prevalence_2024": {
+      "pct_of_all_rounds": 0.17,
+      "note": "17% of 2024 rounds were down rounds (Carta) — up from 7% in 2021"
+    }
+  },
+
+  "management_fee_drag": {
+    "standard_2_20": {
+      "fee_pct": 0.02,
+      "fee_years_committed": 5,
+      "fee_years_step_down": "invested_capital",
+      "typical_drag_on_100m_fund": 10.0,
+      "note": "2% × 5yr × $100M = $10M fees; investable capital = $90M"
+    },
+    "step_down_structure": {
+      "description": "After deployment period, fees charged on invested capital (net of write-offs)",
+      "effective_drag_pct_of_fund": 0.08,
+      "note": "Effective total fee drag ~8% of fund over typical 10-year life"
+    }
+  }
+}
