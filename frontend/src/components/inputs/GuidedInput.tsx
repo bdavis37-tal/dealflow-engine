@@ -4,6 +4,7 @@
  */
 import React, { useState } from 'react'
 import { HelpCircle } from 'lucide-react'
+import AIHelpPopover from './AIHelpPopover'
 
 interface GuidedInputProps {
   label: string
@@ -21,6 +22,10 @@ interface GuidedInputProps {
   max?: number
   step?: number
   disabled?: boolean
+  /** When provided, replaces the static help icon with an AI-powered popover */
+  fieldName?: string
+  /** Industry context passed to the AI help explanation */
+  industry?: string
 }
 
 export default function GuidedInput({
@@ -39,8 +44,12 @@ export default function GuidedInput({
   max,
   step,
   disabled,
+  fieldName,
+  industry,
 }: GuidedInputProps) {
   const [showHelp, setShowHelp] = useState(false)
+
+  const useAIHelp = !!fieldName && !!help
 
   return (
     <div className="space-y-1.5">
@@ -49,14 +58,24 @@ export default function GuidedInput({
           {label}
           {required && <span className="text-red-400 text-xs">*</span>}
           {help && (
-            <button
-              type="button"
-              onClick={() => setShowHelp(v => !v)}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
-              aria-label="Help"
-            >
-              <HelpCircle size={13} />
-            </button>
+            useAIHelp ? (
+              <AIHelpPopover
+                fieldName={fieldName!}
+                fieldLabel={label}
+                staticHelp={help}
+                industry={industry}
+                currentValue={value !== '' ? String(value) : undefined}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowHelp(v => !v)}
+                className="text-slate-500 hover:text-slate-300 transition-colors"
+                aria-label="Help"
+              >
+                <HelpCircle size={13} />
+              </button>
+            )
           )}
         </label>
         {defaultNote && (
@@ -64,7 +83,7 @@ export default function GuidedInput({
         )}
       </div>
 
-      {showHelp && help && (
+      {!useAIHelp && showHelp && help && (
         <p className="text-xs text-slate-400 bg-slate-800/60 rounded-md px-3 py-2 border border-slate-700/50 animate-fade-in">
           {help}
         </p>

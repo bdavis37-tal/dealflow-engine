@@ -1,23 +1,33 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Download, RotateCcw } from 'lucide-react'
-import type { DealOutput } from '../../types/deal'
+import type { DealInput, DealOutput } from '../../types/deal'
 import Verdict from './Verdict'
 import DealScorecard from './DealScorecard'
 import RiskPanel from './RiskPanel'
 import SensitivityExplorer from './SensitivityExplorer'
 import FinancialStatements from './FinancialStatements'
+import AINarrative from './AINarrative'
+import AIChatPanel from './AIChatPanel'
+import { checkAIStatus } from '../../lib/ai-api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
-import { formatPercentage } from '../../lib/formatters'
 
 interface ResultsDashboardProps {
   output: DealOutput
+  dealInput: DealInput
   onReset: () => void
 }
 
-export default function ResultsDashboard({ output, onReset }: ResultsDashboardProps) {
+export default function ResultsDashboard({ output, dealInput, onReset }: ResultsDashboardProps) {
   const [showNotes, setShowNotes] = useState(false)
+  const [aiAvailable, setAiAvailable] = useState(false)
+
+  useEffect(() => {
+    checkAIStatus()
+      .then(s => setAiAvailable(s.ai_available))
+      .catch(() => setAiAvailable(false))
+  }, [])
 
   const chartData = output.pro_forma_income_statement.map(yr => ({
     year: `Year ${yr.year}`,
@@ -27,7 +37,7 @@ export default function ResultsDashboard({ output, onReset }: ResultsDashboardPr
   }))
 
   return (
-    <div className="animate-fade-in space-y-10">
+    <div className="animate-fade-in space-y-10 pb-24">
       {/* Header bar */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-100">Deal Analysis</h1>
@@ -35,6 +45,11 @@ export default function ResultsDashboard({ output, onReset }: ResultsDashboardPr
           {output.convergence_warning && (
             <span className="text-xs text-amber-400 border border-amber-800/40 rounded-lg px-3 py-1">
               ⚠ Solver estimate
+            </span>
+          )}
+          {aiAvailable && (
+            <span className="text-2xs text-purple-400 border border-purple-800/30 rounded-full px-2 py-0.5">
+              ✦ AI enabled
             </span>
           )}
           <button
@@ -51,6 +66,13 @@ export default function ResultsDashboard({ output, onReset }: ResultsDashboardPr
         verdict={output.deal_verdict}
         headline={output.deal_verdict_headline}
         subtext={output.deal_verdict_subtext}
+      />
+
+      {/* AI Narrative — appears below verdict when AI is available */}
+      <AINarrative
+        dealInput={dealInput}
+        dealOutput={output}
+        aiAvailable={aiAvailable}
       />
 
       {/* Scorecard */}
@@ -109,10 +131,15 @@ export default function ResultsDashboard({ output, onReset }: ResultsDashboardPr
       {/* Risk Panel */}
       <RiskPanel risks={output.risk_assessment} />
 
-      {/* Sensitivity Explorer */}
+      {/* Sensitivity Explorer — now with AI scenario stories on cell click */}
       {output.sensitivity_matrices.length > 0 && (
         <div className="rounded-xl border border-slate-700 bg-slate-800/10 p-6">
-          <SensitivityExplorer matrices={output.sensitivity_matrices} />
+          <SensitivityExplorer
+            matrices={output.sensitivity_matrices}
+            dealInput={dealInput}
+            dealOutput={output}
+            aiAvailable={aiAvailable}
+          />
         </div>
       )}
 
@@ -148,15 +175,19 @@ export default function ResultsDashboard({ output, onReset }: ResultsDashboardPr
         >
           <RotateCcw size={14} /> Model Another Deal
         </button>
-        <div className="flex gap-3">
-          <button
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 text-sm transition-colors opacity-50 cursor-not-allowed"
-            title="Export coming soon"
-          >
-            <Download size={14} /> Export PDF
-          </button>
-        </div>
+        <button
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-700 text-slate-400 text-sm transition-colors opacity-50 cursor-not-allowed"
+          title="Export coming soon"
+        >
+          <Download size={14} /> Export PDF
+        </button>
       </div>
+
+      {/* AI Co-Pilot — floating chat panel, bottom-right */}
+      <AIChatPanel
+        dealInput={dealInput}
+        dealOutput={output}
+      />
     </div>
   )
 }

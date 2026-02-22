@@ -16,7 +16,9 @@ RUN pip install --no-cache-dir --upgrade pip \
         fastapi \
         "uvicorn[standard]" \
         pydantic \
-        python-multipart
+        python-multipart \
+        "anthropic>=0.28.0" \
+        "python-dotenv>=1.0.0"
 
 # Copy application code
 COPY app/ ./app/

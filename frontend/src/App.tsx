@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import AppShell from './components/layout/AppShell'
 import Step1_DealOverview from './components/flow/Step1_DealOverview'
 import Step2_BuyerProfile from './components/flow/Step2_BuyerProfile'
@@ -6,8 +7,10 @@ import Step4_Financing from './components/flow/Step4_Financing'
 import Step5_Synergies from './components/flow/Step5_Synergies'
 import Step6_Review from './components/flow/Step6_Review'
 import ResultsDashboard from './components/output/ResultsDashboard'
+import ConversationalEntry from './components/flow/ConversationalEntry'
 import { useDealState } from './hooks/useDealState'
-import type { FlowStep } from './types/deal'
+import type { FlowStep, DealInput, AcquirerProfile, TargetProfile } from './types/deal'
+import { checkAIStatus } from './lib/ai-api'
 
 export default function App() {
   const {
@@ -23,15 +26,44 @@ export default function App() {
     runAnalysis,
   } = useDealState()
 
-  const { step, mode, acquirer, target, structure, synergies, output } = state
+  const { step, mode, acquirer, target, structure, ppa, synergies, output } = state
+
+  const [aiAvailable, setAiAvailable] = useState(false)
+  // Show conversational entry first on step 1; skip to form if user prefers
+  const [showConversational, setShowConversational] = useState(true)
+
+  useEffect(() => {
+    checkAIStatus()
+      .then(s => setAiAvailable(s.ai_available))
+      .catch(() => setAiAvailable(false))
+  }, [])
 
   const nav = (s: FlowStep) => () => setStep(s)
 
+  const handleExtracted = (
+    acq: Partial<AcquirerProfile>,
+    tgt: Partial<TargetProfile>,
+    _summary: string,
+  ) => {
+    updateAcquirer(acq)
+    updateTarget(tgt)
+    setStep(2)
+  }
+
   // If we have output, show the results dashboard
   if (output && !state.isLoading) {
+    const dealInput: DealInput = {
+      acquirer: acquirer as AcquirerProfile,
+      target: target as TargetProfile,
+      structure,
+      ppa,
+      synergies,
+      mode,
+      projection_years: 5,
+    }
     return (
       <AppShell step={6} mode={mode} onModeChange={setMode} showNav={false}>
-        <ResultsDashboard output={output} onReset={reset} />
+        <ResultsDashboard output={output} dealInput={dealInput} onReset={reset} />
       </AppShell>
     )
   }
@@ -41,7 +73,14 @@ export default function App() {
 
   return (
     <AppShell step={step} mode={mode} onModeChange={setMode}>
-      {step === 1 && (
+      {step === 1 && showConversational && (
+        <ConversationalEntry
+          aiAvailable={aiAvailable}
+          onExtracted={handleExtracted}
+          onSkipToForm={() => setShowConversational(false)}
+        />
+      )}
+      {step === 1 && !showConversational && (
         <Step1_DealOverview
           acquirer={acquirer}
           target={target}

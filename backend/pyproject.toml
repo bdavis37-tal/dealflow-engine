@@ -12,6 +12,8 @@ dependencies = [
     "uvicorn[standard]>=0.29.0",
     "pydantic>=2.7.0",
     "python-multipart>=0.0.9",
+    "anthropic>=0.28.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

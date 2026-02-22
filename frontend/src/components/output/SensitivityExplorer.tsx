@@ -1,12 +1,21 @@
 import { useState } from 'react'
-import type { SensitivityMatrix } from '../../types/deal'
+import type { SensitivityMatrix, DealInput, DealOutput } from '../../types/deal'
 import HeatmapCell from '../shared/HeatmapCell'
+import ScenarioNarrative from './ScenarioNarrative'
 
 interface SensitivityExplorerProps {
   matrices: SensitivityMatrix[]
+  dealInput?: DealInput
+  dealOutput?: DealOutput
+  aiAvailable?: boolean
 }
 
-export default function SensitivityExplorer({ matrices }: SensitivityExplorerProps) {
+export default function SensitivityExplorer({
+  matrices,
+  dealInput,
+  dealOutput,
+  aiAvailable = false,
+}: SensitivityExplorerProps) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [pinned, setPinned] = useState<[number, number] | null>(null)
 
@@ -114,6 +123,20 @@ export default function SensitivityExplorer({ matrices }: SensitivityExplorerPro
         </div>
         <span>← More accretive</span>
       </div>
+
+      {/* AI Scenario Narrative — appears when a cell is pinned */}
+      {pinned && dealInput && dealOutput && (
+        <ScenarioNarrative
+          dealInput={dealInput}
+          dealOutput={dealOutput}
+          rowLabel={matrix.row_label}
+          colLabel={matrix.col_label}
+          rowValue={matrix.row_values[pinned[0]]}
+          colValue={matrix.col_values[pinned[1]]}
+          accretionPct={matrix.data[pinned[0]][pinned[1]] * 100}
+          aiAvailable={aiAvailable}
+        />
+      )}
     </div>
   )
 }

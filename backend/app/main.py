@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes import router
+from .api.ai_routes import router as ai_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,7 +18,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Dealflow Engine API starting up...")
+    # Load .env file if present (development convenience)
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
+    from .services.ai_service import is_ai_available
+    ai_status = "enabled" if is_ai_available() else "disabled (no ANTHROPIC_API_KEY)"
+    logger.info("Dealflow Engine API starting up... AI features: %s", ai_status)
     yield
     logger.info("Dealflow Engine API shutting down.")
 
@@ -49,6 +59,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(ai_router)
 
 
 @app.get("/")
