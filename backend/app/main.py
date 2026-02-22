@@ -4,6 +4,7 @@ FastAPI application entry point for the dealflow engine.
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -44,15 +45,25 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow the frontend (Vite dev server + production build)
+# CORS — origins configured from CORS_ORIGINS env var (comma-separated).
+# Falls back to safe localhost-only defaults for development.
+# In production, set CORS_ORIGINS to your actual frontend origin(s).
+_default_origins = [
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:3000",   # Alternative dev port
+    "http://localhost:80",     # Docker production
+    "http://frontend:80",      # Docker compose internal
+]
+_env_origins = os.environ.get("CORS_ORIGINS", "")
+allowed_origins = (
+    [o.strip() for o in _env_origins.split(",") if o.strip()]
+    if _env_origins
+    else _default_origins
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite dev server
-        "http://localhost:3000",   # Alternative dev port
-        "http://localhost:80",     # Docker production
-        "http://frontend:80",      # Docker compose internal
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

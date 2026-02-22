@@ -9,6 +9,13 @@ The key income statement impact:
   - Incremental D&A from asset step-ups (depreciates over useful life)
   - Intangible amortization (amortizes over useful life)
   - Goodwill (no P&L impact unless impaired — excluded from our model)
+
+Deferred Tax Liability (DTL):
+  Under ASC 805, asset step-ups and intangible allocations create temporary
+  differences between book and tax basis. A DTL is recognized for these
+  differences: DTL = (asset_writeup + identifiable_intangibles) × tax_rate.
+  The DTL reduces the fair value of net identifiable assets (FVNA), which
+  increases goodwill — this is standard practice in M&A accounting.
 """
 from __future__ import annotations
 
@@ -24,7 +31,8 @@ class PPAResult:
     net_assets_book_value: float    # Target's pre-deal book equity (approx)
     asset_writeup: float            # PP&E fair value step-up
     identifiable_intangibles: float # Customer relationships, IP, trade names, etc.
-    goodwill: float                 # Residual = Price - FVNA
+    deferred_tax_liability: float   # DTL on step-ups: (writeup + intangibles) × tax_rate
+    goodwill: float                 # Residual = Price - FVNA (after DTL)
     # Annual incremental charges
     incremental_da_annual: float    # From asset writeup (straight-line over useful life)
     incremental_amort_annual: float # From intangibles (straight-line over useful life)
@@ -36,32 +44,42 @@ def compute_ppa(deal: DealInput) -> PPAResult:
     Perform purchase price allocation for a transaction.
 
     Goodwill = Purchase Price - Fair Value of Net Identifiable Assets (ASC 805)
-    Fair Value of Net Identifiable Assets = Target book equity + asset step-ups + intangibles
-    - Target's assumed debt (refinanced/assumed into the transaction)
-    + Target's cash (acquired)
+
+    FVNA = Target book equity
+         + PP&E step-up (asset_writeup)
+         + Identifiable intangibles
+         - Deferred tax liability on step-ups  (ASC 805 / ASC 740)
+
+    The DTL arises because step-ups increase book basis above tax basis,
+    creating a future taxable temporary difference. DTL = step-ups × tax_rate.
 
     Args:
         deal: Complete deal input including PPA assumptions.
 
     Returns:
-        PPAResult with goodwill and annual incremental charges.
+        PPAResult with goodwill, DTL, and annual incremental charges.
     """
     target = deal.target
     ppa = deal.ppa
+    tax_rate = deal.acquirer.tax_rate
 
-    # Approximate target net assets (book equity) = assets - liabilities
-    # We use a simplified proxy: revenue * NWC% as proxy for book equity
-    # In a real model this would use the target's balance sheet directly.
-    # Here we estimate net assets = cash + NWC - debt (rough proxy)
+    # Approximate target net assets (book equity)
+    # = cash + NWC - pre-existing debt (rough proxy; a real model uses full BS)
     net_assets_book = (
         target.cash_on_hand
         + target.working_capital
         - target.total_debt
     )
 
+    # Deferred tax liability on step-ups (ASC 805 / ASC 740)
+    # The acquirer steps up PP&E and intangibles to FV but tax basis remains at cost,
+    # so a DTL is established: DTL = taxable temporary difference × tax_rate.
+    taxable_temporary_difference = ppa.asset_writeup + ppa.identifiable_intangibles
+    dtl = taxable_temporary_difference * tax_rate
+
     # Fair value of net identifiable assets (FVNA)
-    # FVNA = Book value + asset step-ups + identifiable intangibles
-    fvna = net_assets_book + ppa.asset_writeup + ppa.identifiable_intangibles
+    # FVNA = Book value + step-ups + intangibles - DTL
+    fvna = net_assets_book + ppa.asset_writeup + ppa.identifiable_intangibles - dtl
 
     # Goodwill is the residual — what you paid above the fair value of what you got
     # Goodwill = Purchase Price - FVNA
@@ -88,6 +106,7 @@ def compute_ppa(deal: DealInput) -> PPAResult:
         net_assets_book_value=net_assets_book,
         asset_writeup=ppa.asset_writeup,
         identifiable_intangibles=ppa.identifiable_intangibles,
+        deferred_tax_liability=dtl,
         goodwill=goodwill,
         incremental_da_annual=incremental_da,
         incremental_amort_annual=incremental_amort,

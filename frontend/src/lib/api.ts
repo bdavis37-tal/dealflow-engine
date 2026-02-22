@@ -13,11 +13,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export async function analyzeDeal(input: DealInput): Promise<DealOutput> {
+export async function analyzeDeal(input: DealInput, signal?: AbortSignal): Promise<DealOutput> {
   const res = await fetch(`${BASE_URL}/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
+    signal,
   })
   return handleResponse<DealOutput>(res)
 }

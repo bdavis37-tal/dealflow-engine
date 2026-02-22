@@ -42,10 +42,10 @@ async def analyze_deal(deal: DealInput) -> DealOutput:
         result = run_deal(deal)
         return result
     except ValidationError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
+        raise HTTPException(status_code=422, detail="Invalid deal inputs. Please check your values and try again.")
+    except Exception:
         logger.exception("Deal analysis failed")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Deal analysis encountered an internal error. Please try again.")
 
 
 @router.get("/defaults", summary="Get smart defaults for a deal")
@@ -89,8 +89,9 @@ async def get_smart_defaults(
                 "facility_synergy_pct_revenue": defaults.facility_synergy_pct_revenue,
             },
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Failed to retrieve defaults for industry=%s deal_size=%s", industry, deal_size)
+        raise HTTPException(status_code=500, detail="Failed to retrieve industry defaults.")
 
 
 @router.get("/industries", summary="List supported industries")

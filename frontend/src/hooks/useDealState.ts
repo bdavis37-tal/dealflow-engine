@@ -2,7 +2,7 @@
  * Central state management for the deal flow.
  * Uses React useState + localStorage for persistence across reloads.
  */
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type {
   DealState,
   FlowStep,
@@ -77,6 +77,8 @@ function loadFromStorage(): DealState {
 
 export function useDealState() {
   const [state, setState] = useState<DealState>(loadFromStorage)
+  // Track the in-flight AbortController so repeated clicks cancel stale requests
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Persist input state (not output) to localStorage
   useEffect(() => {
@@ -118,7 +120,15 @@ export function useDealState() {
   }, [])
 
   const runAnalysis = useCallback(async () => {
-    const { acquirer, target, structure, ppa, synergies, mode } = state
+    const { acquirer, target, structure, ppa, synergies, mode, isLoading } = state
+
+    // Prevent overlapping requests: if already loading, abort the in-flight request
+    // and start fresh rather than silently stacking duplicate calls.
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
 
     setState(s => ({ ...s, isLoading: true, error: null, loadingMessage: LOADING_MESSAGES[0] }))
 
@@ -142,8 +152,13 @@ export function useDealState() {
         projection_years: 5,
       }
 
-      const output = await analyzeDeal(input)
+      const output = await analyzeDeal(input, controller.signal)
+
+      // Ignore stale response if this request was superseded by a newer one
+      if (controller.signal.aborted) return
+
       clearInterval(msgInterval)
+      abortControllerRef.current = null
       setState(s => ({
         ...s,
         output,
@@ -153,6 +168,9 @@ export function useDealState() {
       }))
     } catch (err) {
       clearInterval(msgInterval)
+      // Ignore abort errors — a newer request has taken over
+      if (err instanceof Error && err.name === 'AbortError') return
+      abortControllerRef.current = null
       const message = err instanceof Error ? err.message : 'Analysis failed'
       setState(s => ({ ...s, isLoading: false, loadingMessage: '', error: message }))
     }

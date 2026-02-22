@@ -110,12 +110,15 @@ def _format_pct(value: float) -> str:
 # Main engine
 # ---------------------------------------------------------------------------
 
-def run_deal(deal: DealInput) -> DealOutput:
+def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     """
     Execute the full deal model computation.
 
     Args:
         deal: Complete deal inputs.
+        include_sensitivity: When False, skips sensitivity matrix generation.
+            Always pass False when calling run_deal() from within a sensitivity
+            function to prevent exponential recursive re-entry.
 
     Returns:
         DealOutput with all computed results.
@@ -139,11 +142,15 @@ def run_deal(deal: DealInput) -> DealOutput:
     acquirer_revenue_growth = 0.03  # Modest organic growth for acquirer
     target_growth = tgt.revenue_growth_rate
 
-    # Gross margin assumptions (use actuals if available, else infer)
-    acq_gross_margin = (acq.revenue - (acq.revenue - acq.ebitda - acq.depreciation)) / acq.revenue
-    # More robust: derive from EBITDA margin + SG&A estimate
+    # EBITDA margin (guarded against zero revenue — Pydantic enforces gt=0, but
+    # be explicit here in case the engine is called directly in tests)
     acq_ebitda_margin = acq.ebitda / acq.revenue if acq.revenue > 0 else 0.15
     tgt_ebitda_margin = tgt.ebitda / tgt.revenue if tgt.revenue > 0 else 0.12
+
+    # Gross margin: derive from EBITDA margin + SG&A proxy
+    # Guard against acq_ebitda_margin producing unrealistic gross margins
+    acq_gross_margin_base = max(0.1, min(0.95, acq_ebitda_margin + 0.20))
+    tgt_gross_margin_base = max(0.1, min(0.95, tgt_ebitda_margin + 0.20))
 
     # Standalone acquirer EPS (for accretion/dilution comparison)
     acq_standalone_eps = acq.eps
@@ -196,6 +203,7 @@ def run_deal(deal: DealInput) -> DealOutput:
     ebitda_by_year: list[float] = []
     net_income_by_year: list[float] = []
     ending_debt_by_year: list[float] = []
+    fcf_by_year: list[float] = []
 
     for yr in range(1, n_years + 1):
         ds = debt_schedules[yr - 1]
@@ -209,12 +217,11 @@ def run_deal(deal: DealInput) -> DealOutput:
         rev_syn_yr = _synergy_year_value(deal.synergies.revenue_synergies, yr)
         total_rev = combined_rev + rev_syn_yr
 
-        # COGS (derive from gross margin; simplified: combined approach)
-        acq_gross_margin_yr = max(0.1, acq_ebitda_margin + 0.20)  # rough proxy
-        tgt_gross_margin_yr = max(0.1, tgt_ebitda_margin + 0.20)
+        # COGS (derive from gross margin; simplified combined approach)
+        # acq_gross_margin_base / tgt_gross_margin_base are pre-computed above
         combined_cogs = (
-            acq_rev_yr * (1 - acq_gross_margin_yr)
-            + tgt_rev_yr * (1 - tgt_gross_margin_yr)
+            acq_rev_yr * (1 - acq_gross_margin_base)
+            + tgt_rev_yr * (1 - tgt_gross_margin_base)
         )
 
         # Cost synergies (reduce SG&A / COGS)
@@ -222,9 +229,10 @@ def run_deal(deal: DealInput) -> DealOutput:
 
         gross_profit = total_rev - combined_cogs
 
-        # SG&A (back-calculate from EBITDA margin and revenue)
-        acq_sga = acq.revenue * (acq_gross_margin_yr - acq_ebitda_margin) * (acq_rev_yr / acq.revenue)
-        tgt_sga = tgt.revenue * (tgt_gross_margin_yr - tgt_ebitda_margin) * (tgt_rev_yr / tgt.revenue)
+        # SG&A: (gross_margin - ebitda_margin) × revenue for each entity, scaled by growth
+        # No division by acq.revenue needed — use the base margin gap directly
+        acq_sga = acq_rev_yr * (acq_gross_margin_base - acq_ebitda_margin)
+        tgt_sga = tgt_rev_yr * (tgt_gross_margin_base - tgt_ebitda_margin)
         combined_sga = acq_sga + tgt_sga - cost_syn_yr
 
         ebitda = gross_profit - combined_sga
@@ -260,9 +268,16 @@ def run_deal(deal: DealInput) -> DealOutput:
             if standalone_eps_yr != 0 else 0.0
         )
 
+        # FCF for returns roll-forward: NI + D&A - capex - WC change
+        # Optional cash sweep (debt paydown from excess FCF) is already reflected
+        # in ds.ending_debt_balance, so we track only what remains as free cash.
+        capex_yr = (acq.capex + tgt.capex)
+        fcf_yr = net_income + da_total - capex_yr - ds.optional_cash_sweep
+
         ebitda_by_year.append(ebitda)
         net_income_by_year.append(net_income)
         ending_debt_by_year.append(ds.ending_debt_balance)
+        fcf_by_year.append(fcf_yr)
 
         income_statement.append(IncomeStatementYear(
             year=yr,
@@ -283,19 +298,49 @@ def run_deal(deal: DealInput) -> DealOutput:
         ))
 
         # ------------------------------------------------------------------
-        # Accretion/Dilution Bridge
+        # Accretion/Dilution Bridge (reconciled to IS EPS delta)
         # ------------------------------------------------------------------
-        # Bridge components explain the EPS change vs standalone
-        target_earnings_contribution = (tgt.net_income * (1 + target_growth) ** yr) / total_shares_pro_forma
-        interest_drag = -(interest_exp * (1 - acq.tax_rate)) / total_shares_pro_forma
-        da_adj = -(ppa.total_incremental_annual * (1 - acq.tax_rate)) / total_shares_pro_forma
-        syn_benefit = ((cost_syn_yr + rev_syn_yr) * (1 - acq.tax_rate)) / total_shares_pro_forma
+        # EPS delta = pro_forma_eps - standalone_eps_yr (the IS truth)
+        # We build the bridge from an explicit NI walk:
+        #   Standalone NI (acquirer-only)  →  [per original share count]
+        #   + Target NI contribution       →  target NI scaled to pro forma shares
+        #   - Incremental interest (AT)    →  new debt service after-tax
+        #   - Incremental D&A (AT)         →  PPA step-up charges after-tax
+        #   + Synergy benefit (AT)         →  cost + revenue synergies after-tax
+        #   - Share dilution effect        →  EPS erosion from new shares outstanding
+        #   + Reconciling item             →  captures all other effects (transaction
+        #                                     costs, tax timing differences, rounding)
+        # The reconciling item makes the bridge tie exactly to the IS EPS delta.
+
+        acq_standalone_ni_yr = standalone_eps_yr * acq.shares_outstanding
+        target_ni_yr = tgt.net_income * (1 + target_growth) ** yr
+
+        # Per-share deltas (denominator = pro forma shares for comparability)
+        target_earnings_contribution = target_ni_yr / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        interest_drag = -(interest_exp * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        da_adj = -(ppa.total_incremental_annual * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        syn_benefit = ((cost_syn_yr + rev_syn_yr) * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
         share_dilution = (
-            -(standalone_eps_yr * new_shares_issued / total_shares_pro_forma)
-            if new_shares_issued > 0 else 0.0
+            # EPS is diluted because the same standalone NI is spread over more shares
+            -((acq_standalone_ni_yr / total_shares_pro_forma) - standalone_eps_yr)
+            if new_shares_issued > 0 and total_shares_pro_forma > 0 else 0.0
         )
-        tax_impact = 0.0  # Captured in tax rate already
-        total_bridge = target_earnings_contribution + interest_drag + da_adj + syn_benefit + share_dilution
+
+        # Sum of explicit components
+        components_sum = (
+            target_earnings_contribution
+            + interest_drag
+            + da_adj
+            + syn_benefit
+            + share_dilution
+        )
+
+        # Reconciling item = actual EPS delta minus sum of components
+        # This captures transaction costs, tax differences, WC effects, etc.
+        actual_eps_delta = pro_forma_eps - standalone_eps_yr
+        tax_impact = actual_eps_delta - components_sum  # Reconciling / residual
+
+        total_bridge = components_sum + tax_impact  # = actual_eps_delta by construction
 
         ad_bridge.append(AccretionDilutionBridge(
             year=yr,
@@ -310,9 +355,21 @@ def run_deal(deal: DealInput) -> DealOutput:
         ))
 
     # -----------------------------------------------------------------------
-    # Balance Sheet at Close
+    # Balance Sheet at Close (simplified opening BS; see F3 in review for full fix)
     # -----------------------------------------------------------------------
+    # Assets: acquirer book assets (proxied) + target intangibles + goodwill + PP&E writeup
     acq_combined_assets = (acq.revenue * 1.2) + ppa.goodwill + ppa.identifiable_intangibles + ppa.asset_writeup
+    combined_total_assets = acq_combined_assets + tgt.revenue * 0.8
+
+    # Liabilities: acquirer existing debt + new acquisition debt + DTL on step-ups
+    combined_total_liabilities = (
+        acq.total_debt
+        + acq_debt_total
+        + ppa.deferred_tax_liability  # DTL from PP&E and intangible step-ups (ASC 805)
+    )
+    # Equity: acquirer market cap + new shares at issue price
+    combined_equity = acq.market_cap + new_shares_issued * acq.share_price
+
     balance_sheet = BalanceSheetAtClose(
         goodwill=ppa.goodwill,
         identifiable_intangibles=ppa.identifiable_intangibles,
@@ -321,30 +378,35 @@ def run_deal(deal: DealInput) -> DealOutput:
         cash_used=deal.target.acquisition_price * deal.structure.cash_percentage,
         shares_issued=new_shares_issued,
         target_equity_eliminated=max(0.0, tgt.working_capital + tgt.cash_on_hand - tgt.total_debt),
-        combined_total_assets=acq_combined_assets + tgt.revenue * 0.8,
-        combined_total_liabilities=acq.total_debt + acq_debt_total + tgt.total_debt * 0,  # Target debt refinanced
-        combined_equity=(acq.market_cap + new_shares_issued * acq.share_price),
+        combined_total_assets=combined_total_assets,
+        combined_total_liabilities=combined_total_liabilities,
+        combined_equity=combined_equity,
     )
 
     # -----------------------------------------------------------------------
     # Returns Analysis
     # -----------------------------------------------------------------------
-    returns = compute_returns(deal, ebitda_by_year, net_income_by_year, ending_debt_by_year)
+    returns = compute_returns(deal, ebitda_by_year, net_income_by_year, ending_debt_by_year, fcf_by_year)
 
     # -----------------------------------------------------------------------
     # Sensitivity Matrices
     # -----------------------------------------------------------------------
-    def _accretion_fn(modified_deal: DealInput) -> float:
-        """Quick re-run for sensitivity — returns Year 1 accretion as decimal."""
-        try:
-            out = run_deal(modified_deal)
-            if out.pro_forma_income_statement:
-                return out.pro_forma_income_statement[0].accretion_dilution_pct / 100
-            return 0.0
-        except Exception:
-            return 0.0
+    if include_sensitivity:
+        def _accretion_fn(modified_deal: DealInput) -> float:
+            """Quick re-run for sensitivity — returns Year 1 accretion as decimal.
+            Calls run_deal with include_sensitivity=False to prevent recursive re-entry.
+            """
+            try:
+                out = run_deal(modified_deal, include_sensitivity=False)
+                if out.pro_forma_income_statement:
+                    return out.pro_forma_income_statement[0].accretion_dilution_pct / 100
+                return 0.0
+            except Exception:
+                return 0.0
 
-    sensitivity_matrices = generate_all_sensitivity_matrices(deal, _accretion_fn)
+        sensitivity_matrices = generate_all_sensitivity_matrices(deal, _accretion_fn)
+    else:
+        sensitivity_matrices = []
 
     # -----------------------------------------------------------------------
     # Risk Assessment
