@@ -1,6 +1,6 @@
 # Dealflow Engine
 
-**Open-source M&A financial modeling engine. TurboTax meets Goldman Sachs — guided deal analysis for everyone, not just bankers.**
+**Open-source deal intelligence platform. Institutional-grade financial modeling for M&A, startup valuation, and venture capital — designed for humans, not just bankers.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
@@ -9,23 +9,22 @@
 
 ---
 
-## The Problem
+## What This Is
 
-M&A financial modeling is broken.
+Dealflow Engine is a unified platform that covers the three core activities in private-market deal-making:
 
-Professional merger models cost $50,000+ when done by advisors. DIY Excel models require years of finance training to build correctly. And even when you have the model, interpreting it requires even more expertise.
+1. **M&A Deal Modeling** — Full merger model with pro forma statements, PPA, circularity solving, sensitivity analysis, and accretion/dilution verdicts.
+2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, Comparable Benchmarks) for pre-seed through Series A, calibrated against Carta/PitchBook data across 12 verticals.
+3. **VC Fund-Seat Analysis** — Evaluate deals from the investor's chair: ownership math, dilution modeling, fund returner thresholds, waterfall analysis, QSBS eligibility, pro-rata decisions, and auto-generated IC memo financials.
 
-The result: most acquisitions — especially in the lower middle market — get analyzed with gut feel and rough math on a napkin. Deals close at the wrong price. Synergies are overestimated. Debt loads cripple the combined company. Acquirers overpay and wonder why the deal didn't work.
+Each module runs a deterministic computation engine underneath. An optional Claude AI co-pilot augments the output with plain-English narratives, scenario explanations, and conversational deal entry — but the computed numbers are always the source of truth.
 
-## The Solution
+## Who It's For
 
-Dealflow Engine is a guided, institutional-grade M&A modeling tool designed for humans.
-
-- **Guided flow** — Six steps, one question cluster at a time. No blank spreadsheet to stare at.
-- **Smart defaults** — Industry benchmarks pre-fill every field. Most users never need to change them.
-- **Plain-English output** — "This deal is accretive by 12.3% in Year 1" — not a table of numbers you have to interpret.
-- **Institutional math** — The engine underneath is the same computational model used by investment banks: pro forma statements, PPA, iterative circularity solving, sensitivity matrices, IRR/MOIC.
-- **Two modes** — Quick Model for business owners and operators. Deep Model for finance professionals who want every lever.
+- **Corporate development teams** evaluating acquisitions without $50K advisory models
+- **Founders** pressure-testing their valuation ask before walking into an investor meeting
+- **VC associates and partners** screening deals against fund economics and portfolio construction constraints
+- **Finance students and analysts** learning institutional deal mechanics with a real computation engine, not static spreadsheet templates
 
 ## Quick Start
 
@@ -42,7 +41,7 @@ docker compose up
 # API docs:  http://localhost:8000/docs
 ```
 
-That's it. No API keys, no accounts, no configuration.
+No API keys, no accounts, no configuration required. AI features activate automatically when `ANTHROPIC_API_KEY` is set.
 
 ## Development Setup
 
@@ -79,114 +78,155 @@ npm test
 
 ```
 dealflow-engine/
-├── backend/                     # Python FastAPI application
+├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI app + CORS
-│   │   ├── api/routes.py        # REST endpoints
-│   │   └── engine/              # Core financial computation
-│   │       ├── models.py        # Pydantic data models
-│   │       ├── financial_engine.py    # Main orchestrator
-│   │       ├── circularity_solver.py  # Debt/interest iterative solver
-│   │       ├── purchase_price.py      # PPA & goodwill (ASC 805)
-│   │       ├── sensitivity.py         # 2D sensitivity matrices
-│   │       ├── returns.py             # IRR / MOIC calculations
-│   │       ├── risk_analyzer.py       # Plain-English risk flags
-│   │       └── defaults.py            # Smart defaults engine
-│   └── tests/                   # pytest test suite
+│   │   ├── main.py                         # FastAPI app + CORS
+│   │   ├── api/
+│   │   │   ├── routes.py                   # /api/v1/* — M&A endpoints
+│   │   │   ├── ai_routes.py                # /api/ai/* — AI co-pilot endpoints
+│   │   │   ├── startup_routes.py           # /api/startup/* — Startup valuation
+│   │   │   └── vc_routes.py                # /api/vc/* — VC fund-seat analysis
+│   │   ├── engine/
+│   │   │   ├── models.py                   # M&A Pydantic models (source of truth)
+│   │   │   ├── financial_engine.py         # M&A orchestrator: run_deal()
+│   │   │   ├── circularity_solver.py       # Debt/interest iterative solver
+│   │   │   ├── purchase_price.py           # PPA & goodwill (ASC 805)
+│   │   │   ├── sensitivity.py              # 2D sensitivity matrices
+│   │   │   ├── returns.py                  # IRR / MOIC calculations
+│   │   │   ├── risk_analyzer.py            # Automated risk flags
+│   │   │   ├── defaults.py                 # Smart defaults engine
+│   │   │   ├── startup_models.py           # Startup valuation Pydantic models
+│   │   │   ├── startup_engine.py           # 4-method startup valuation engine
+│   │   │   ├── vc_fund_models.py           # VC fund-seat Pydantic models
+│   │   │   └── vc_return_engine.py         # VC return/ownership/waterfall engine
+│   │   ├── services/
+│   │   │   └── ai_service.py               # Claude API client, caching, streaming
+│   │   └── data/
+│   │       ├── industry_benchmarks.json    # 20 M&A industry verticals
+│   │       ├── startup_valuation_benchmarks.json  # 12 startup verticals × 3 stages
+│   │       └── vc_benchmarks.json          # VC stage transitions, fund construction, exit data
+│   └── tests/
 │       ├── test_engine.py
 │       ├── test_circularity.py
 │       ├── test_sensitivity.py
-│       └── fixtures/            # Known input/output pairs
-└── frontend/                    # React + TypeScript + Vite
+│       └── fixtures/                       # Known input/output pairs
+│
+└── frontend/
     └── src/
+        ├── App.tsx                         # Mode selector + route orchestrator
+        ├── types/
+        │   ├── deal.ts                     # M&A TypeScript types
+        │   ├── startup.ts                  # Startup valuation types
+        │   └── vc.ts                       # VC fund-seat types
+        ├── hooks/
+        │   ├── useDealState.ts             # M&A state + localStorage
+        │   ├── useStartupState.ts          # Startup valuation state
+        │   └── useVCState.ts               # VC fund-seat state
+        ├── lib/
+        │   ├── api.ts                      # M&A + startup API calls
+        │   ├── ai-api.ts                   # AI streaming (SSE)
+        │   ├── vc-api.ts                   # VC API calls
+        │   └── formatters.ts               # Currency, pct, multiple formatters
         ├── components/
-        │   ├── flow/            # 6-step guided input experience
-        │   ├── output/          # Results dashboard components
-        │   ├── inputs/          # Reusable form components
-        │   └── layout/          # Shell, nav, step indicator
-        ├── hooks/useDealState.ts  # Central state management
-        ├── types/deal.ts          # TypeScript types (mirrors backend)
-        └── lib/                   # API client, formatters
+        │   ├── flow/                       # M&A 6-step guided input
+        │   │   └── startup/                # Startup 4-step input flow
+        │   ├── output/                     # M&A results dashboard
+        │   │   └── startup/                # Startup valuation dashboard
+        │   ├── vc/                         # VC fund setup, deal screen, dashboard,
+        │   │                               #   waterfall, ownership, governance, IC memo
+        │   ├── inputs/                     # Reusable form components
+        │   ├── layout/                     # AppShell, StepIndicator, ModeToggle
+        │   └── shared/                     # MetricCard, HeatmapCell, AIBadge, StreamingText
+        └── styles/globals.css
 ```
 
-### The Financial Engine
+## The Three Engines
 
-The engine is a standalone Python module that takes a `DealInput` and returns a `DealOutput`. It can be used completely independently of the web UI.
+### M&A Deal Model
+
+Full acquisition analysis engine. Takes buyer + target financials, financing structure, PPA assumptions, and synergy estimates. Returns:
+
+- 5-year pro forma income statements with iteratively solved interest expense
+- Purchase price allocation (ASC 805) with goodwill and incremental D&A
+- Accretion/dilution analysis with EPS bridge breakdown
+- IRR and MOIC at exit years 3, 5, 7
+- Three 2D sensitivity matrices (purchase price vs. synergies, cash mix, leverage)
+- Six automated risk flags with severity ratings
+- Deal scorecard with verdict: green (accretive), yellow (marginal), red (dilutive)
 
 ```python
 from app.engine import run_deal
-from app.engine.models import DealInput, AcquirerProfile, TargetProfile, DealStructure
+from app.engine.models import DealInput
 
-deal = DealInput(
-    acquirer=AcquirerProfile(
-        company_name="Acme Corp",
-        revenue=200_000_000,
-        ebitda=30_000_000,
-        net_income=15_000_000,
-        total_debt=20_000_000,
-        cash_on_hand=80_000_000,
-        shares_outstanding=10_000_000,
-        share_price=25.00,
-        tax_rate=0.25,
-        depreciation=5_000_000,
-        capex=4_000_000,
-        working_capital=18_000_000,
-        industry="Manufacturing",
-    ),
-    target=TargetProfile(
-        company_name="Target LLC",
-        revenue=40_000_000,
-        ebitda=6_000_000,
-        net_income=3_000_000,
-        total_debt=0,
-        cash_on_hand=2_000_000,
-        tax_rate=0.25,
-        depreciation=800_000,
-        capex=600_000,
-        working_capital=4_000_000,
-        industry="Manufacturing",
-        acquisition_price=50_000_000,
-        revenue_growth_rate=0.04,
-    ),
-    structure=DealStructure(
-        cash_percentage=1.0,
-        stock_percentage=0.0,
-        debt_percentage=0.0,
-        debt_tranches=[],
-        transaction_fees_pct=0.025,
-        advisory_fees=0,
-    ),
-)
-
-result = run_deal(deal)
+result = run_deal(deal_input)
 print(result.deal_verdict_headline)
 # "This deal is accretive to earnings by 8.2% in Year 1"
 ```
 
-### Computational Model
+### Startup Valuation
 
-**Pro Forma Income Statement** — 5-year annual projections combining buyer + target, with synergy phase-in curves, PPA-adjusted D&A, and iteratively solved interest expense.
+Four-method valuation engine for pre-seed through Series A startups across 12 verticals (AI/ML, B2B SaaS, Fintech, Healthtech, Climate, etc.):
 
-**Purchase Price Allocation (ASC 805)** — Asset writeups, identifiable intangibles, and goodwill calculation. Incremental D&A flows through the income statement automatically.
+- **Berkus Method** — Qualitative factor scoring (idea, team, prototype, relationships, rollout)
+- **Scorecard Method** — Team, market, product, traction, competition weighted against stage medians
+- **Risk Factor Summation** — 12 risk categories adjusted from a vertical-specific base valuation
+- **Comparable Benchmarks** — P25/P50/P75 market data from Carta, PitchBook, and Equidam
 
-**Circularity Solver** — The debt/interest/income/cashflow circularity is solved iteratively (Newton-style, tolerance $1 or 0.01%, max 100 iterations). No circular reference errors.
+Output includes a blended pre-money valuation with confidence range, dilution modeling through future rounds, SAFE conversion mechanics, investor scorecard signals, and a market-calibrated verdict (strong / fair / stretched / at risk).
 
-**Sensitivity Matrices** — 3 standard 2D matrices: Purchase Price vs Synergies, Purchase Price vs Cash Mix, Interest Rate vs Leverage. Each cell shows Year 1 accretion/dilution.
+### VC Fund-Seat Analysis
 
-**Returns Analysis** — IRR and MOIC at exit years 3, 5, 7 across entry ± 2× exit multiples in 0.5× steps.
+Evaluates any deal from the investor's perspective, anchored to fund economics:
 
-**Risk Analysis** — 6 automated risk flags: leverage, synergy execution, interest rate sensitivity, purchase price vs benchmarks, integration cost payback, revenue synergy concentration.
+- **Ownership math** — Entry % through exit % after a full dilution stack (seed → A → B → C → IPO)
+- **Fund returner thresholds** — "This company needs a $2.1B exit to return 1x your fund"
+- **3-scenario return model** — Bear/base/bull with probability-weighted expected MOIC and IRR
+- **Waterfall analysis** — Liquidation preference distribution through a multi-class cap table
+- **Pro-rata decision modeling** — Exercise vs. pass expected value comparison
+- **Portfolio construction** — TVPI/DPI/RVPI, concentration analysis, reserve adequacy
+- **QSBS eligibility** — IRC Section 1202 tax benefit estimation (including 2025 $15M cap changes)
+- **Anti-dilution modeling** — Full ratchet vs. broad-based weighted average in down rounds
+- **Bridge round analysis** — Dilution impact and participation recommendation
+- **IC memo financials** — Auto-generated financial section with investment thesis prompt
 
 ## API Reference
 
-The backend exposes a simple REST API:
+The backend exposes four route groups:
 
 ```
-POST /api/v1/analyze          — Run deal model (DealInput → DealOutput)
+# M&A
+POST /api/v1/analyze          — Run M&A deal model (DealInput → DealOutput)
 GET  /api/v1/defaults         — Smart defaults for industry + deal size
-GET  /api/v1/industries       — List supported industry verticals
+GET  /api/v1/industries       — List supported M&A industry verticals
 GET  /api/v1/health           — Health check
-GET  /docs                    — Interactive API documentation (Swagger)
+
+# Startup Valuation
+POST /api/startup/value       — Run startup valuation engine
+GET  /api/startup/benchmarks  — Benchmark data by vertical + stage
+GET  /api/startup/verticals   — List startup verticals
+GET  /api/startup/stages      — List funding stages
+
+# VC Fund-Seat
+POST /api/vc/evaluate         — Full deal evaluation from fund seat
+POST /api/vc/portfolio        — Portfolio construction analysis
+POST /api/vc/waterfall        — Liquidation preference waterfall
+POST /api/vc/pro-rata         — Pro-rata exercise analysis
+POST /api/vc/qsbs             — QSBS eligibility check (IRC §1202)
+POST /api/vc/anti-dilution    — Down-round anti-dilution modeling
+POST /api/vc/bridge           — Bridge/extension round analysis
+GET  /api/vc/fund/defaults    — Fund profile defaults by size
+GET  /api/vc/benchmarks       — VC benchmarks by vertical + stage
+GET  /api/vc/health           — VC engine health check
+
+# AI Co-pilot
+GET  /api/ai/status           — AI availability check
+POST /api/ai/parse-deal       — Natural language deal parsing
+POST /api/ai/generate-narrative — Deal narrative generation
+POST /api/ai/chat             — Streaming chat (SSE)
+POST /api/ai/scenario-narrative — Scenario explanation (SSE)
+POST /api/ai/explain-field    — Field-level help
+
+GET  /docs                    — Interactive Swagger documentation
 ```
 
 ## Tech Stack
@@ -197,6 +237,7 @@ GET  /docs                    — Interactive API documentation (Swagger)
 | Charts | Recharts |
 | UI Components | Radix UI primitives |
 | Backend | Python 3.11, FastAPI, Pydantic v2 |
+| AI Co-pilot | Claude (Anthropic API), streaming SSE |
 | Testing | pytest (backend), Vitest (frontend) |
 | Deployment | Docker, docker-compose |
 
@@ -217,25 +258,27 @@ This is a build-in-public project. Contributions are welcome.
 4. Open a PR with a clear description of what you changed and why
 
 **Priority contribution areas:**
-- Additional industry benchmark data
-- Export to Excel (structured workbook)
-- PDF report generation
-- Additional risk checks
-- UI polish / animations
+- Export to Excel (structured workbook with tabs per module)
+- PDF report generation (board-ready briefings, IC memos)
+- Additional startup verticals and VC benchmark data
+- Live market data integration (public company financials)
+- Multi-target (roll-up) M&A modeling
+- LBO modeling mode (pure PE returns analysis)
 
 ## Roadmap
 
-**V2 priorities:**
 - [ ] Live market data integration (pull public company financials automatically)
-- [ ] Multi-target (roll-up) modeling
+- [ ] Multi-target (roll-up) M&A modeling
 - [ ] Cross-border / multi-currency deals
 - [ ] User accounts + deal history
 - [ ] Real-time collaboration (share a deal link)
 - [ ] Excel export (structured workbook with tabs)
-- [ ] PDF report generation (board-ready briefing)
-- [ ] Convertible notes and preferred equity
+- [ ] PDF report generation (board-ready briefing, IC memos)
 - [ ] LBO modeling mode (pure PE returns analysis)
 - [ ] Comparable transaction database
+- [ ] Secondary market transaction modeling
+- [ ] Fund-of-funds / LP portfolio construction
+- [ ] Convertible notes and preferred equity in M&A structures
 
 ## License
 
