@@ -7,6 +7,10 @@
 [![React 18](https://img.shields.io/badge/react-18-61dafb.svg)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com)
 
+<p align="center">
+  <img src="screenshot.png" alt="Dealflow Engine — Landing Page" width="800" />
+</p>
+
 ---
 
 ## What This Is
