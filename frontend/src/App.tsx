@@ -11,7 +11,7 @@ import Step6_Review from './components/flow/Step6_Review'
 import ResultsDashboard from './components/output/ResultsDashboard'
 import ConversationalEntry from './components/flow/ConversationalEntry'
 import { useDealState } from './hooks/useDealState'
-import type { DealInput, AcquirerProfile, TargetProfile } from './types/deal'
+import type { DealInput, DealStructure, PurchasePriceAllocation, AcquirerProfile, TargetProfile } from './types/deal'
 import { checkAIStatus } from './lib/ai-api'
 
 // Startup flow
@@ -22,7 +22,7 @@ import StartupStep3_Traction from './components/flow/startup/StartupStep3_Tracti
 import StartupStep4_Market from './components/flow/startup/StartupStep4_Market'
 import StartupStep5_Review from './components/flow/startup/StartupStep5_Review'
 import StartupDashboard from './components/output/startup/StartupDashboard'
-import type { StartupFlowStep, StartupInput, TeamProfile, TractionMetrics, ProductProfile, MarketProfile, FundraisingProfile } from './types/startup'
+import type { StartupFlowStep, TeamProfile, TractionMetrics, ProductProfile, MarketProfile, FundraisingProfile } from './types/startup'
 
 // VC Investor flow
 import { useVCState } from './hooks/useVCState'
@@ -47,7 +47,6 @@ export default function App() {
     updateAcquirer,
     updateTarget,
     updateStructure,
-    updatePPA,
     updateSynergies,
     reset,
     runAnalysis,
@@ -248,8 +247,8 @@ export default function App() {
     const dealInput: DealInput = {
       acquirer: acquirer as AcquirerProfile,
       target: target as TargetProfile,
-      structure,
-      ppa,
+      structure: structure as DealStructure,
+      ppa: ppa as PurchasePriceAllocation,
       synergies,
       mode,
       projection_years: 5,

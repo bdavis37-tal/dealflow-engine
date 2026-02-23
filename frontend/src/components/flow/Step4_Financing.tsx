@@ -1,4 +1,3 @@
-import React from 'react'
 import { ArrowLeft, ArrowRight, Plus, Trash2 } from 'lucide-react'
 import FinancingSlider from '../inputs/FinancingSlider'
 import type { DealStructure, DebtTranche, AmortizationType, ModelMode } from '../../types/deal'

@@ -3,8 +3,8 @@
  * User describes their deal in natural language; Claude extracts structured parameters.
  * Falls back gracefully to manual form if AI unavailable.
  */
-import React, { useState, useRef, useEffect } from 'react'
-import { Send, ArrowRight, Sparkles, Bot, User, ChevronDown } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Send, ArrowRight, Sparkles, Bot, User } from 'lucide-react'
 import type { AcquirerProfile, TargetProfile, Industry } from '../../types/deal'
 import type { ChatMessage, ParseDealResponse } from '../../lib/ai-api'
 import { parseDeal } from '../../lib/ai-api'

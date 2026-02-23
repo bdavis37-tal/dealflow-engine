@@ -4,7 +4,7 @@
  * Standalone panel that can be shown from the portfolio or deal views.
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import type { FundProfile, QSBSOutput, AntiDilutionOutput, BridgeRoundOutput } from '../../types/vc'
 import { checkQSBS, analyzeAntiDilution, analyzeBridge } from '../../lib/vc-api'
 import type { QSBSInput, AntiDilutionInput, BridgeRoundInput } from '../../lib/vc-api'

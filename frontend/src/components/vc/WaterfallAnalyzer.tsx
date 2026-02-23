@@ -3,8 +3,8 @@
  * Interactive exit-price slider + distribution chart per share class.
  */
 
-import React, { useState } from 'react'
-import type { VCDealOutput, WaterfallDistribution, WaterfallShareClass } from '../../types/vc'
+import { useState } from 'react'
+import type { VCDealOutput, WaterfallShareClass } from '../../types/vc'
 
 interface Props {
   output: VCDealOutput
@@ -13,7 +13,6 @@ interface Props {
 function fmt(n: number, dec = 1) {
   return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
-function pct(n: number) { return `${(n * 100).toFixed(1)}%` }
 function fmtEV(ev: number) {
   if (ev >= 1000) return `$${(ev / 1000).toFixed(1)}B`
   return `$${ev.toFixed(0)}M`
@@ -44,8 +43,6 @@ export default function WaterfallAnalyzer({ output }: Props) {
   const minEV = 1
 
   // Compute simplified waterfall at current slider value
-  const totalPrefs = waterfall?.share_classes.reduce((sum, c) => sum + c.preference_amount, 0) ?? 0
-  const commonPct = output.ic_memo ? (1 - 0.70) : 0.30 // rough
   const investorPct = output.ownership.exit_ownership_pct
 
   // At slider exit, compute investor proceeds

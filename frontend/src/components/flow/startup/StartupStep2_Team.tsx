@@ -1,7 +1,7 @@
 /**
  * Step 2: Team profile — the single most important pre-seed valuation driver.
  */
-import React from 'react'
+
 import { ArrowRight, ArrowLeft } from 'lucide-react'
 import type { TeamProfile } from '../../../types/startup'
 

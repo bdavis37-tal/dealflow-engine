@@ -1,9 +1,12 @@
 {
+  "_comment_frozen_off": "frozen_off contains M&A industry identifiers (not startup verticals) where AI-native premium does not apply",
   "frozen_on": ["ai_ml_infrastructure", "ai_enabled_saas"],
   "frozen_off": ["construction", "restaurants", "retail", "real_estate", "agriculture", "waste_management", "staffing"],
   "default_on": ["defense_tech", "healthtech", "biotech_pharma", "developer_tools"],
   "default_off": ["b2b_saas", "fintech", "deep_tech_hardware", "consumer", "climate_energy", "marketplace", "vertical_saas"],
   "vertical_premiums": {
+    "ai_ml_infrastructure": 0.0,
+    "ai_enabled_saas": 0.0,
     "defense_tech": 1.5,
     "healthtech": 1.0,
     "biotech_pharma": 0.8,

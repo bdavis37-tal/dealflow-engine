@@ -2,7 +2,7 @@
  * Reusable guided input component.
  * Shows label, help tooltip, smart default indicator, and validation.
  */
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { HelpCircle } from 'lucide-react'
 import AIHelpPopover from './AIHelpPopover'
 

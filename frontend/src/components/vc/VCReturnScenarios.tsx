@@ -3,7 +3,6 @@
  * Bear / Base / Bull with probability weights, MOIC, IRR, fund contribution.
  */
 
-import React, { useState } from 'react'
 import type { VCScenario, VCDealOutput } from '../../types/vc'
 
 interface Props {
@@ -88,9 +87,7 @@ function Metric({ label, value, accent, large }: { label: string; value: string;
 }
 
 export default function VCReturnScenarios({ output }: Props) {
-  const { bear_scenario, base_scenario, bull_scenario, expected_value, expected_moic, expected_irr, fund_size, check_size } = output
-
-  const ev_moic = check_size > 0 ? expected_value / check_size : 0
+  const { bear_scenario, base_scenario, bull_scenario, expected_value, expected_moic, expected_irr, fund_size } = output
 
   return (
     <div className="space-y-5">

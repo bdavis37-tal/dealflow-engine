@@ -31,7 +31,7 @@ export default function ScenarioNarrative({
 }: ScenarioNarrativeProps) {
   const [text, setText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
-  const [hasLoaded, setHasLoaded] = useState(false)
+  const [, setHasLoaded] = useState(false)
 
   useEffect(() => {
     if (!aiAvailable) return

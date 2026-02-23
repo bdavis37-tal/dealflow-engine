@@ -1,7 +1,7 @@
 /**
  * Step 3: Revenue, growth, NRR, burn — the metrics that drive ARR multiple.
  */
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { ArrowRight, ArrowLeft, Info } from 'lucide-react'
 import type { TractionMetrics, ProductProfile, ProductStage } from '../../../types/startup'
 import { PRODUCT_STAGE_LABELS } from '../../../types/startup'

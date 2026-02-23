@@ -2,7 +2,7 @@
  * Tappable synergy category cards for Quick Model.
  * Each card expands to show estimated dollar amount.
  */
-import React, { useState } from 'react'
+import { useState } from 'react'
 import type { SynergyItem } from '../../types/deal'
 import CurrencyInput from './CurrencyInput'
 

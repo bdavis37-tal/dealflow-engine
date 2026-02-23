@@ -3,7 +3,7 @@
  * Copy-to-clipboard export for deal memos and investment committee presentations.
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import type { ICMemoFinancials, VCScenario } from '../../types/vc'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
 

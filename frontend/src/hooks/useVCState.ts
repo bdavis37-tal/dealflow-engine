@@ -10,7 +10,6 @@ import type {
   VCFlowStep,
   FundProfile,
   VCDealInput,
-  VCDealOutput,
   DilutionAssumptions,
 } from '../types/vc'
 import { DEFAULT_FUND_PROFILE, DEFAULT_DILUTION_ASSUMPTIONS } from '../types/vc'

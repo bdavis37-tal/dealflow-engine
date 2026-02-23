@@ -1,4 +1,3 @@
-import React from 'react'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import SynergyCards from '../inputs/SynergyCards'
 import type { SynergyAssumptions, SynergyItem, ModelMode } from '../../types/deal'

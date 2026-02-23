@@ -324,6 +324,11 @@ export interface PortfolioOutput {
   recommendations: string[]
 }
 
+export interface PortfolioInput {
+  fund_profile: FundProfile
+  positions: PortfolioPosition[]
+}
+
 // ---------------------------------------------------------------------------
 // Pro-Rata Analysis
 // ---------------------------------------------------------------------------
