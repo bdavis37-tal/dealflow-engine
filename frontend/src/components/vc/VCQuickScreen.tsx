@@ -134,9 +134,9 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
     ? deal.check_size / deal.post_money_valuation
     : null
 
-  // Rough exit ownership after default dilution (seed stage)
+  // Rough exit ownership after default dilution (all rounds from seed onward)
   const exitPct = entryPct
-    ? entryPct * (1 - dilution.seed_to_a) * (1 - dilution.a_to_b) * (1 - dilution.b_to_c) * (1 - dilution.c_to_ipo)
+    ? entryPct * (1 - dilution.pre_seed_to_seed) * (1 - dilution.seed_to_a) * (1 - dilution.a_to_b) * (1 - dilution.b_to_c) * (1 - dilution.c_to_ipo)
     : null
 
   const frThreshold = exitPct && exitPct > 0 ? fund.fund_size / exitPct : null
@@ -309,6 +309,7 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
           {showDilution && (
             <div className="mt-4 grid grid-cols-2 gap-4">
               {[
+                { key: 'pre_seed_to_seed' as const, label: 'Pre-Seed → Seed dilution' },
                 { key: 'seed_to_a' as const, label: 'Seed → A dilution' },
                 { key: 'a_to_b' as const, label: 'A → B dilution' },
                 { key: 'b_to_c' as const, label: 'B → C dilution' },

@@ -148,13 +148,20 @@ class LiquidationPreference(BaseModel):
 # ---------------------------------------------------------------------------
 
 class DilutionAssumptions(BaseModel):
-    """Expected dilution per future funding round."""
-    seed_to_a: float = Field(default=0.205, ge=0, le=0.50,
-                              description="Dilution at Series A (Carta median: 20.5%)")
+    """Expected dilution per future funding round.
+
+    Each field represents the dilution an existing shareholder faces when that
+    round closes.  E.g. ``pre_seed_to_seed`` is the dilution the pre-seed
+    investor takes at the seed round, ``seed_to_a`` is dilution at Series A, etc.
+    """
+    pre_seed_to_seed: float = Field(default=0.205, ge=0, le=0.50,
+                                     description="Dilution at Seed round (Carta median: 20.5%)")
+    seed_to_a: float = Field(default=0.20, ge=0, le=0.50,
+                              description="Dilution at Series A (Carta median: 20%)")
     a_to_b: float = Field(default=0.18, ge=0, le=0.50,
                            description="Dilution at Series B (typical 18-22%)")
-    b_to_c: float = Field(default=0.16, ge=0, le=0.50,
-                           description="Dilution at Series C (typical 15-20%)")
+    b_to_c: float = Field(default=0.15, ge=0, le=0.50,
+                           description="Dilution at Series C (Carta median: 15%)")
     c_to_ipo: float = Field(default=0.12, ge=0, le=0.40,
                              description="Dilution from C to IPO (typical 10-15%)")
     option_pool_expansion: float = Field(default=0.05, ge=0, le=0.20,

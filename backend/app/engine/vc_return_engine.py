@@ -131,11 +131,11 @@ def compute_ownership_math(
     }
 
     dilution_map = {
-        "seed":     dilution.seed_to_a,
-        "series_a": dilution.a_to_b,
-        "series_b": dilution.b_to_c,
-        "series_c": dilution.c_to_ipo,
-        "ipo":      dilution.c_to_ipo,  # treated same as final dilution
+        "seed":     dilution.pre_seed_to_seed,
+        "series_a": dilution.seed_to_a,
+        "series_b": dilution.a_to_b,
+        "series_c": dilution.b_to_c,
+        "ipo":      dilution.c_to_ipo,
     }
 
     future_rounds = stage_sequence.get(stage, [])
