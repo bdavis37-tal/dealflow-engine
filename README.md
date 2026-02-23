@@ -14,7 +14,7 @@
 Dealflow Engine is a unified platform that covers the three core activities in private-market deal-making:
 
 1. **M&A Deal Modeling** — Full merger model with pro forma statements, PPA, circularity solving, sensitivity analysis, and accretion/dilution verdicts.
-2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, Comparable Benchmarks) for pre-seed through Series A, calibrated against Carta/PitchBook data across 12 verticals.
+2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, ARR Multiple) for pre-seed through Series A, calibrated against Carta/PitchBook data across 13 verticals including Defense Tech / National Security.
 3. **VC Fund-Seat Analysis** — Evaluate deals from the investor's chair: ownership math, dilution modeling, fund returner thresholds, waterfall analysis, QSBS eligibility, pro-rata decisions, and auto-generated IC memo financials.
 
 Each module runs a deterministic computation engine underneath. An optional Claude AI co-pilot augments the output with plain-English narratives, scenario explanations, and conversational deal entry — but the computed numbers are always the source of truth.
@@ -103,7 +103,7 @@ dealflow-engine/
 │   │   │   └── ai_service.py               # Claude API client, caching, streaming
 │   │   └── data/
 │   │       ├── industry_benchmarks.json    # 20 M&A industry verticals
-│   │       ├── startup_valuation_benchmarks.json  # 12 startup verticals × 3 stages
+│   │       ├── startup_valuation_benchmarks.json  # 13 startup verticals × 3 stages
 │   │       └── vc_benchmarks.json          # VC stage transitions, fund construction, exit data
 │   └── tests/
 │       ├── test_engine.py
@@ -113,7 +113,7 @@ dealflow-engine/
 │
 └── frontend/
     └── src/
-        ├── App.tsx                         # Mode selector + route orchestrator
+        ├── App.tsx                         # Mode selector + route orchestrator (landing | ma | startup | vc)
         ├── types/
         │   ├── deal.ts                     # M&A TypeScript types
         │   ├── startup.ts                  # Startup valuation types
@@ -135,7 +135,7 @@ dealflow-engine/
         │   ├── vc/                         # VC fund setup, deal screen, dashboard,
         │   │                               #   waterfall, ownership, governance, IC memo
         │   ├── inputs/                     # Reusable form components
-        │   ├── layout/                     # AppShell, StepIndicator, ModeToggle
+        │   ├── layout/                     # AppShell, LandingPage, StepIndicator, ModeToggle
         │   └── shared/                     # MetricCard, HeatmapCell, AIBadge, StreamingText
         └── styles/globals.css
 ```
@@ -165,12 +165,16 @@ print(result.deal_verdict_headline)
 
 ### Startup Valuation
 
-Four-method valuation engine for pre-seed through Series A startups across 12 verticals (AI/ML, B2B SaaS, Fintech, Healthtech, Climate, etc.):
+Four-method valuation engine for pre-seed through Series A startups across 13 verticals:
+
+**AI/ML Infrastructure** · **AI-Enabled SaaS** · **B2B SaaS** · **Fintech** · **Healthtech** · **Biotech/Pharma** · **Deep Tech/Hardware** · **Consumer** · **Climate/Energy** · **Marketplace** · **Vertical SaaS** · **Developer Tools** · **Defense Tech / National Security**
+
+Each vertical has its own benchmark dataset (P25/P50/P75 valuations, ARR multiples, traction bars) sourced from Carta, PitchBook, and Equidam Q3 2025. The engine anchors all pre-revenue methods to the vertical-specific P50 baseline rather than a generic market median, so a defense tech pre-seed and a consumer pre-seed produce meaningfully different outputs.
 
 - **Berkus Method** — Qualitative factor scoring (idea, team, prototype, relationships, rollout)
 - **Scorecard Method** — Team, market, product, traction, competition weighted against stage medians
 - **Risk Factor Summation** — 12 risk categories adjusted from a vertical-specific base valuation
-- **Comparable Benchmarks** — P25/P50/P75 market data from Carta, PitchBook, and Equidam
+- **ARR Multiple** — Vertical-specific P25/P50/P75 revenue multiples from Carta, PitchBook, and Equidam; adjusts for NRR, growth rate, gross margin, and burn multiple
 
 Output includes a blended pre-money valuation with confidence range, dilution modeling through future rounds, SAFE conversion mechanics, investor scorecard signals, and a market-calibrated verdict (strong / fair / stretched / at risk).
 

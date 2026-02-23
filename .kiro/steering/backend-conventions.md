@@ -67,3 +67,17 @@ Three independent engines — no shared computational code:
 
 - Financial formulas: comment explaining the finance logic, not just the code
 - Benchmark data files live in `app/data/` — when adding new verticals, update both the JSON and the corresponding enum
+
+## Vertical Benchmark Pattern
+
+Each vertical has its own benchmark block in `startup_valuation_benchmarks.json` and `vc_benchmarks.json`.
+
+**Critical rule:** Pre-revenue valuation methods (Berkus, Scorecard, RFS) must use `_get_vertical_baseline(vdata, stage)` — NOT the market-wide median — as their anchor. This ensures defense tech ($10M P50) and consumer ($3.5M P50) produce different outputs even with identical inputs.
+
+**RFS adjustment scaling:** `adj_per_step` scales proportionally to the vertical baseline so each step remains ~3.2% of baseline regardless of vertical size.
+
+**Vertical-specific risk factors in RFS:**
+- `Legislation / Political`: penalizes FINTECH, HEALTHTECH, BIOTECH_PHARMA, DEFENSE_TECH
+- `Manufacturing / Operations`: penalizes DEEP_TECH_HARDWARE, CLIMATE_ENERGY, BIOTECH_PHARMA
+- `Exit Potential`: bonus for AI_ML_INFRASTRUCTURE, AI_ENABLED_SAAS, DEFENSE_TECH
+- `Management`: penalizes missing tech cofounder for AI_ML_INFRASTRUCTURE, DEVELOPER_TOOLS

@@ -69,3 +69,33 @@ Backend Pydantic models are source of truth. Frontend TypeScript types must mirr
 | `models.py` | `deal.ts` |
 | `startup_models.py` | `startup.ts` |
 | `vc_fund_models.py` | `vc.ts` |
+
+## Startup Verticals
+
+13 verticals supported across Startup Valuation and VC Fund-Seat engines:
+
+| Enum Value | Label |
+|---|---|
+| `ai_ml_infrastructure` | AI / ML Infrastructure |
+| `ai_enabled_saas` | AI-Enabled SaaS |
+| `b2b_saas` | B2B SaaS (Traditional) |
+| `fintech` | Fintech |
+| `healthtech` | Healthcare / HealthTech |
+| `biotech_pharma` | Biotech / Pharma |
+| `deep_tech_hardware` | Deep Tech / Hardware |
+| `consumer` | Consumer |
+| `climate_energy` | Climate / Energy |
+| `marketplace` | Marketplace |
+| `vertical_saas` | Vertical / Industry SaaS |
+| `developer_tools` | Developer Tools / Infrastructure |
+| `defense_tech` | Defense Tech / National Security |
+
+When adding a new vertical: update `StartupVertical` enum → `VCVertical` enum → both JSON benchmark files → both TypeScript union types.
+
+## App Navigation
+
+Four views: `'landing' | 'ma' | 'startup' | 'vc'`
+
+- `LandingPage` — mode selection entry point
+- Clicking the logo in `AppShell` returns to landing
+- Each mode has its own color scheme: M&A = `blue-*`, Startup = `purple-*`, VC = `emerald-*`
