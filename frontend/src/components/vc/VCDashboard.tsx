@@ -4,7 +4,7 @@
  * Tabs: Overview | Ownership | Returns | Waterfall | IC Memo | Portfolio
  */
 
-import React, { useState } from 'react'
+import { useState } from 'react'
 import type { VCDealOutput, FundProfile } from '../../types/vc'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
 import VCOwnershipPanel from './VCOwnershipPanel'

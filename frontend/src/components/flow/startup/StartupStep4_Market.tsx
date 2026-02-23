@@ -1,7 +1,7 @@
 /**
  * Step 4: Market size, moat, round structure details.
  */
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { ArrowRight, ArrowLeft, Info } from 'lucide-react'
 import type { MarketProfile, FundraisingProfile } from '../../../types/startup'
 

@@ -1,7 +1,6 @@
 /**
  * Step 5: Review inputs, trigger valuation, show loading state.
  */
-import React from 'react'
 import { ArrowLeft, Loader2, Zap } from 'lucide-react'
 import type { StartupState } from '../../../types/startup'
 import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'

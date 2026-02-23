@@ -12,7 +12,6 @@ import type {
   DealStructure,
   PurchasePriceAllocation,
   SynergyAssumptions,
-  DealOutput,
   DealInput,
 } from '../types/deal'
 import { analyzeDeal } from '../lib/api'
@@ -124,7 +123,7 @@ export function useDealState() {
   }, [])
 
   const runAnalysis = useCallback(async () => {
-    const { acquirer, target, structure, ppa, synergies, mode, isLoading } = state
+    const { acquirer, target, structure, ppa, synergies, mode } = state
 
     // Prevent overlapping requests: if already loading, abort the in-flight request
     // and start fresh rather than silently stacking duplicate calls.

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { IncomeStatementYear } from '../../types/deal'
-import { formatAccounting, formatEPS, formatPercentage } from '../../lib/formatters'
+import { formatAccounting, formatPercentage } from '../../lib/formatters'
 
 interface FinancialStatementsProps {
   incomeStatement: IncomeStatementYear[]

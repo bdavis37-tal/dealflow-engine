@@ -4,7 +4,7 @@
  * Works with localStorage-persisted positions.
  */
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import type { FundProfile, PortfolioPosition, PortfolioOutput } from '../../types/vc'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
 import { analyzePortfolio } from '../../lib/vc-api'
@@ -192,7 +192,7 @@ export default function VCPortfolioDash({ fund }: Props) {
   const [positions, setPositions] = useState<PortfolioPosition[]>(loadPositions)
   const [output, setOutput] = useState<PortfolioOutput | null>(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
 
   useEffect(() => {
     savePositions(positions)

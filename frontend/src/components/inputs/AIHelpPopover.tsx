@@ -2,7 +2,7 @@
  * Enhanced help popover with AI-powered contextual explanations.
  * Shows static text instantly, then offers "Tell me more" AI expansion.
  */
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { HelpCircle, Loader2, Sparkles } from 'lucide-react'
 import { explainField } from '../../lib/ai-api'
 import AIBadge from '../shared/AIBadge'

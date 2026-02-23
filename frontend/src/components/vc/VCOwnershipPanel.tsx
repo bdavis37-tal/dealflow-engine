@@ -4,7 +4,6 @@
  * and a contribution table at various exit values.
  */
 
-import React from 'react'
 import type { OwnershipMath, FundProfile } from '../../types/vc'
 
 interface Props {
@@ -23,7 +22,7 @@ function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`
 }
 
-export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney, arr }: Props) {
+export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney: _, arr }: Props) {
   const {
     entry_ownership_pct,
     exit_ownership_pct,

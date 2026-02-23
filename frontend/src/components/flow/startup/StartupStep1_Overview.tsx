@@ -2,7 +2,7 @@
  * Step 1: Company name, vertical, stage, geography, raise amount, instrument.
  * The "front door" of the startup valuation flow.
  */
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import type { FundraisingProfile, StartupVertical, StartupStage, Geography, InstrumentType } from '../../../types/startup'
 import { VERTICAL_LABELS, STAGE_LABELS, GEOGRAPHY_LABELS, INSTRUMENT_LABELS } from '../../../types/startup'

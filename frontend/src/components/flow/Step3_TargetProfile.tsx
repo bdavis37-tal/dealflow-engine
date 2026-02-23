@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Shield } from 'lucide-react'
 import CurrencyInput from '../inputs/CurrencyInput'
 import GuidedInput from '../inputs/GuidedInput'

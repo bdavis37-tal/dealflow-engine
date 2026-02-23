@@ -1,4 +1,3 @@
-import React from 'react'
 import { ArrowLeft, Loader2, TrendingUp } from 'lucide-react'
 import type { DealState } from '../../types/deal'
 import { formatCurrencyCompact, formatPercentage } from '../../lib/formatters'

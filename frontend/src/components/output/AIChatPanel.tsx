@@ -2,8 +2,8 @@
  * AI Co-Pilot chat panel — persistent sidebar on the results dashboard.
  * Has full deal context. Streams responses. Surfaces parameter change suggestions.
  */
-import React, { useState, useRef, useEffect } from 'react'
-import { MessageSquare, Send, X, ChevronRight, Loader2, Bot, User, Zap } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { MessageSquare, Send, X, Loader2, Bot, User, Zap } from 'lucide-react'
 import type { DealInput, DealOutput } from '../../types/deal'
 import type { ChatMessage } from '../../lib/ai-api'
 import { streamChat } from '../../lib/ai-api'
