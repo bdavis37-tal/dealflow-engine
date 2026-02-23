@@ -1,0 +1,122 @@
+{
+  "description": "Defense AI acquisition. Large defense prime acquiring an AI-native defense startup with TS/SCI clearance, contract backlog, and programs of record. Tests defense-specific valuation logic.",
+  "input": {
+    "acquirer": {
+      "company_name": "Sentinel Defense Corp",
+      "revenue": 2000000000,
+      "ebitda": 280000000,
+      "net_income": 140000000,
+      "total_debt": 500000000,
+      "cash_on_hand": 400000000,
+      "shares_outstanding": 50000000,
+      "share_price": 85.00,
+      "tax_rate": 0.25,
+      "depreciation": 60000000,
+      "capex": 50000000,
+      "working_capital": 200000000,
+      "industry": "Defense & National Security"
+    },
+    "target": {
+      "company_name": "Vanguard AI Systems",
+      "revenue": 120000000,
+      "ebitda": 15000000,
+      "net_income": 5000000,
+      "total_debt": 10000000,
+      "cash_on_hand": 30000000,
+      "tax_rate": 0.25,
+      "depreciation": 5000000,
+      "capex": 8000000,
+      "working_capital": 12000000,
+      "industry": "Defense & National Security",
+      "acquisition_price": 1800000000,
+      "revenue_growth_rate": 0.25,
+      "defense_profile": {
+        "is_ai_native": true,
+        "contract_backlog_total": 500000000,
+        "contract_backlog_funded": 200000000,
+        "idiq_ceiling_value": 800000000,
+        "contract_vehicles": [
+          "OTA (Other Transaction Authority)",
+          "IDIQ (Indefinite Delivery/Indefinite Quantity)",
+          "Prime Contract",
+          "SBIR/STTR"
+        ],
+        "clearance_level": "ts_sci",
+        "authorization_certifications": ["FedRAMP High", "IL5", "CMMC Level 3"],
+        "customer_concentration_dod_pct": 0.85,
+        "programs_of_record": 2,
+        "deployment_classification": ["cloud_il5", "edge_tactical", "ddil"],
+        "software_type": ["C2 (Command & Control)", "Decision Support", "Autonomous Systems"],
+        "ip_ownership": "company_owned"
+      }
+    },
+    "structure": {
+      "cash_percentage": 0.40,
+      "stock_percentage": 0.40,
+      "debt_percentage": 0.20,
+      "debt_tranches": [
+        {
+          "name": "Term Loan A",
+          "amount": 360000000,
+          "interest_rate": 0.065,
+          "term_years": 7,
+          "amortization_type": "straight_line"
+        }
+      ],
+      "transaction_fees_pct": 0.015,
+      "advisory_fees": 0
+    },
+    "ppa": {
+      "asset_writeup": 20000000,
+      "asset_writeup_useful_life": 10,
+      "identifiable_intangibles": 400000000,
+      "intangible_useful_life": 10
+    },
+    "synergies": {
+      "cost_synergies": [
+        {
+          "category": "Combine contract vehicles to pursue larger opportunities",
+          "annual_amount": 15000000,
+          "phase_in_years": 3,
+          "cost_to_achieve": 5000000,
+          "is_revenue": false
+        },
+        {
+          "category": "Leverage combined clearance portfolio",
+          "annual_amount": 10000000,
+          "phase_in_years": 2,
+          "cost_to_achieve": 2000000,
+          "is_revenue": false
+        }
+      ],
+      "revenue_synergies": [
+        {
+          "category": "Cross-sell AI platform to acquirer program offices",
+          "annual_amount": 30000000,
+          "phase_in_years": 3,
+          "cost_to_achieve": 8000000,
+          "is_revenue": true
+        },
+        {
+          "category": "Combine past performance for competitive bids",
+          "annual_amount": 20000000,
+          "phase_in_years": 4,
+          "cost_to_achieve": 3000000,
+          "is_revenue": true
+        }
+      ]
+    },
+    "mode": "deep",
+    "projection_years": 5
+  },
+  "expected": {
+    "entry_ev_revenue_approx": 15.0,
+    "defense_positioning_present": true,
+    "backlog_coverage_ratio_approx": 4.17,
+    "clearance_premium_applied": true,
+    "programs_of_record": 2,
+    "is_ai_native": true,
+    "num_defense_risks_min": 1,
+    "defense_scorecard_metrics_min": 2
+  }
+}

@@ -23,8 +23,10 @@ from .models import (
     DealInput,
     DealOutput,
     DealVerdict,
+    DefensePositioning,
     HealthStatus,
     IncomeStatementYear,
+    Industry,
     ScorecardMetric,
     SynergyItem,
 )
@@ -105,6 +107,96 @@ def _format_multiple(value: float) -> str:
 
 def _format_pct(value: float) -> str:
     return f"{value:+.1f}%"
+
+
+# ---------------------------------------------------------------------------
+# Defense-specific computation
+# ---------------------------------------------------------------------------
+
+def _compute_defense_positioning(deal: DealInput, benchmarks: dict) -> DefensePositioning | None:
+    """
+    Compute defense-specific positioning metrics when the target is in
+    the Defense & National Security vertical with a defense_profile.
+    """
+    tgt = deal.target
+    if tgt.industry != Industry.DEFENSE or tgt.defense_profile is None:
+        return None
+
+    dp = tgt.defense_profile
+    defense_bench = benchmarks.get("Defense & National Security", {}).get("defense_specific", {})
+
+    # EV/Revenue multiple
+    ev_revenue = tgt.acquisition_price / tgt.revenue if tgt.revenue > 0 else 0.0
+
+    # Backlog metrics
+    combined_backlog = dp.contract_backlog_total
+    backlog_coverage_ratio = combined_backlog / tgt.revenue if tgt.revenue > 0 else 0.0
+    revenue_visibility_years = dp.contract_backlog_funded / tgt.revenue if tgt.revenue > 0 else 0.0
+
+    # Clearance premium from benchmarks
+    clearance_premiums = defense_bench.get("clearance_premium_pct", {})
+    clearance_premium = clearance_premiums.get(dp.clearance_level.value, 0.0)
+
+    # Certification premium — sum applicable certifications
+    cert_premiums = defense_bench.get("certification_premium_pct", {})
+    certification_premium = 0.0
+    cert_key_map = {
+        "FedRAMP Moderate": "fedramp_moderate",
+        "FedRAMP High": "fedramp_high",
+        "IL4": "il4",
+        "IL5": "il5",
+        "IL6": "il6",
+        "CMMC Level 2": "cmmc_level_2",
+        "CMMC Level 3": "cmmc_level_3",
+    }
+    for cert in dp.authorization_certifications:
+        key = cert_key_map.get(cert, cert.lower().replace(" ", "_"))
+        certification_premium += cert_premiums.get(key, 0.0)
+
+    # Program of record premium
+    por_premium = defense_bench.get("program_of_record_premium_pct", 0.15) if dp.programs_of_record > 0 else 0.0
+
+    total_defense_premium = clearance_premium + certification_premium + por_premium
+
+    # Build summary
+    clearance_labels = {
+        "unclassified": "Unclassified",
+        "secret": "Secret",
+        "top_secret": "Top Secret",
+        "ts_sci": "Top Secret/SCI",
+        "sap": "SAP",
+    }
+    clearance_label = clearance_labels.get(dp.clearance_level.value, dp.clearance_level.value)
+
+    parts = []
+    parts.append(f"This acquisition gives the buyer access to {clearance_label} facility clearance")
+    if len(dp.contract_vehicles) > 0:
+        parts.append(f"{len(dp.contract_vehicles)} active contract vehicle{'s' if len(dp.contract_vehicles) != 1 else ''}")
+    if dp.programs_of_record > 0:
+        parts.append(f"positions on {dp.programs_of_record} program{'s' if dp.programs_of_record != 1 else ''} of record")
+    if combined_backlog > 0:
+        parts.append(f"Combined backlog of ${combined_backlog / 1e6:.0f}M provides {revenue_visibility_years:.1f} years of revenue visibility")
+
+    summary = ", ".join(parts[:3])
+    if len(parts) > 3:
+        summary += ". " + parts[3]
+    summary += "."
+
+    return DefensePositioning(
+        clearance_level=clearance_label,
+        active_contract_vehicles=len(dp.contract_vehicles),
+        programs_of_record=dp.programs_of_record,
+        combined_backlog=combined_backlog,
+        backlog_coverage_ratio=backlog_coverage_ratio,
+        revenue_visibility_years=revenue_visibility_years,
+        ev_revenue_multiple=ev_revenue,
+        clearance_premium_applied=clearance_premium,
+        certification_premium_applied=certification_premium,
+        program_of_record_premium_applied=por_premium,
+        total_defense_premium_pct=total_defense_premium,
+        is_ai_native=dp.is_ai_native,
+        positioning_summary=summary,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +520,11 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     risks = analyze_risks(deal, stub_output, benchmarks)
 
     # -----------------------------------------------------------------------
+    # Defense Positioning (only for Defense & National Security deals)
+    # -----------------------------------------------------------------------
+    defense_positioning = _compute_defense_positioning(deal, benchmarks)
+
+    # -----------------------------------------------------------------------
     # Deal Scorecard
     # -----------------------------------------------------------------------
     y1 = income_statement[0]
@@ -563,10 +660,66 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         ),
     ]
 
+    # Defense-specific scorecard metrics
+    if defense_positioning is not None:
+        dp = defense_positioning
+        ev_rev_range = ind_bench.get("ev_revenue_multiple_range", {"low": 3, "median": 8, "high": 20})
+
+        scorecard.append(ScorecardMetric(
+            name="Implied EV/Revenue",
+            value=dp.ev_revenue_multiple,
+            formatted_value=_format_multiple(dp.ev_revenue_multiple),
+            benchmark_low=ev_rev_range["low"],
+            benchmark_median=ev_rev_range["median"],
+            benchmark_high=ev_rev_range["high"],
+            health_status=_health(dp.ev_revenue_multiple, ev_rev_range["low"], ev_rev_range["median"], ev_rev_range["high"], higher_is_better=False),
+            description=f"EV/Revenue of {dp.ev_revenue_multiple:.1f}× vs defense {'AI' if dp.is_ai_native else 'tech'} range {ev_rev_range['low']}–{ev_rev_range['high']}×",
+        ))
+        scorecard.append(ScorecardMetric(
+            name="Backlog Coverage Ratio",
+            value=dp.backlog_coverage_ratio,
+            formatted_value=_format_multiple(dp.backlog_coverage_ratio),
+            benchmark_low=1.0,
+            benchmark_median=2.0,
+            benchmark_high=4.0,
+            health_status=_health(dp.backlog_coverage_ratio, 1.0, 2.0, 4.0),
+            description=f"Contracted backlog of {_format_currency(dp.combined_backlog)} covers {dp.backlog_coverage_ratio:.1f}× annual revenue",
+        ))
+        if dp.total_defense_premium_pct > 0:
+            scorecard.append(ScorecardMetric(
+                name="Defense Premium Applied",
+                value=dp.total_defense_premium_pct * 100,
+                formatted_value=f"{dp.total_defense_premium_pct:.0%}",
+                benchmark_low=5.0,
+                benchmark_median=15.0,
+                benchmark_high=40.0,
+                health_status=_health(dp.total_defense_premium_pct * 100, 5.0, 15.0, 40.0),
+                description=f"Clearance ({dp.clearance_premium_applied:.0%}) + certs ({dp.certification_premium_applied:.0%}) + POR ({dp.program_of_record_premium_applied:.0%}) premium",
+            ))
+        if dp.programs_of_record > 0:
+            scorecard.append(ScorecardMetric(
+                name="Programs of Record",
+                value=float(dp.programs_of_record),
+                formatted_value=str(dp.programs_of_record),
+                benchmark_low=0.0,
+                benchmark_median=1.0,
+                benchmark_high=3.0,
+                health_status=HealthStatus.GOOD if dp.programs_of_record >= 1 else HealthStatus.FAIR,
+                description="Software embedded in DoD programs of record — multi-year guaranteed funding",
+            ))
+
     # -----------------------------------------------------------------------
     # Verdict
     # -----------------------------------------------------------------------
     y1_ad = y1.accretion_dilution_pct
+
+    # Defense deals get adjusted verdict logic — backlog and certifications
+    # can justify a higher price that would look dilutive on pure EPS math
+    is_defense_deal = defense_positioning is not None
+    defense_uplift = False
+    if is_defense_deal and defense_positioning.backlog_coverage_ratio >= 2.0:
+        defense_uplift = True
+
     if y1_ad > 2.0:
         verdict = DealVerdict.GREEN
         headline = f"This deal is accretive to earnings by {y1_ad:+.1f}% in Year 1"
@@ -576,13 +729,32 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             f"${(y1.pro_forma_eps - y1.acquirer_standalone_eps):.2f} improvement "
             f"driven primarily by {'cost savings' if sum(s.annual_amount for s in deal.synergies.cost_synergies) > 0 else 'target earnings contribution'}."
         )
-    elif y1_ad >= -2.0:
+        if is_defense_deal:
+            subtext += (
+                f" Defense positioning adds {defense_positioning.total_defense_premium_pct:.0%} "
+                f"certification/clearance premium with {defense_positioning.backlog_coverage_ratio:.1f}× backlog coverage."
+            )
+    elif y1_ad >= -2.0 or (defense_uplift and y1_ad >= -8.0):
         verdict = DealVerdict.YELLOW
-        headline = f"This deal is marginally neutral ({y1_ad:+.1f}% in Year 1)"
-        subtext = (
-            f"At this price, the deal has minimal EPS impact in Year 1. "
-            f"It becomes more meaningful as synergies phase in and debt is repaid."
-        )
+        if defense_uplift and y1_ad < -2.0:
+            headline = f"Near-term dilutive ({y1_ad:+.1f}%) but justified by defense backlog"
+            subtext = (
+                f"Traditional EPS math shows dilution, but ${defense_positioning.combined_backlog / 1e6:.0f}M "
+                f"of contracted backlog ({defense_positioning.backlog_coverage_ratio:.1f}× revenue) and "
+                f"{defense_positioning.total_defense_premium_pct:.0%} defense premiums provide downside protection. "
+                f"Revenue visibility of {defense_positioning.revenue_visibility_years:.1f} years from funded backlog."
+            )
+        else:
+            headline = f"This deal is marginally neutral ({y1_ad:+.1f}% in Year 1)"
+            subtext = (
+                "At this price, the deal has minimal EPS impact in Year 1. "
+                "It becomes more meaningful as synergies phase in and debt is repaid."
+            )
+            if is_defense_deal:
+                subtext += (
+                    f" Defense backlog of ${defense_positioning.combined_backlog / 1e6:.0f}M "
+                    f"provides additional revenue visibility not captured in EPS."
+                )
     else:
         verdict = DealVerdict.RED
         min_syn = abs(y1_ad / 100 * y1.acquirer_standalone_eps * total_shares_pro_forma / (1 - acq.tax_rate))
@@ -592,6 +764,12 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             f"{_format_currency(min_syn)}/year to break even. "
             "Consider renegotiating price or increasing synergy capture."
         )
+        if is_defense_deal:
+            subtext += (
+                f" Even accounting for defense premiums ({defense_positioning.total_defense_premium_pct:.0%}) "
+                f"and backlog ({defense_positioning.backlog_coverage_ratio:.1f}× coverage), the price "
+                f"appears stretched."
+            )
 
     return DealOutput(
         pro_forma_income_statement=income_statement,
@@ -604,6 +782,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         deal_verdict_headline=headline,
         deal_verdict_subtext=subtext,
         deal_scorecard=scorecard,
+        defense_positioning=defense_positioning,
         convergence_warning=any_non_convergence,
         computation_notes=notes,
     )

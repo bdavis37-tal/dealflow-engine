@@ -218,5 +218,74 @@
     "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 17 },
     "typical_revenue_growth_rate": 0.04,
     "typical_debt_capacity_turns_ebitda": 5.0
+  },
+  "Defense & National Security": {
+    "typical_ebitda_margin": 0.14,
+    "typical_gross_margin": 0.38,
+    "typical_sga_pct_revenue": 0.18,
+    "typical_working_capital_pct_revenue": 0.10,
+    "typical_capex_pct_revenue": 0.04,
+    "typical_da_pct_revenue": 0.05,
+    "ev_ebitda_multiple_range": { "low": 10, "median": 16, "high": 30 },
+    "ev_revenue_multiple_range": { "low": 3, "median": 8, "high": 20 },
+    "typical_revenue_growth_rate": 0.12,
+    "typical_debt_capacity_turns_ebitda": 4.0,
+    "defense_specific": {
+      "traditional_defense_ev_ebitda": { "low": 10, "median": 14, "high": 18 },
+      "ai_native_ev_revenue": { "low": 8, "median": 15, "high": 30 },
+      "traditional_defense_ev_revenue": { "low": 1.5, "median": 2.5, "high": 4 },
+      "backlog_to_revenue_healthy": 2.0,
+      "backlog_to_revenue_strong": 4.0,
+      "clearance_premium_pct": {
+        "unclassified": 0.0,
+        "secret": 0.05,
+        "top_secret": 0.12,
+        "ts_sci": 0.20,
+        "sap": 0.25
+      },
+      "certification_premium_pct": {
+        "fedramp_moderate": 0.03,
+        "fedramp_high": 0.08,
+        "il4": 0.05,
+        "il5": 0.10,
+        "il6": 0.15,
+        "cmmc_level_2": 0.02,
+        "cmmc_level_3": 0.05
+      },
+      "program_of_record_premium_pct": 0.15,
+      "comparable_companies": {
+        "palantir": { "ev_revenue": 18.0, "note": "Public AI-native defense platform, premium for data OS + government trust" },
+        "anduril": { "ev_revenue": 22.0, "note": "Private, last round implied ~$14B on ~$600M ARR, autonomy + hardware" },
+        "shield_ai": { "ev_revenue": 15.0, "note": "Private, autonomous systems + V-BAT" },
+        "l3harris": { "ev_revenue": 2.1, "note": "Traditional prime, ~$18B revenue" },
+        "booz_allen": { "ev_revenue": 3.5, "note": "IT services + analytics, high clearance workforce" },
+        "leidos": { "ev_revenue": 1.8, "note": "Traditional IT/engineering services" },
+        "saic": { "ev_revenue": 1.2, "note": "Government IT services" }
+      },
+      "recent_transactions": {
+        "l3_harris_merger": { "ev_ebitda": 16.5, "year": 2019, "note": "Premium for combined portfolio breadth" },
+        "raytheon_utc": { "ev_ebitda": 14.0, "year": 2020, "note": "Defense + aerospace diversification" },
+        "northrop_orbital_atk": { "ev_ebitda": 15.5, "year": 2018, "note": "Solid rocket motor monopoly + space" }
+      },
+      "contract_vehicle_types": [
+        "OTA (Other Transaction Authority)",
+        "GWAC (Government-Wide Acquisition Contract)",
+        "IDIQ (Indefinite Delivery/Indefinite Quantity)",
+        "BPA (Blanket Purchase Agreement)",
+        "SBIR/STTR",
+        "Prime Contract",
+        "Subcontract"
+      ],
+      "software_categories": [
+        "C2 (Command & Control)",
+        "ISR Processing",
+        "Logistics / Supply Chain",
+        "Predictive Maintenance",
+        "Cybersecurity",
+        "Decision Support",
+        "Autonomous Systems",
+        "Training / Simulation"
+      ]
+    }
   }
 }

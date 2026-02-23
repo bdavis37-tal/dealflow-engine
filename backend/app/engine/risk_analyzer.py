@@ -10,6 +10,7 @@ from __future__ import annotations
 from .models import (
     DealInput,
     DealOutput,
+    Industry,
     RiskItem,
     RiskSeverity,
 )
@@ -352,6 +353,218 @@ def _revenue_synergy_concentration_risk(deal: DealInput) -> RiskItem | None:
     )
 
 
+def _defense_customer_concentration_risk(deal: DealInput) -> RiskItem | None:
+    """
+    Defense customer concentration risk: over-reliance on a single service branch.
+
+    In defense, high DoD concentration is normal and can be a premium.
+    But if >80% of revenue comes from a single branch, recompete risk is elevated.
+    """
+    dp = deal.target.defense_profile
+    if dp is None:
+        return None
+
+    dod_pct = dp.customer_concentration_dod_pct
+    if dod_pct < 0.80:
+        return None
+
+    severity = RiskSeverity.HIGH if dod_pct > 0.95 else RiskSeverity.MEDIUM
+    return RiskItem(
+        description=(
+            f"{dod_pct:.0%} of target revenue comes from DoD customers. "
+            "While DoD concentration signals program alignment, it creates risk "
+            "if key contracts are recompeted or budgets shift between branches."
+        ),
+        severity=severity,
+        metric_name="DoD Revenue Concentration",
+        current_value=dod_pct * 100,
+        threshold_value=80.0,
+        tolerance_band=(
+            "Revenue concentration is manageable if spread across multiple programs "
+            "and service branches (Army, Navy, Air Force, Space Force)."
+        ),
+        plain_english=(
+            f"{dod_pct:.0%} of this company's revenue comes from the Department of Defense. "
+            "If a single major contract ends or isn't renewed, the impact would be significant."
+        ),
+    )
+
+
+def _defense_recompete_risk(deal: DealInput) -> RiskItem | None:
+    """
+    Contract recompete risk: IDIQ ceiling utilization and vehicle diversity.
+
+    Companies with few contract vehicles face concentration risk.
+    """
+    dp = deal.target.defense_profile
+    if dp is None:
+        return None
+
+    num_vehicles = len(dp.contract_vehicles)
+    if num_vehicles >= 3:
+        return None
+
+    if num_vehicles == 0:
+        severity = RiskSeverity.HIGH
+        description = (
+            "Target holds no identified contract vehicles. Revenue depends entirely "
+            "on subcontract positions or direct awards, which limits growth ceiling "
+            "and creates recompete vulnerability."
+        )
+    else:
+        severity = RiskSeverity.MEDIUM
+        description = (
+            f"Target holds only {num_vehicles} contract vehicle{'s' if num_vehicles != 1 else ''}. "
+            "Limited vehicle diversity means revenue growth is constrained to existing "
+            "contract ceilings. Losing a single vehicle would materially impact revenue."
+        )
+
+    return RiskItem(
+        description=description,
+        severity=severity,
+        metric_name="Contract Vehicle Count",
+        current_value=float(num_vehicles),
+        threshold_value=3.0,
+        tolerance_band=(
+            "Companies with 3+ active contract vehicles (mix of IDIQs, OTAs, GWACs) "
+            "have sufficient vehicle diversity to weather individual recompetes."
+        ),
+        plain_english=(
+            f"This company relies on {num_vehicles or 'no'} contract vehicle{'s' if num_vehicles != 1 else ''} "
+            "to win government work. More vehicles means more paths to revenue."
+        ),
+    )
+
+
+def _defense_clearance_dependency_risk(deal: DealInput) -> RiskItem | None:
+    """
+    Key person clearance dependency: if the company's value depends on
+    classified work but has limited cleared personnel, that's a risk.
+    """
+    dp = deal.target.defense_profile
+    if dp is None:
+        return None
+
+    from .models import ClearanceLevel
+    high_clearance = dp.clearance_level in (ClearanceLevel.TS_SCI, ClearanceLevel.SAP)
+
+    if not high_clearance:
+        return None
+
+    # Flag if the company has high clearance but no programs of record
+    # (clearance is an asset but the company hasn't converted it to sticky revenue)
+    if dp.programs_of_record > 0:
+        return None
+
+    return RiskItem(
+        description=(
+            f"Target holds {dp.clearance_level.value.upper().replace('_', '/')} facility clearance "
+            "but is not embedded in any programs of record. The clearance is valuable but "
+            "hasn't been converted to sticky, multi-year funded positions."
+        ),
+        severity=RiskSeverity.MEDIUM,
+        metric_name="Clearance Utilization",
+        current_value=0.0,
+        threshold_value=1.0,
+        tolerance_band=(
+            "High-clearance facilities paired with program-of-record embedment create "
+            "the strongest competitive moat in defense. Clearance alone is necessary but not sufficient."
+        ),
+        plain_english=(
+            "This company has top-level security clearances — that's valuable and hard to get. "
+            "But they haven't yet embedded their software into official DoD programs, "
+            "which would lock in multi-year funding."
+        ),
+    )
+
+
+def _defense_ip_rights_risk(deal: DealInput) -> RiskItem | None:
+    """
+    IP ownership risk: government may have unlimited rights to software
+    developed under certain contract types.
+    """
+    dp = deal.target.defense_profile
+    if dp is None:
+        return None
+
+    if dp.ip_ownership == "company_owned":
+        return None
+
+    if dp.ip_ownership == "unlimited_rights":
+        severity = RiskSeverity.HIGH
+        description = (
+            "Government holds unlimited rights to the target's software IP. "
+            "This means the government can share the software with competitors or use "
+            "it without restriction, significantly reducing the acquirer's competitive moat."
+        )
+    else:
+        severity = RiskSeverity.MEDIUM
+        description = (
+            "Government holds government-purpose rights to parts of the target's software. "
+            "While the company retains commercial rights, the government can use and modify "
+            "the software for government purposes. This limits but doesn't eliminate IP value."
+        )
+
+    return RiskItem(
+        description=description,
+        severity=severity,
+        metric_name="IP Ownership Risk",
+        current_value=0.0 if dp.ip_ownership == "unlimited_rights" else 0.5,
+        threshold_value=1.0,
+        tolerance_band=(
+            "Software developed under SBIR/STTR has strongest IP protections. "
+            "FAR 52.227-14 clauses can grant government unlimited rights. "
+            "Review each contract's data rights provisions before closing."
+        ),
+        plain_english=(
+            "The government has rights to some or all of this company's software. "
+            "That means the competitive advantage of owning the IP is reduced, "
+            "because the government could potentially let competitors use it too."
+        ),
+    )
+
+
+def _defense_cr_shutdown_risk(deal: DealInput) -> RiskItem | None:
+    """
+    Continuing resolution / government shutdown funding risk.
+
+    If the target is highly dependent on new-start programs, CRs are a risk.
+    Existing programs of record are somewhat protected.
+    """
+    dp = deal.target.defense_profile
+    if dp is None:
+        return None
+
+    # Only flag if funded backlog is less than 1 year of revenue
+    if dp.contract_backlog_funded <= 0:
+        return None
+
+    funded_coverage = dp.contract_backlog_funded / deal.target.revenue if deal.target.revenue > 0 else 0
+    if funded_coverage >= 1.0:
+        return None
+
+    severity = RiskSeverity.MEDIUM
+    return RiskItem(
+        description=(
+            f"Funded backlog covers only {funded_coverage:.1f}× annual revenue. "
+            "Under a continuing resolution or government shutdown, unfunded contract "
+            "obligations may be delayed. New-start programs are especially vulnerable."
+        ),
+        severity=severity,
+        metric_name="Funded Backlog Coverage",
+        current_value=funded_coverage,
+        threshold_value=1.0,
+        tolerance_band=(
+            "Companies with 1+ year of funded backlog can weather CRs and short shutdowns. "
+            "Programs of record typically continue under CRs at prior-year levels."
+        ),
+        plain_english=(
+            f"This company's guaranteed government funding covers only {funded_coverage:.1f} years. "
+            "If Congress can't pass a budget, work that isn't already funded could be paused."
+        ),
+    )
+
+
 def analyze_risks(
     deal: DealInput,
     output: DealOutput,
@@ -380,6 +593,16 @@ def analyze_risks(
         lambda: _integration_cost_risk(deal),
         lambda: _revenue_synergy_concentration_risk(deal),
     ]
+
+    # Defense-specific risk checks (only when target is Defense & National Security)
+    if deal.target.industry == Industry.DEFENSE and deal.target.defense_profile is not None:
+        risk_functions.extend([
+            lambda: _defense_customer_concentration_risk(deal),
+            lambda: _defense_recompete_risk(deal),
+            lambda: _defense_clearance_dependency_risk(deal),
+            lambda: _defense_ip_rights_risk(deal),
+            lambda: _defense_cr_shutdown_risk(deal),
+        ])
 
     severity_order = {
         RiskSeverity.CRITICAL: 0,
