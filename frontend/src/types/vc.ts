@@ -64,6 +64,7 @@ export interface FundProfile {
 // ---------------------------------------------------------------------------
 
 export interface DilutionAssumptions {
+  pre_seed_to_seed: number
   seed_to_a: number
   a_to_b: number
   b_to_c: number
@@ -447,9 +448,10 @@ export const VC_STAGE_LABELS: Record<VCStage, string> = {
 }
 
 export const DEFAULT_DILUTION_ASSUMPTIONS: DilutionAssumptions = {
-  seed_to_a: 0.205,
+  pre_seed_to_seed: 0.205,
+  seed_to_a: 0.20,
   a_to_b: 0.18,
-  b_to_c: 0.16,
+  b_to_c: 0.15,
   c_to_ipo: 0.12,
   option_pool_expansion: 0.05,
 }
