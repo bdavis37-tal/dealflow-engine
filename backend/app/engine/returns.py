@@ -1,3 +1,4 @@
+# Licensed under the Business Source License 1.1 — see LICENSE file for details
 """
 IRR and MOIC return calculations for the acquirer's equity investment.
 

@@ -1,3 +1,4 @@
+# Licensed under the Business Source License 1.1 — see LICENSE file for details
 """
 Purchase Price Allocation (PPA) calculations per ASC 805 Business Combinations.
 

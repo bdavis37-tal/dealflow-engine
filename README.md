@@ -2,7 +2,7 @@
 
 **Open-source deal intelligence platform. Institutional-grade financial modeling for M&A, startup valuation, and venture capital — designed for humans, not just bankers.**
 
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-orange.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![React 18](https://img.shields.io/badge/react-18-61dafb.svg)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com)
@@ -282,7 +282,9 @@ This is a build-in-public project. Contributions are welcome.
 
 ## License
 
-MIT — free to use, modify, and distribute. See [LICENSE](LICENSE).
+This project is licensed under the [Business Source License 1.1](LICENSE) (BSL 1.1).
+
+The code is source-available — anyone can view, fork, run it locally, and modify it for personal or internal use. Commercial use (selling the software, offering it as a hosted service, or embedding it in a commercial product) requires a separate commercial license; contact [brendan@incertaintel.ai](mailto:brendan@incertaintel.ai) for licensing inquiries. On February 23, 2030 (four years from the initial release), the license automatically converts to Apache 2.0 and the code becomes fully open source. This model is used by companies like HashiCorp, Sentry, CockroachDB, and MariaDB.
 
 ---
 
