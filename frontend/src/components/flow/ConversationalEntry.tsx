@@ -82,7 +82,7 @@ export default function ConversationalEntry({
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: "I had trouble parsing that. Could you try again, or use the manual form?",
+        content: "I couldn't fully parse those details. Try including specific numbers — for example: buyer revenue, target revenue, EBITDA margins, and asking price. Or switch to the guided form below.",
       }])
     } finally {
       setIsLoading(false)
@@ -288,13 +288,13 @@ export default function ConversationalEntry({
         </div>
       )}
 
-      {/* Skip to form link */}
+      {/* Switch to manual form link */}
       <div className="mt-4 text-center">
         <button
           onClick={onSkipToForm}
-          className="text-xs text-slate-600 hover:text-slate-400 underline transition-colors"
+          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
         >
-          Skip AI — use guided form instead
+          Prefer to fill in fields manually? <span className="underline">Use the guided form</span>
         </button>
       </div>
     </div>

@@ -1,23 +1,57 @@
-import type { FlowStep } from '../../types/deal'
+type AppMode = 'ma' | 'startup' | 'vc'
 
-const STEPS: Array<{ label: string; short: string }> = [
-  { label: 'Deal Overview', short: 'Overview' },
-  { label: "Buyer's Profile", short: 'Buyer' },
-  { label: "Target's Profile", short: 'Target' },
-  { label: 'Financing', short: 'Financing' },
-  { label: 'Expected Benefits', short: 'Benefits' },
-  { label: 'Review & Analyze', short: 'Analyze' },
-]
-
-interface StepIndicatorProps {
-  currentStep: FlowStep
+interface StepDef {
+  label: string
+  short: string
 }
 
-export default function StepIndicator({ currentStep }: StepIndicatorProps) {
+const MODE_ACCENT: Record<AppMode, {
+  completed: string
+  current: string
+  currentRing: string
+  connector: string
+  completedText: string
+  currentText: string
+}> = {
+  ma: {
+    completed: 'bg-blue-600 text-white',
+    current: 'bg-blue-500 text-white',
+    currentRing: 'ring-blue-400/30',
+    connector: 'bg-blue-600',
+    completedText: 'text-blue-400',
+    currentText: 'text-slate-100',
+  },
+  startup: {
+    completed: 'bg-purple-600 text-white',
+    current: 'bg-purple-500 text-white',
+    currentRing: 'ring-purple-400/30',
+    connector: 'bg-purple-600',
+    completedText: 'text-purple-400',
+    currentText: 'text-slate-100',
+  },
+  vc: {
+    completed: 'bg-emerald-600 text-white',
+    current: 'bg-emerald-500 text-white',
+    currentRing: 'ring-emerald-400/30',
+    connector: 'bg-emerald-600',
+    completedText: 'text-emerald-400',
+    currentText: 'text-slate-100',
+  },
+}
+
+interface StepIndicatorProps {
+  currentStep: number
+  steps: StepDef[]
+  appMode: AppMode
+}
+
+export default function StepIndicator({ currentStep, steps, appMode }: StepIndicatorProps) {
+  const accent = MODE_ACCENT[appMode]
+
   return (
     <div className="flex items-center gap-1">
-      {STEPS.map((step, idx) => {
-        const stepNum = (idx + 1) as FlowStep
+      {steps.map((step, idx) => {
+        const stepNum = idx + 1
         const isCompleted = currentStep > stepNum
         const isCurrent = currentStep === stepNum
 
@@ -27,20 +61,20 @@ export default function StepIndicator({ currentStep }: StepIndicatorProps) {
               {/* Step dot */}
               <div
                 className={`
-                  w-5 h-5 rounded-full flex items-center justify-center text-2xs font-semibold flex-shrink-0 transition-all
-                  ${isCompleted ? 'bg-blue-600 text-white' : ''}
-                  ${isCurrent ? 'bg-blue-500 text-white ring-2 ring-blue-400/30' : ''}
+                  w-5 h-5 rounded-full flex items-center justify-center text-2xs font-semibold flex-shrink-0 transition-all duration-300
+                  ${isCompleted ? accent.completed : ''}
+                  ${isCurrent ? `${accent.current} ring-2 ${accent.currentRing}` : ''}
                   ${!isCompleted && !isCurrent ? 'bg-slate-700 text-slate-400' : ''}
                 `}
               >
                 {isCompleted ? '✓' : stepNum}
               </div>
-              {/* Label — hidden on small screens */}
+              {/* Label — always visible, truncated on mobile */}
               <span
                 className={`
-                  text-xs hidden sm:block truncate transition-colors
-                  ${isCurrent ? 'text-slate-100 font-medium' : ''}
-                  ${isCompleted ? 'text-blue-400' : ''}
+                  text-xs truncate transition-colors duration-300 max-w-[48px] sm:max-w-none
+                  ${isCurrent ? `${accent.currentText} font-medium` : ''}
+                  ${isCompleted ? accent.completedText : ''}
                   ${!isCompleted && !isCurrent ? 'text-slate-500' : ''}
                 `}
               >
@@ -49,9 +83,9 @@ export default function StepIndicator({ currentStep }: StepIndicatorProps) {
             </div>
 
             {/* Connector line */}
-            {idx < STEPS.length - 1 && (
+            {idx < steps.length - 1 && (
               <div
-                className={`h-px flex-1 mx-1 transition-colors ${isCompleted ? 'bg-blue-600' : 'bg-slate-700'}`}
+                className={`h-px flex-1 mx-1 transition-all duration-500 ${isCompleted ? accent.connector : 'bg-slate-700'}`}
               />
             )}
           </div>

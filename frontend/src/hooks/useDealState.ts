@@ -79,6 +79,8 @@ export function useDealState() {
   const [state, setState] = useState<DealState>(loadFromStorage)
   // Track the in-flight AbortController so repeated clicks cancel stale requests
   const abortControllerRef = useRef<AbortController | null>(null)
+  // Track loading message interval to prevent leaks on repeated runs
+  const msgIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Persist input state (not output) to localStorage
   useEffect(() => {
@@ -127,6 +129,12 @@ export function useDealState() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
+    // Clear any lingering message interval from a previous run
+    if (msgIntervalRef.current) {
+      clearInterval(msgIntervalRef.current)
+      msgIntervalRef.current = null
+    }
+
     const controller = new AbortController()
     abortControllerRef.current = controller
 
@@ -134,7 +142,7 @@ export function useDealState() {
 
     // Show loading messages with artificial delays for perceived quality
     let msgIdx = 1
-    const msgInterval = setInterval(() => {
+    msgIntervalRef.current = setInterval(() => {
       if (msgIdx < LOADING_MESSAGES.length) {
         setState(s => ({ ...s, loadingMessage: LOADING_MESSAGES[msgIdx] }))
         msgIdx++
@@ -157,7 +165,7 @@ export function useDealState() {
       // Ignore stale response if this request was superseded by a newer one
       if (controller.signal.aborted) return
 
-      clearInterval(msgInterval)
+      if (msgIntervalRef.current) { clearInterval(msgIntervalRef.current); msgIntervalRef.current = null }
       abortControllerRef.current = null
       setState(s => ({
         ...s,
@@ -167,7 +175,7 @@ export function useDealState() {
         step: 6 as FlowStep,
       }))
     } catch (err) {
-      clearInterval(msgInterval)
+      if (msgIntervalRef.current) { clearInterval(msgIntervalRef.current); msgIntervalRef.current = null }
       // Ignore abort errors — a newer request has taken over
       if (err instanceof Error && err.name === 'AbortError') return
       abortControllerRef.current = null

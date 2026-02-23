@@ -1,7 +1,7 @@
 import React from 'react'
 import { ArrowLeft, Loader2, TrendingUp } from 'lucide-react'
 import type { DealState } from '../../types/deal'
-import { formatCurrencyCompact, formatPercentage, formatMultiple } from '../../lib/formatters'
+import { formatCurrencyCompact, formatPercentage } from '../../lib/formatters'
 
 interface Step6Props {
   state: DealState
@@ -28,8 +28,8 @@ export default function Step6_Review({ state, onBack, onRun }: Step6Props) {
 
   const dealSize = target.acquisition_price ?? 0
   const entryMultipleEst = target.ebitda && target.ebitda > 0
-    ? (dealSize / target.ebitda).toFixed(1) + '×'
-    : '—'
+    ? (dealSize / target.ebitda).toFixed(1) + '\u00d7'
+    : '\u2014'
 
   if (isLoading) {
     return (
@@ -48,6 +48,9 @@ export default function Step6_Review({ state, onBack, onRun }: Step6Props) {
           <div className="w-48 h-1 bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse w-2/3" />
           </div>
+          <p className="text-2xs text-slate-600">
+            5-year pro forma, sensitivity matrices, risk analysis, and full scorecard
+          </p>
         </div>
       </div>
     )
@@ -71,8 +74,8 @@ export default function Step6_Review({ state, onBack, onRun }: Step6Props) {
         <div>
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Deal Overview</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <AssumptionCard label="Buyer" value={acquirer.company_name || '—'} />
-            <AssumptionCard label="Target" value={target.company_name || '—'} />
+            <AssumptionCard label="Buyer" value={acquirer.company_name || '\u2014'} />
+            <AssumptionCard label="Target" value={target.company_name || '\u2014'} />
             <AssumptionCard label="Deal Size" value={formatCurrencyCompact(dealSize)} />
             <AssumptionCard label="Implied Multiple" value={entryMultipleEst} />
             <AssumptionCard label="Buyer Revenue" value={formatCurrencyCompact(acquirer.revenue ?? 0)} />
@@ -105,7 +108,7 @@ export default function Step6_Review({ state, onBack, onRun }: Step6Props) {
             </div>
           ) : (
             <div className="rounded-lg bg-slate-800/30 border border-slate-700/50 px-4 py-3 text-sm text-slate-500">
-              No synergies — modeling a standalone acquisition.
+              No synergies \u2014 modeling a standalone acquisition.
             </div>
           )}
         </div>
@@ -127,13 +130,13 @@ export default function Step6_Review({ state, onBack, onRun }: Step6Props) {
           Generate Analysis
         </button>
         <p className="text-center text-xs text-slate-500 mt-3">
-          Runs 500+ scenarios and produces an institutional-grade deal brief.
+          Generates 5-year pro forma, sensitivity analysis across EV and margin ranges, risk assessment, and exit return scenarios.
         </p>
       </div>
 
       <div className="mt-4">
         <button onClick={onBack} className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-300 text-sm py-2 transition-colors">
-          <ArrowLeft size={14} /> Edit inputs
+          <ArrowLeft size={14} /> Back to edit inputs
         </button>
       </div>
     </div>

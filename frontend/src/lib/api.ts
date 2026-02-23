@@ -9,8 +9,20 @@ const STARTUP_BASE = '/api/startup'
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`API error ${res.status}: ${body}`)
+    let message = `Server error (${res.status})`
+    try {
+      const contentType = res.headers.get('content-type')
+      if (contentType?.includes('application/json')) {
+        const body = await res.json()
+        message = body.detail || body.message || message
+      } else {
+        // Don't show raw HTML error pages to users
+        message = res.statusText || message
+      }
+    } catch {
+      // Parsing failed, use generic message
+    }
+    throw new Error(message)
   }
   return res.json() as Promise<T>
 }

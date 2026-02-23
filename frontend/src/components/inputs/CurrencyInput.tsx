@@ -46,10 +46,13 @@ export default function CurrencyInput({
 
   const handleBlur = () => {
     setFocused(false)
+    if (!rawInput.trim()) return // empty is fine, keep previous value
     const parsed = parseFloat(rawInput.replace(/[^0-9.-]/g, ''))
     if (!isNaN(parsed) && parsed >= min) {
       onChange(parsed)
     }
+    // If invalid, silently revert to previous value display (no state change).
+    // The formatted display will show the last valid value on blur.
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
