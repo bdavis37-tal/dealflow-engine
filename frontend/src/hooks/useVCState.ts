@@ -111,7 +111,7 @@ export function useVCState() {
   const runEvaluation = useCallback(async () => {
     const { fund, deal } = state
     if (!deal.company_name || !deal.post_money_valuation || !deal.check_size) {
-      setState(s => ({ ...s, error: 'Missing required fields: company name, valuation, and check size.' }))
+      setState(s => ({ ...s, error: 'Please enter company name, post-money valuation, and check size to evaluate the deal.' }))
       return
     }
 

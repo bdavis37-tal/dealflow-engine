@@ -23,9 +23,9 @@ export default function Step1_DealOverview({
 
   const validate = () => {
     const errs: Record<string, string> = {}
-    if (!acquirer.company_name?.trim()) errs.acq_name = 'Required'
-    if (!target.company_name?.trim()) errs.tgt_name = 'Required'
-    if (!target.acquisition_price || target.acquisition_price <= 0) errs.price = 'Required'
+    if (!acquirer.company_name?.trim()) errs.acq_name = 'Enter the buyer\'s name (e.g. "Acme Corp")'
+    if (!target.company_name?.trim()) errs.tgt_name = 'Enter the target company name or a brief description'
+    if (!target.acquisition_price || target.acquisition_price <= 0) errs.price = 'Enter the total purchase price in millions (e.g. 50 for $50M)'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -82,7 +82,7 @@ export default function Step1_DealOverview({
             value={target.acquisition_price ?? 0}
             onChange={v => onUpdateTarget({ acquisition_price: v })}
             placeholder="$50,000,000"
-            help="The total enterprise value you expect to pay, including assumed debt. Your best estimate is fine."
+            help="The total amount to acquire the target, including any debt they carry. This is the full 'price tag' on the business — not just equity. A rough estimate is fine for now."
             error={errors.price}
             required
           />

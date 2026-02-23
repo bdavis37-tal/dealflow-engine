@@ -87,28 +87,41 @@ export default function FinancingSlider({ dealSize, cash, stock, debt, onChange 
       </div>
 
       {/* Sliders */}
-      <div className="space-y-4">
+      <div className="space-y-4" role="group" aria-label="Deal financing mix">
         <div className="space-y-2">
-          <label className="text-xs text-slate-400">Cash: {cash}%</label>
+          <label htmlFor="slider-cash" className="text-xs text-slate-400">Cash: {cash}%</label>
           <input
+            id="slider-cash"
             type="range" min={0} max={100} value={cash}
             onChange={handleCashChange}
+            aria-label={`Cash percentage: ${cash}%`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={cash}
             className="w-full accent-green-500"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-xs text-slate-400">Stock: {stock}%</label>
+          <label htmlFor="slider-stock" className="text-xs text-slate-400">Stock: {stock}%</label>
           <input
+            id="slider-stock"
             type="range" min={0} max={100} value={stock}
             onChange={handleStockChange}
+            aria-label={`Stock percentage: ${stock}%`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={stock}
             className="w-full accent-blue-500"
           />
         </div>
         <div className="space-y-2">
-          <label className="text-xs text-slate-400">Debt: {debt}% (auto-calculated)</label>
+          <label htmlFor="slider-debt" className="text-xs text-slate-400">Debt: {debt}% (auto-calculated)</label>
           <input
+            id="slider-debt"
             type="range" min={0} max={100} value={debt}
             readOnly
+            aria-label={`Debt percentage: ${debt}% (auto-calculated)`}
+            aria-disabled="true"
             className="w-full accent-amber-500 opacity-50"
           />
         </div>

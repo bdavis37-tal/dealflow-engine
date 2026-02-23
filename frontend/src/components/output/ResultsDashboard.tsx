@@ -39,17 +39,22 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
   return (
     <div className="animate-fade-in space-y-10 pb-24">
       {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-100">Deal Analysis</h1>
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Deal Analysis</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {dealInput.acquirer.company_name} acquiring {dealInput.target.company_name}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
           {output.convergence_warning && (
             <span className="text-xs text-amber-400 border border-amber-800/40 rounded-lg px-3 py-1">
-              ⚠ Solver estimate
+              Solver estimate
             </span>
           )}
           {aiAvailable && (
             <span className="text-2xs text-purple-400 border border-purple-800/30 rounded-full px-2 py-0.5">
-              ✦ AI enabled
+              AI co-pilot enabled
             </span>
           )}
           <button
