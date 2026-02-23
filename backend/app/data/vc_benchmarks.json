@@ -595,6 +595,41 @@
         "median_arr_multiple": 30.0,
         "traction_bar": "$2M-$4M ARR; enterprise deals alongside PLG; security review passing"
       }
+    },
+    "defense_tech": {
+      "label": "Defense Tech / National Security",
+      "description": "AI-native defense software, autonomous systems, C2, ISR, cybersecurity for DoD/IC",
+      "exit_multiples": {
+        "bear": 5.0,
+        "base": 15.0,
+        "bull": 30.0
+      },
+      "pre_seed": {
+        "median_post_money_usd_m": 14.0,
+        "p25_post_money": 8.0,
+        "p75_post_money": 25.0,
+        "median_raise_usd_m": 2.5,
+        "median_arr_multiple": null,
+        "traction_bar": "Cleared founder or DoD operator background; SBIR Phase I; working prototype for mission use case"
+      },
+      "seed": {
+        "median_post_money_usd_m": 50.0,
+        "p25_post_money": 25.0,
+        "p75_post_money": 100.0,
+        "median_raise_usd_m": 8.0,
+        "median_arr_usd_m": 1.5,
+        "median_arr_multiple": 33.0,
+        "traction_bar": "$1M-$3M ARR from government contracts; SBIR Phase II or OTA; Secret+ facility clearance"
+      },
+      "series_a": {
+        "median_post_money_usd_m": 180.0,
+        "p25_post_money": 90.0,
+        "p75_post_money": 400.0,
+        "median_raise_usd_m": 35.0,
+        "median_arr_usd_m": 6.0,
+        "median_arr_multiple": 30.0,
+        "traction_bar": "$4M-$10M ARR; 1+ program of record; TS/SCI facility; clear path to prime contract"
+      }
     }
   },
 

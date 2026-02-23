@@ -22,6 +22,7 @@ export type StartupVertical =
   | 'marketplace'
   | 'vertical_saas'
   | 'developer_tools'
+  | 'defense_tech'
 
 export type InstrumentType = 'safe' | 'convertible_note' | 'priced_equity'
 
@@ -224,6 +225,7 @@ export const VERTICAL_LABELS: Record<StartupVertical, string> = {
   marketplace: 'Marketplace',
   vertical_saas: 'Vertical / Industry SaaS',
   developer_tools: 'Developer Tools / Infrastructure',
+  defense_tech: 'Defense Tech / National Security',
 }
 
 export const STAGE_LABELS: Record<StartupStage, string> = {

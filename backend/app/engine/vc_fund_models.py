@@ -40,6 +40,7 @@ class VCVertical(str, Enum):
     MARKETPLACE = "marketplace"
     VERTICAL_SAAS = "vertical_saas"
     DEVELOPER_TOOLS = "developer_tools"
+    DEFENSE_TECH = "defense_tech"
 
 
 class ExitType(str, Enum):

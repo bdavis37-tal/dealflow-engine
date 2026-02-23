@@ -521,6 +521,49 @@
         "arr_required_typical": 3.0,
         "yoy_growth_expected": 3.0
       }
+    },
+    "defense_tech": {
+      "label": "Defense Tech / National Security",
+      "description": "AI-native defense software, autonomous systems, C2, ISR, cybersecurity for DoD/IC customers",
+      "pre_seed": {
+        "valuation_p25": 5.0,
+        "valuation_p50": 10.0,
+        "valuation_p75": 20.0,
+        "valuation_p95": 45.0,
+        "safe_cap_median": 14.0,
+        "round_size_median": 1.0,
+        "typical_dilution": 0.14,
+        "check_size_range": [0.25, 2.5],
+        "traction_bar": "Founder with clearance or DoD background; SBIR Phase I or OTA pilot; working prototype for a specific mission need",
+        "revenue_required": false
+      },
+      "seed": {
+        "valuation_p25": 18.0,
+        "valuation_p50": 35.0,
+        "valuation_p75": 70.0,
+        "valuation_p95": 150.0,
+        "round_size_median": 6.0,
+        "typical_dilution": 0.17,
+        "check_size_range": [2.0, 12.0],
+        "arr_multiple_p25": 15.0,
+        "arr_multiple_p50": 25.0,
+        "arr_multiple_p75": 45.0,
+        "traction_bar": "$500K–$3M ARR from government contracts; SBIR Phase II or OTA; at least Secret clearance facility; 1+ program of record",
+        "revenue_required": false
+      },
+      "series_a": {
+        "valuation_p25": 60.0,
+        "valuation_p50": 120.0,
+        "valuation_p75": 250.0,
+        "round_size_median": 25.0,
+        "typical_dilution": 0.18,
+        "arr_multiple_p25": 15.0,
+        "arr_multiple_p50": 25.0,
+        "arr_multiple_p75": 45.0,
+        "arr_required_min": 2.0,
+        "arr_required_typical": 5.0,
+        "yoy_growth_expected": 2.5
+      }
     }
   },
   "market_wide_medians": {

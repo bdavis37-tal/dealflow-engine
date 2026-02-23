@@ -29,6 +29,7 @@ export type VCVertical =
   | 'marketplace'
   | 'vertical_saas'
   | 'developer_tools'
+  | 'defense_tech'
 
 export type PreferenceType =
   | 'non_participating'
@@ -436,6 +437,7 @@ export const VC_VERTICAL_LABELS: Record<VCVertical, string> = {
   marketplace: 'Marketplace',
   vertical_saas: 'Vertical SaaS',
   developer_tools: 'Developer Tools',
+  defense_tech: 'Defense Tech / National Security',
 }
 
 export const VC_STAGE_LABELS: Record<VCStage, string> = {

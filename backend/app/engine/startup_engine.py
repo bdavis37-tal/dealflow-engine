@@ -59,6 +59,20 @@ def _get_regional_premium(geography: str) -> float:
     return _BENCHMARKS.get("berkus_regional_premiums", {}).get(geography, 1.0)
 
 
+def _get_vertical_baseline(vdata: dict, stage: StartupStage) -> float:
+    """
+    Return the vertical-specific valuation baseline for pre-revenue methods.
+    Uses vertical p50 when available; falls back to market-wide pre-seed median.
+    This ensures defense tech, AI infra, etc. are anchored to their own comps
+    rather than the generic $7.7M market median.
+    """
+    market_median = _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
+    vertical_p50 = vdata.get("valuation_p50")
+    if vertical_p50 and vertical_p50 > 0:
+        return float(vertical_p50)
+    return market_median
+
+
 # ---------------------------------------------------------------------------
 # Method 1: Berkus Method
 # ---------------------------------------------------------------------------
@@ -81,8 +95,8 @@ def _run_berkus(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
     """
     # Regional baseline
     regional_premium = _get_regional_premium(inp.fundraise.geography.value)
-    market_median = _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
-    regional_median = market_median * regional_premium
+    vertical_baseline = _get_vertical_baseline(vdata, inp.fundraise.stage)
+    regional_median = vertical_baseline * regional_premium
 
     # Dimension scoring (0–1 each; max contribution = 20% × regional_median each)
     if inp.berkus_scores:
@@ -188,8 +202,8 @@ def _run_scorecard(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
     Weighted sum (50–150% range) × regional median.
     """
     regional_premium = _get_regional_premium(inp.fundraise.geography.value)
-    market_median = _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
-    regional_median = market_median * regional_premium
+    vertical_baseline = _get_vertical_baseline(vdata, inp.fundraise.stage)
+    regional_median = vertical_baseline * regional_premium
 
     weights = _BENCHMARKS["scorecard_weights"]
 
@@ -303,9 +317,15 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
     Each step = ±$250K (±$0.25M). Starting baseline = scorecard indicated value.
     """
     regional_premium = _get_regional_premium(inp.fundraise.geography.value)
+    vertical_baseline = _get_vertical_baseline(vdata, inp.fundraise.stage)
+    base = vertical_baseline * regional_premium
+    # Scale adjustment per step proportionally to vertical baseline.
+    # The benchmark $0.25M/step was calibrated for the ~$7.7M market median.
+    # For defense tech ($10M+) or AI infra ($10M+), flat $0.25M is negligible;
+    # scaling keeps each step at ~3.2% of baseline regardless of vertical.
     market_median = _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
-    base = market_median * regional_premium
-    adj_per_step = _BENCHMARKS["risk_factor_summation"]["adjustment_per_step_usd_millions"]
+    raw_adj = _BENCHMARKS["risk_factor_summation"]["adjustment_per_step_usd_millions"]
+    adj_per_step = raw_adj * (base / market_median) if market_median > 0 else raw_adj
 
     if inp.risk_factor_scores:
         rfs = inp.risk_factor_scores
@@ -336,7 +356,11 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         rfs["Stage of Business"] = stage_map.get(prod.stage, 0)
 
         # Legislation / Political
-        high_reg = [StartupVertical.FINTECH, StartupVertical.HEALTHTECH, StartupVertical.BIOTECH_PHARMA]
+        # Defense tech faces ITAR, CMMC, clearance requirements — high regulatory burden
+        high_reg = [
+            StartupVertical.FINTECH, StartupVertical.HEALTHTECH,
+            StartupVertical.BIOTECH_PHARMA, StartupVertical.DEFENSE_TECH,
+        ]
         rfs["Legislation / Political"] = -1 if inp.fundraise.vertical in high_reg else 1 if prod.regulatory_clearance else 0
 
         # Manufacturing / Operations
@@ -379,7 +403,12 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         # Exit Potential
         exit_score = 0
         if inp.market.tam_usd_billions >= 10: exit_score += 1
-        if inp.fundraise.vertical in [StartupVertical.AI_ML_INFRASTRUCTURE, StartupVertical.AI_ENABLED_SAAS]: exit_score += 1
+        # Defense tech exit comps (Palantir, Anduril, Shield AI) justify premium
+        if inp.fundraise.vertical in [
+            StartupVertical.AI_ML_INFRASTRUCTURE,
+            StartupVertical.AI_ENABLED_SAAS,
+            StartupVertical.DEFENSE_TECH,
+        ]: exit_score += 1
         rfs["Exit Potential"] = max(-2, min(2, exit_score))
 
     total_adjustment = sum(rfs.values()) * adj_per_step
@@ -390,8 +419,8 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         method_name="risk_factor_summation",
         method_label="Risk Factor Summation",
         indicated_value=round(indicated, 2),
-        value_low=round(max(0.5, indicated - 2.0), 2),
-        value_high=round(indicated + 2.0, 2),
+        value_low=round(max(0.5, indicated * 0.80), 2),
+        value_high=round(indicated * 1.25, 2),
         applicable=inp.fundraise.stage in [StartupStage.PRE_SEED, StartupStage.SEED],
         rationale=(
             f"Base ${base:.1f}M + total adjustment ${total_adjustment:+.2f}M "
