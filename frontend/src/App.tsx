@@ -1,6 +1,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE file for details
 import { useState, useEffect } from 'react'
 import AppShell from './components/layout/AppShell'
+import LandingPage from './components/layout/LandingPage'
 import Step1_DealOverview from './components/flow/Step1_DealOverview'
 import Step2_BuyerProfile from './components/flow/Step2_BuyerProfile'
 import Step3_TargetProfile from './components/flow/Step3_TargetProfile'
@@ -30,12 +31,13 @@ import VCQuickScreen from './components/vc/VCQuickScreen'
 import VCDashboard from './components/vc/VCDashboard'
 
 type AppMode = 'ma' | 'startup' | 'vc'
+type AppView = 'landing' | 'ma' | 'startup' | 'vc'
 
 // ---------------------------------------------------------------------------
 // Main App
 // ---------------------------------------------------------------------------
 export default function App() {
-  const [appMode, setAppMode] = useState<AppMode>('ma')
+  const [appView, setAppView] = useState<AppView>('landing')
 
   // M&A state
   const {
@@ -101,12 +103,24 @@ export default function App() {
   }
 
   // ---------------------------------------------------------------------------
+  // Landing page
+  // ---------------------------------------------------------------------------
+  if (appView === 'landing') {
+    return (
+      <LandingPage
+        onSelectMode={(mode) => setAppView(mode)}
+        onSkip={() => setAppView('ma')}
+      />
+    )
+  }
+
+  // ---------------------------------------------------------------------------
   // Startup flow
   // ---------------------------------------------------------------------------
-  if (appMode === 'startup') {
+  if (appView === 'startup') {
     if (startupState.output && !startupState.isLoading) {
       return (
-        <AppShell appMode="startup" onAppModeChange={setAppMode} isResults>
+        <AppShell appMode="startup" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
           <StartupDashboard output={startupState.output} onReset={resetStartup} />
         </AppShell>
       )
@@ -115,7 +129,8 @@ export default function App() {
     return (
       <AppShell
         appMode="startup"
-        onAppModeChange={setAppMode}
+        onAppModeChange={(m: AppMode) => setAppView(m)}
+        onHome={() => setAppView('landing')}
         step={Math.min(startupState.step, 4)}
       >
         {startupState.step === 1 && (
@@ -169,11 +184,11 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // VC Investor flow
   // ---------------------------------------------------------------------------
-  if (appMode === 'vc') {
+  if (appView === 'vc') {
     // Results view
     if (vcState.output && !vcState.isLoading) {
       return (
-        <AppShell appMode="vc" onAppModeChange={setAppMode} isResults>
+        <AppShell appMode="vc" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
           <VCDashboard
             output={vcState.output}
             fund={vcState.fund}
@@ -185,7 +200,7 @@ export default function App() {
     }
 
     return (
-      <AppShell appMode="vc" onAppModeChange={setAppMode} step={vcState.step}>
+      <AppShell appMode="vc" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} step={vcState.step}>
         {vcState.step === 1 && (
           <VCFundSetup
             fund={vcState.fund}
@@ -222,7 +237,7 @@ export default function App() {
       projection_years: 5,
     }
     return (
-      <AppShell appMode="ma" onAppModeChange={setAppMode} isResults>
+      <AppShell appMode="ma" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
         <ResultsDashboard output={output} dealInput={dealInput} onReset={reset} />
       </AppShell>
     )
@@ -234,7 +249,8 @@ export default function App() {
   return (
     <AppShell
       appMode="ma"
-      onAppModeChange={setAppMode}
+      onAppModeChange={(m: AppMode) => setAppView(m)}
+      onHome={() => setAppView('landing')}
       step={step}
       modelMode={mode}
       onModelModeChange={setMode}

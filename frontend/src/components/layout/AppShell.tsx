@@ -67,6 +67,8 @@ interface AppShellProps {
   children: React.ReactNode
   appMode: AppMode
   onAppModeChange: (mode: AppMode) => void
+  /** Navigate back to landing page */
+  onHome?: () => void
   /** Current step (1-indexed) */
   step?: number
   /** Whether we're showing results (hides step nav, shows completed state) */
@@ -83,6 +85,7 @@ export default function AppShell({
   children,
   appMode,
   onAppModeChange,
+  onHome,
   step,
   isResults,
   modelMode,
@@ -98,7 +101,11 @@ export default function AppShell({
       <header className="border-b border-slate-800 bg-navy-800/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           {/* Logo + mode label */}
-          <div className="flex items-center gap-3">
+          <button
+            onClick={onHome}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-900 rounded-lg"
+            title="Back to home"
+          >
             <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${modeColor.gradient} flex items-center justify-center`}>
               <span className="text-white text-xs font-bold">DE</span>
             </div>
@@ -107,7 +114,7 @@ export default function AppShell({
               <span className="text-slate-600 text-sm hidden sm:inline">&middot;</span>
               <span className={`${modeColor.accentText} text-sm font-medium hidden sm:inline`}>{modeColor.accentLabel}</span>
             </div>
-          </div>
+          </button>
 
           {/* Right side: mode selector + model depth toggle */}
           <div className="flex items-center gap-3">
@@ -196,7 +203,7 @@ export default function AppShell({
               GitHub
             </a>
             <span className="text-slate-700">&middot;</span>
-            <span>Open Source</span>
+            <span>BSL 1.1</span>
           </div>
         </div>
       </footer>

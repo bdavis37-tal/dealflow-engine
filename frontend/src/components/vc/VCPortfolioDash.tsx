@@ -416,16 +416,16 @@ function ConcentrationBar({ label, value, total, flag }: { label: string; value:
     <div className="mb-2">
       <div className="flex justify-between text-xs mb-0.5">
         <span className={flag ? 'text-amber-400' : 'text-slate-400'}>{label}</span>
-        <span className={flag ? 'text-amber-400 font-medium' : 'text-slate-400'}>{pct(p)}</span>
+        <span className={flag ? 'text-amber-400 font-medium' : 'text-slate-400'}>{pctRound(p)}</span>
       </div>
       <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
         <div
           className={flag ? 'h-full bg-amber-500 rounded-full' : 'h-full bg-emerald-500 rounded-full'}
-          style={{ width: pct(p) }}
+          style={{ width: pctRound(p) }}
         />
       </div>
     </div>
   )
 }
 
-function pct(n: number) { return `${(n * 100).toFixed(0)}%` }
+function pctRound(n: number) { return `${(n * 100).toFixed(0)}%` }
