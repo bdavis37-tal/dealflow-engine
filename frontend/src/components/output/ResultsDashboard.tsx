@@ -8,6 +8,7 @@ import SensitivityExplorer from './SensitivityExplorer'
 import FinancialStatements from './FinancialStatements'
 import AINarrative from './AINarrative'
 import AIChatPanel from './AIChatPanel'
+import DefensePositioningCard from './DefensePositioningCard'
 import { checkAIStatus } from '../../lib/ai-api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
@@ -79,6 +80,11 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
         dealOutput={output}
         aiAvailable={aiAvailable}
       />
+
+      {/* Defense Positioning — only for Defense & National Security deals */}
+      {output.defense_positioning && (
+        <DefensePositioningCard positioning={output.defense_positioning} />
+      )}
 
       {/* Scorecard */}
       <DealScorecard metrics={output.deal_scorecard} />

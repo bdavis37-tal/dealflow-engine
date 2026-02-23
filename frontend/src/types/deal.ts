@@ -24,6 +24,59 @@ export type Industry =
   | 'Insurance'
   | 'Staffing / Recruiting'
   | 'Waste Management'
+  | 'Defense & National Security'
+
+// Defense & National Security types
+export type ClearanceLevel = 'unclassified' | 'secret' | 'top_secret' | 'ts_sci' | 'sap'
+export type DeploymentClassification = 'cloud_il2' | 'cloud_il4' | 'cloud_il5' | 'cloud_il6' | 'on_prem_scif' | 'edge_tactical' | 'ddil'
+export type DefenseSoftwareType =
+  | 'C2 (Command & Control)'
+  | 'ISR Processing'
+  | 'Logistics / Supply Chain'
+  | 'Predictive Maintenance'
+  | 'Cybersecurity'
+  | 'Decision Support'
+  | 'Autonomous Systems'
+  | 'Training / Simulation'
+export type ContractVehicleType =
+  | 'OTA (Other Transaction Authority)'
+  | 'GWAC (Government-Wide Acquisition Contract)'
+  | 'IDIQ (Indefinite Delivery/Indefinite Quantity)'
+  | 'BPA (Blanket Purchase Agreement)'
+  | 'SBIR/STTR'
+  | 'Prime Contract'
+  | 'Subcontract'
+
+export interface DefenseProfile {
+  is_ai_native: boolean
+  contract_backlog_total: number
+  contract_backlog_funded: number
+  idiq_ceiling_value: number
+  contract_vehicles: ContractVehicleType[]
+  clearance_level: ClearanceLevel
+  authorization_certifications: string[]
+  customer_concentration_dod_pct: number
+  programs_of_record: number
+  deployment_classification: DeploymentClassification[]
+  software_type: DefenseSoftwareType[]
+  ip_ownership: string
+}
+
+export interface DefensePositioning {
+  clearance_level: string
+  active_contract_vehicles: number
+  programs_of_record: number
+  combined_backlog: number
+  backlog_coverage_ratio: number
+  revenue_visibility_years: number
+  ev_revenue_multiple: number
+  clearance_premium_applied: number
+  certification_premium_applied: number
+  program_of_record_premium_applied: number
+  total_defense_premium_pct: number
+  is_ai_native: boolean
+  positioning_summary: string
+}
 
 export type AmortizationType = 'straight_line' | 'interest_only' | 'bullet'
 export type RiskSeverity = 'low' | 'medium' | 'high' | 'critical'
@@ -65,6 +118,7 @@ export interface TargetProfile {
   industry: Industry
   acquisition_price: number
   revenue_growth_rate: number
+  defense_profile?: DefenseProfile
 }
 
 export interface DebtTranche {
@@ -216,6 +270,7 @@ export interface DealOutput {
   deal_verdict_headline: string
   deal_verdict_subtext: string
   deal_scorecard: ScorecardMetric[]
+  defense_positioning?: DefensePositioning
   convergence_warning: boolean
   computation_notes: string[]
 }

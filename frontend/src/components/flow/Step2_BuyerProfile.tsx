@@ -12,6 +12,7 @@ const INDUSTRIES: Industry[] = [
   'Real Estate Services', 'Technology Hardware', 'Pharmaceuticals',
   'Telecommunications', 'Agriculture', 'Media / Entertainment',
   'Insurance', 'Staffing / Recruiting', 'Waste Management',
+  'Defense & National Security',
 ]
 
 interface Step2Props {

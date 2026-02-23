@@ -34,6 +34,7 @@ class Industry(str, Enum):
     INSURANCE = "Insurance"
     STAFFING = "Staffing / Recruiting"
     WASTE_MANAGEMENT = "Waste Management"
+    DEFENSE = "Defense & National Security"
 
 
 class AmortizationType(str, Enum):
@@ -65,6 +66,90 @@ class DealVerdict(str, Enum):
 class ModelMode(str, Enum):
     QUICK = "quick"
     DEEP = "deep"
+
+
+# ---------------------------------------------------------------------------
+# Defense & National Security enums
+# ---------------------------------------------------------------------------
+
+class ClearanceLevel(str, Enum):
+    UNCLASSIFIED = "unclassified"
+    SECRET = "secret"
+    TOP_SECRET = "top_secret"
+    TS_SCI = "ts_sci"
+    SAP = "sap"
+
+
+class DeploymentClassification(str, Enum):
+    CLOUD_IL2 = "cloud_il2"
+    CLOUD_IL4 = "cloud_il4"
+    CLOUD_IL5 = "cloud_il5"
+    CLOUD_IL6 = "cloud_il6"
+    ON_PREM_SCIF = "on_prem_scif"
+    EDGE_TACTICAL = "edge_tactical"
+    DDIL = "ddil"
+
+
+class DefenseSoftwareType(str, Enum):
+    C2 = "C2 (Command & Control)"
+    ISR = "ISR Processing"
+    LOGISTICS = "Logistics / Supply Chain"
+    PREDICTIVE_MAINTENANCE = "Predictive Maintenance"
+    CYBERSECURITY = "Cybersecurity"
+    DECISION_SUPPORT = "Decision Support"
+    AUTONOMOUS_SYSTEMS = "Autonomous Systems"
+    TRAINING_SIMULATION = "Training / Simulation"
+
+
+class ContractVehicleType(str, Enum):
+    OTA = "OTA (Other Transaction Authority)"
+    GWAC = "GWAC (Government-Wide Acquisition Contract)"
+    IDIQ = "IDIQ (Indefinite Delivery/Indefinite Quantity)"
+    BPA = "BPA (Blanket Purchase Agreement)"
+    SBIR_STTR = "SBIR/STTR"
+    PRIME = "Prime Contract"
+    SUBCONTRACT = "Subcontract"
+
+
+# ---------------------------------------------------------------------------
+# Defense-specific input sub-models
+# ---------------------------------------------------------------------------
+
+class DefenseProfile(BaseModel):
+    """Defense & National Security specific attributes for a target company."""
+    is_ai_native: bool = Field(default=False, description="AI-native defense company vs traditional defense contractor")
+    contract_backlog_total: float = Field(default=0.0, ge=0, description="Total value of awarded contracts not yet recognized as revenue")
+    contract_backlog_funded: float = Field(default=0.0, ge=0, description="Funded/obligated portion of backlog (near-certain revenue)")
+    idiq_ceiling_value: float = Field(default=0.0, ge=0, description="Total ceiling value of IDIQ contracts")
+    contract_vehicles: list[ContractVehicleType] = Field(default_factory=list)
+    clearance_level: ClearanceLevel = Field(default=ClearanceLevel.UNCLASSIFIED)
+    authorization_certifications: list[str] = Field(default_factory=list, description="FedRAMP High, IL5, CMMC Level 3, etc.")
+    customer_concentration_dod_pct: float = Field(default=0.0, ge=0, le=1, description="% of revenue from DoD")
+    programs_of_record: int = Field(default=0, ge=0, description="Number of DoD programs of record the software is embedded in")
+    deployment_classification: list[DeploymentClassification] = Field(default_factory=list)
+    software_type: list[DefenseSoftwareType] = Field(default_factory=list)
+    ip_ownership: str = Field(default="company_owned", description="company_owned, government_purpose_rights, or unlimited_rights")
+
+
+# ---------------------------------------------------------------------------
+# Defense-specific output sub-models
+# ---------------------------------------------------------------------------
+
+class DefensePositioning(BaseModel):
+    """Strategic defense positioning summary in deal output."""
+    clearance_level: str
+    active_contract_vehicles: int
+    programs_of_record: int
+    combined_backlog: float
+    backlog_coverage_ratio: float  # backlog / annual revenue
+    revenue_visibility_years: float  # funded backlog / annual revenue
+    ev_revenue_multiple: float
+    clearance_premium_applied: float  # percentage premium
+    certification_premium_applied: float
+    program_of_record_premium_applied: float
+    total_defense_premium_pct: float
+    is_ai_native: bool
+    positioning_summary: str
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +196,7 @@ class TargetProfile(BaseModel):
     industry: Industry
     acquisition_price: float = Field(gt=0, description="Total enterprise value paid")
     revenue_growth_rate: float = Field(default=0.05, description="Projected annual revenue growth (5-year horizon)")
+    defense_profile: Optional[DefenseProfile] = Field(default=None, description="Defense-specific attributes (only when industry is Defense & National Security)")
 
 
 class DebtTranche(BaseModel):
@@ -278,6 +364,8 @@ class DealOutput(BaseModel):
     deal_verdict_headline: str
     deal_verdict_subtext: str
     deal_scorecard: list[ScorecardMetric]
+    # Defense-specific output (populated only for Defense & National Security deals)
+    defense_positioning: Optional[DefensePositioning] = None
     # Metadata
     convergence_warning: bool = False
     computation_notes: list[str] = Field(default_factory=list)
