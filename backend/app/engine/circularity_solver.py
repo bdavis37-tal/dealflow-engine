@@ -1,3 +1,4 @@
+# Licensed under the Business Source License 1.1 — see LICENSE file for details
 """
 Iterative solver for the debt/interest/income circularity in leveraged deal models.
 

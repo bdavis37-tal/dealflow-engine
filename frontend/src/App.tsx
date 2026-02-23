@@ -1,3 +1,4 @@
+// Licensed under the Business Source License 1.1 — see LICENSE file for details
 import { useState, useEffect } from 'react'
 import AppShell from './components/layout/AppShell'
 import Step1_DealOverview from './components/flow/Step1_DealOverview'
