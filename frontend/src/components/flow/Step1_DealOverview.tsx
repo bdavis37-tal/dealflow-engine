@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import GuidedInput from '../inputs/GuidedInput'
 import CurrencyInput from '../inputs/CurrencyInput'
-import type { AcquirerProfile, TargetProfile, FlowStep } from '../../types/deal'
+import type { AcquirerProfile, TargetProfile } from '../../types/deal'
 
 interface Step1Props {
   acquirer: Partial<AcquirerProfile>
@@ -86,6 +86,49 @@ export default function Step1_DealOverview({
             error={errors.price}
             required
           />
+
+          {/* AI-Native Toggle */}
+          {(() => {
+            const defenseLockedOn = target.defense_profile?.is_ai_native === true
+            const isOn = defenseLockedOn || (target.is_ai_native ?? false)
+
+            return (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-700">
+                <div>
+                  <span className="text-sm font-medium text-slate-300">AI-Native Company</span>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {defenseLockedOn
+                      ? 'Locked — defense profile already flagged as AI-native.'
+                      : 'Enable to benchmark against AI-native peer multiples.'}
+                  </p>
+                </div>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isOn}
+                    disabled={defenseLockedOn}
+                    onClick={() => onUpdateTarget({ is_ai_native: !isOn })}
+                    className={`
+                      relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                      ${isOn ? 'bg-blue-600' : 'bg-slate-600'}
+                      ${defenseLockedOn ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}
+                    `}
+                  >
+                    <span className={`
+                      inline-block h-4 w-4 rounded-full bg-white transition-transform
+                      ${isOn ? 'translate-x-6' : 'translate-x-1'}
+                    `} />
+                  </button>
+                  {defenseLockedOn && (
+                    <span className="absolute bottom-full right-0 mb-2 px-2 py-1 text-xs text-slate-300 bg-slate-700 rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      Defense profile is already flagged as AI-native
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
 

@@ -213,55 +213,126 @@ def _interest_rate_sensitivity_risk(
     )
 
 
+
 def _purchase_price_risk(
     deal: DealInput,
     benchmarks: dict,
-) -> RiskItem | None:
+) -> tuple[RiskItem | None, str | None]:
     """
     Purchase price risk: implied entry multiple vs industry benchmarks.
 
     Flag if entry multiple > 1.5× the industry median EV/EBITDA.
+
+    When the target is AI-native, uses ai_native_ev_ebitda_range from benchmarks
+    instead of the generic ev_ebitda_multiple_range. Falls back to the generic
+    range with a warning when the AI-native range is absent.
+
+    Returns:
+        Tuple of (RiskItem or None, ai_benchmark_context string or None).
     """
     target_ebitda = deal.target.ebitda
     if target_ebitda <= 0:
-        return None
+        return None, None
 
     entry_multiple = deal.target.acquisition_price / target_ebitda
     industry_key = deal.target.industry.value
     ind = benchmarks.get(industry_key, {})
-    ev_range = ind.get("ev_ebitda_multiple_range", {})
+
+    # Select benchmark range: AI-native range when flagged, with fallback
+    ai_benchmark_context: str | None = None
+    if deal.target.is_ai_native:
+        ai_range = ind.get("ai_native_ev_ebitda_range")
+        if ai_range:
+            ev_range = ai_range
+            context_prefix = "AI-native"
+        else:
+            # Fallback: AI-native range absent for this industry
+            ev_range = ind.get("ev_ebitda_multiple_range", {})
+            context_prefix = "AI-native"
+            ai_benchmark_context = (
+                f"AI-native EV/EBITDA benchmarks not available for {industry_key}; "
+                "using standard industry multiples as fallback"
+            )
+    else:
+        ev_range = ind.get("ev_ebitda_multiple_range", {})
+        context_prefix = None
+
     median_multiple = ev_range.get("median", 9.0)
     high_multiple = ev_range.get("high", 13.0)
+
+    # Build AI benchmark context string when AI-native range was found
+    if deal.target.is_ai_native and ai_benchmark_context is None:
+        low_val = ev_range.get("low", 0)
+        high_val = ev_range.get("high", 0)
+        med_val = ev_range.get("median", 0)
+        ai_benchmark_context = (
+            f"Benchmarked against AI-native {industry_key} peers: "
+            f"EV/EBITDA {low_val}\u2013{high_val}x, median {med_val}x"
+        )
+
+        # Defense industry: additionally reference ai_native_ev_revenue
+        if (
+            deal.target.industry == Industry.DEFENSE
+            and deal.target.defense_profile is not None
+        ):
+            defense_specific = ind.get("defense_specific", {})
+            ai_rev = defense_specific.get("ai_native_ev_revenue")
+            if ai_rev:
+                ai_benchmark_context += (
+                    f". AI-native defense EV/Revenue: "
+                    f"{ai_rev.get('low', 0)}\u2013{ai_rev.get('high', 0)}x, "
+                    f"median {ai_rev.get('median', 0)}x"
+                )
 
     overpay_threshold = median_multiple * 1.5
 
     if entry_multiple < high_multiple:
-        return None  # Within normal range
+        return None, ai_benchmark_context  # Within normal range
 
     severity = RiskSeverity.HIGH if entry_multiple > overpay_threshold else RiskSeverity.MEDIUM
     pct_above_median = (entry_multiple - median_multiple) / median_multiple * 100
 
-    return RiskItem(
-        description=(
+    # Adjust description to mention AI-native context when applicable
+    if context_prefix:
+        desc = (
+            f"You're paying {entry_multiple:.1f}× EBITDA for the target, which is "
+            f"{pct_above_median:.0f}% above the {context_prefix} median of "
+            f"{median_multiple:.1f}× for {industry_key} companies. "
+            "High entry prices require exceptional execution to generate returns."
+        )
+        plain = (
+            f"You're paying a premium price — {entry_multiple:.1f}× annual earnings, "
+            f"vs the {context_prefix} median of {median_multiple:.1f}× for this type of business. "
+            "You're betting on above-average performance to earn this back."
+        )
+    else:
+        desc = (
             f"You're paying {entry_multiple:.1f}× EBITDA for the target, which is "
             f"{pct_above_median:.0f}% above the typical {median_multiple:.1f}× for "
-            f"{deal.target.industry.value} companies. High entry prices require "
+            f"{industry_key} companies. High entry prices require "
             "exceptional execution to generate returns."
-        ),
+        )
+        plain = (
+            f"You're paying a premium price — {entry_multiple:.1f}× annual earnings, "
+            f"vs the typical {median_multiple:.1f}× for this type of business. "
+            "You're betting on above-average performance to earn this back."
+        )
+
+    return RiskItem(
+        description=desc,
         severity=severity,
         metric_name="Entry EV/EBITDA Multiple",
         current_value=entry_multiple,
         threshold_value=overpay_threshold,
         tolerance_band=(
-            f"At the current price, EBITDA must grow to ${deal.target.acquisition_price / median_multiple / 1e6:.1f}M "
+            f"At the current price, EBITDA must grow to "
+            f"${deal.target.acquisition_price / median_multiple / 1e6:.1f}M "
             f"to reach a fair {median_multiple:.1f}× multiple."
         ),
-        plain_english=(
-            f"You're paying a premium price — {entry_multiple:.1f}× annual earnings, "
-            f"vs the typical {median_multiple:.1f}× for this type of business. "
-            "You're betting on above-average performance to earn this back."
-        ),
-    )
+        plain_english=plain,
+    ), ai_benchmark_context
+
+
 
 
 def _integration_cost_risk(deal: DealInput) -> RiskItem | None:
@@ -569,7 +640,7 @@ def analyze_risks(
     deal: DealInput,
     output: DealOutput,
     benchmarks: dict,
-) -> list[RiskItem]:
+) -> tuple[list[RiskItem], str | None]:
     """
     Run all risk analyzers and return flagged risks sorted by severity.
 
@@ -579,17 +650,25 @@ def analyze_risks(
         benchmarks: Industry benchmark data dict.
 
     Returns:
-        List of RiskItems, sorted critical → high → medium → low.
+        Tuple of (list of RiskItems sorted critical → high → medium → low,
+        ai_benchmark_context string or None).
     """
     base_accretion = 0.0
     if output.pro_forma_income_statement:
         base_accretion = output.pro_forma_income_statement[0].accretion_dilution_pct
 
+    # Purchase price risk is handled separately because it returns
+    # (RiskItem | None, ai_benchmark_context | None) for AI-native targets.
+    ai_benchmark_context: str | None = None
+    try:
+        price_risk, ai_benchmark_context = _purchase_price_risk(deal, benchmarks)
+    except Exception:
+        price_risk = None
+
     risk_functions = [
         lambda: _leverage_risk(deal, output),
         lambda: _synergy_execution_risk(deal, output),
         lambda: _interest_rate_sensitivity_risk(deal, output, base_accretion),
-        lambda: _purchase_price_risk(deal, benchmarks),
         lambda: _integration_cost_risk(deal),
         lambda: _revenue_synergy_concentration_risk(deal),
     ]
@@ -612,6 +691,9 @@ def analyze_risks(
     }
 
     risks: list[RiskItem] = []
+    if price_risk is not None:
+        risks.append(price_risk)
+
     for fn in risk_functions:
         try:
             risk = fn()
@@ -621,4 +703,4 @@ def analyze_risks(
             pass  # Never let a risk analyzer crash the deal analysis
 
     risks.sort(key=lambda r: severity_order.get(r.severity, 4))
-    return risks
+    return risks, ai_benchmark_context

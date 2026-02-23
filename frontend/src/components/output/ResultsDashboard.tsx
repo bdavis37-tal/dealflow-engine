@@ -139,6 +139,16 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
         </div>
       </div>
 
+      {/* AI Benchmark Context — only for AI-native targets */}
+      {output.ai_modifier_applied && output.ai_benchmark_context && (
+        <div className="rounded-xl border border-blue-600/40 bg-blue-900/15 px-5 py-3 flex items-start gap-3">
+          <span className="mt-0.5 text-blue-400 text-sm">ℹ</span>
+          <p className="text-sm text-blue-300/90 leading-relaxed">
+            {output.ai_benchmark_context}
+          </p>
+        </div>
+      )}
+
       {/* Risk Panel */}
       <RiskPanel risks={output.risk_assessment} />
 

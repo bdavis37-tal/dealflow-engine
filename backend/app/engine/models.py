@@ -197,6 +197,7 @@ class TargetProfile(BaseModel):
     acquisition_price: float = Field(gt=0, description="Total enterprise value paid")
     revenue_growth_rate: float = Field(default=0.05, description="Projected annual revenue growth (5-year horizon)")
     defense_profile: Optional[DefenseProfile] = Field(default=None, description="Defense-specific attributes (only when industry is Defense & National Security)")
+    is_ai_native: bool = Field(default=False, description="AI-native toggle for M&A target — switches to AI-native benchmark ranges")
 
 
 class DebtTranche(BaseModel):
@@ -366,6 +367,9 @@ class DealOutput(BaseModel):
     deal_scorecard: list[ScorecardMetric]
     # Defense-specific output (populated only for Defense & National Security deals)
     defense_positioning: Optional[DefensePositioning] = None
+    # AI modifier outputs
+    ai_modifier_applied: bool = Field(default=False)
+    ai_benchmark_context: Optional[str] = Field(default=None, description="AI-native benchmark context string for purchase price risk section")
     # Metadata
     convergence_warning: bool = False
     computation_notes: list[str] = Field(default_factory=list)

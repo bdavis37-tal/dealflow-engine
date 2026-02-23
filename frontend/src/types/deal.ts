@@ -119,6 +119,7 @@ export interface TargetProfile {
   acquisition_price: number
   revenue_growth_rate: number
   defense_profile?: DefenseProfile
+  is_ai_native: boolean
 }
 
 export interface DebtTranche {
@@ -271,6 +272,8 @@ export interface DealOutput {
   deal_verdict_subtext: string
   deal_scorecard: ScorecardMetric[]
   defense_positioning?: DefensePositioning
+  ai_modifier_applied: boolean
+  ai_benchmark_context: string | null
   convergence_warning: boolean
   computation_notes: string[]
 }

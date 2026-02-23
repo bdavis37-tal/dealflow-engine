@@ -1,0 +1,19 @@
+{
+  "frozen_on": ["ai_ml_infrastructure", "ai_enabled_saas"],
+  "frozen_off": ["construction", "restaurants", "retail", "real_estate", "agriculture", "waste_management", "staffing"],
+  "default_on": ["defense_tech", "healthtech", "biotech_pharma", "developer_tools"],
+  "default_off": ["b2b_saas", "fintech", "deep_tech_hardware", "consumer", "climate_energy", "marketplace", "vertical_saas"],
+  "vertical_premiums": {
+    "defense_tech": 1.5,
+    "healthtech": 1.0,
+    "biotech_pharma": 0.8,
+    "b2b_saas": 0.8,
+    "vertical_saas": 0.7,
+    "fintech": 0.6,
+    "developer_tools": 0.5,
+    "climate_energy": 0.5,
+    "consumer": 0.4,
+    "deep_tech_hardware": 0.4,
+    "marketplace": 0.3
+  }
+}

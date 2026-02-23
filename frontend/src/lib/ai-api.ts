@@ -3,6 +3,7 @@
  * Every function degrades gracefully if AI is unavailable.
  */
 import type { DealInput, DealOutput } from '../types/deal'
+import type { StartupInput, StartupValuationOutput, StartupNarrativeResponse } from '../types/startup'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -194,4 +195,11 @@ export async function streamScenarioNarrative(
   } catch {
     onDone()
   }
+}
+
+export async function generateStartupNarrative(
+  startup_input: StartupInput,
+  startup_output: StartupValuationOutput,
+): Promise<StartupNarrativeResponse> {
+  return post<StartupNarrativeResponse>('/startup-narrative', { startup_input, startup_output })
 }

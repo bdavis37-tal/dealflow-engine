@@ -2,13 +2,16 @@
  * Main startup valuation results dashboard.
  * Renders all output panels from StartupValuationOutput.
  */
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { RefreshCw, TrendingUp, Users, BarChart2, AlertTriangle, ChevronDown, ChevronUp, CheckCircle, AlertCircle, XCircle, Info } from 'lucide-react'
-import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict } from '../../../types/startup'
+import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput } from '../../../types/startup'
 import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'
+import { checkAIStatus } from '../../../lib/ai-api'
+import StartupAINarrative from './StartupAINarrative'
 
 interface Props {
   output: StartupValuationOutput
+  startupInput: StartupInput
   onReset: () => void
 }
 
@@ -78,6 +81,38 @@ function VerdictBanner({ verdict, headline, subtext }: { verdict: ValuationVerdi
 }
 
 // ---------------------------------------------------------------------------
+// AI Modifier Banner (shown only when ai_modifier_applied=true)
+// ---------------------------------------------------------------------------
+
+function AIModifierBanner({ output }: { output: StartupValuationOutput }) {
+  if (!output.ai_modifier_applied || output.blended_before_ai == null) return null
+
+  const premiumPct = ((output.blended_valuation / output.blended_before_ai) - 1) * 100
+
+  return (
+    <div className="rounded-xl border border-purple-600/50 bg-purple-900/20 p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp size={16} className="text-purple-400" />
+        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI-Native Premium Applied</span>
+      </div>
+      <p className="text-2xl font-bold text-purple-300 mb-2">
+        +{premiumPct.toFixed(0)}% AI-Native Premium
+      </p>
+      {output.ai_premium_context && (
+        <p className="text-sm text-slate-400 leading-relaxed mb-3">{output.ai_premium_context}</p>
+      )}
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-slate-500">Base Valuation:</span>
+        <span className="text-slate-300 font-medium">${fmt(output.blended_before_ai)}</span>
+        <span className="text-slate-600">→</span>
+        <span className="text-slate-500">AI-Adjusted:</span>
+        <span className="text-purple-300 font-semibold">${fmt(output.blended_valuation)}</span>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Panels
 // ---------------------------------------------------------------------------
 
@@ -102,6 +137,9 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
       <div className="text-center mb-6">
         <p className="text-slate-500 text-xs mb-1">Blended Pre-Money Valuation</p>
         <p className="text-5xl font-bold text-slate-100">{fmt(blended_valuation)}</p>
+        {output.ai_modifier_applied && output.blended_before_ai != null && (
+          <p className="text-slate-500 text-xs mt-1">Before AI premium: ${fmt(output.blended_before_ai)}</p>
+        )}
         <p className="text-slate-400 text-sm mt-1">Range: {fmt(valuation_range_low)} – {fmt(valuation_range_high)}</p>
         <p className="text-purple-400 text-xs mt-2 font-medium">{percentile_in_market}</p>
       </div>
@@ -378,7 +416,12 @@ function SAFEPanel({ safe }: { safe: NonNullable<StartupValuationOutput['safe_co
 // Main dashboard
 // ---------------------------------------------------------------------------
 
-export default function StartupDashboard({ output, onReset }: Props) {
+export default function StartupDashboard({ output, startupInput, onReset }: Props) {
+  const [aiAvailable, setAiAvailable] = useState(false)
+  useEffect(() => {
+    checkAIStatus().then(s => setAiAvailable(s.ai_available)).catch(() => {})
+  }, [])
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -397,6 +440,12 @@ export default function StartupDashboard({ output, onReset }: Props) {
 
       {/* Verdict */}
       <VerdictBanner verdict={output.verdict} headline={output.verdict_headline} subtext={output.verdict_subtext} />
+
+      {/* AI modifier banner — only renders when ai_modifier_applied=true */}
+      <AIModifierBanner output={output} />
+
+      {/* AI narrative — user opt-in */}
+      <StartupAINarrative startupInput={startupInput} output={output} aiAvailable={aiAvailable} />
 
       {/* Traction bar */}
       <TractionBarPanel traction_bar={output.traction_bar} vertical={output.vertical} stage={output.stage} />

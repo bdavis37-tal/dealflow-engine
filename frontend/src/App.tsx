@@ -22,7 +22,7 @@ import StartupStep3_Traction from './components/flow/startup/StartupStep3_Tracti
 import StartupStep4_Market from './components/flow/startup/StartupStep4_Market'
 import StartupStep5_Review from './components/flow/startup/StartupStep5_Review'
 import StartupDashboard from './components/output/startup/StartupDashboard'
-import type { StartupFlowStep } from './types/startup'
+import type { StartupFlowStep, StartupInput, TeamProfile, TractionMetrics, ProductProfile, MarketProfile, FundraisingProfile } from './types/startup'
 
 // VC Investor flow
 import { useVCState } from './hooks/useVCState'
@@ -65,6 +65,8 @@ export default function App() {
     updateFundraise,
     reset: resetStartup,
     runValuation,
+    setAINative,
+    updateAIAnswer,
   } = useStartupState()
 
   // VC state
@@ -121,7 +123,18 @@ export default function App() {
     if (startupState.output && !startupState.isLoading) {
       return (
         <AppShell appMode="startup" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
-          <StartupDashboard output={startupState.output} onReset={resetStartup} />
+          <StartupDashboard
+            output={startupState.output}
+            startupInput={{
+              company_name: startupState.company_name,
+              team: startupState.team as TeamProfile,
+              traction: startupState.traction as TractionMetrics,
+              product: startupState.product as ProductProfile,
+              market: startupState.market as MarketProfile,
+              fundraise: startupState.fundraise as FundraisingProfile,
+            }}
+            onReset={resetStartup}
+          />
         </AppShell>
       )
     }
@@ -137,8 +150,13 @@ export default function App() {
           <StartupStep1_Overview
             company_name={startupState.company_name}
             fundraise={startupState.fundraise}
+            is_ai_native={startupState.is_ai_native}
+            ai_native_score={startupState.ai_native_score}
+            ai_answers={startupState.ai_answers}
             onNameChange={setCompanyName}
             onUpdateFundraise={updateFundraise}
+            onSetAINative={setAINative}
+            onUpdateAIAnswer={updateAIAnswer}
             onNext={navStartup(2)}
           />
         )}

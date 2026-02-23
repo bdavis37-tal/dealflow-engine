@@ -18,6 +18,7 @@ import math
 import os
 from typing import Optional
 
+from .ai_modifier import AIModifierInput, AIModifierOutput, apply_ai_modifier
 from .startup_models import (
     StartupInput,
     StartupValuationOutput,
@@ -897,6 +898,21 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
             blended = sum(values) / len(values)
             notes.append(f"Blended average of {len(values)} applicable pre-revenue methods.")
 
+    # --- AI Modifier: apply graduated premium for AI-native startups ---
+    blended_before_ai: Optional[float] = None
+    ai_mod_output: Optional[AIModifierOutput] = None
+
+    if inp.fundraise.is_ai_native:
+        ai_mod_output = apply_ai_modifier(AIModifierInput(
+            is_ai_native=True,
+            ai_native_score=inp.fundraise.ai_native_score,
+            vertical=inp.fundraise.vertical.value,
+            blended_valuation=blended,
+        ))
+        if ai_mod_output.ai_modifier_applied:
+            blended_before_ai = blended
+            blended = ai_mod_output.blended_after_ai
+
     # Range from applicable methods
     low_vals = [m.value_low for m in applicable if m.value_low is not None]
     high_vals = [m.value_high for m in applicable if m.value_high is not None]
@@ -979,4 +995,9 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         warnings=warnings,
         computation_notes=notes,
         vertical_benchmarks=vdata,
+        ai_modifier_applied=ai_mod_output.ai_modifier_applied if ai_mod_output else False,
+        ai_premium_multiplier=ai_mod_output.ai_premium_multiplier if ai_mod_output else None,
+        ai_premium_context=ai_mod_output.ai_premium_context if ai_mod_output else None,
+        blended_before_ai=blended_before_ai,
+        ai_native_score=inp.fundraise.ai_native_score if inp.fundraise.is_ai_native else None,
     )

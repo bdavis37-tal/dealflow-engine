@@ -6,12 +6,25 @@ import React, { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import type { FundraisingProfile, StartupVertical, StartupStage, Geography, InstrumentType } from '../../../types/startup'
 import { VERTICAL_LABELS, STAGE_LABELS, GEOGRAPHY_LABELS, INSTRUMENT_LABELS } from '../../../types/startup'
+import StartupStep1b_AICharacteristics from './StartupStep1b_AICharacteristics'
+
+const AI_TOGGLE_CONFIG = {
+  frozen_on: ['ai_ml_infrastructure', 'ai_enabled_saas'],
+  frozen_off: [] as string[],
+  default_on: ['defense_tech', 'healthtech', 'biotech_pharma', 'developer_tools'],
+  default_off: ['b2b_saas', 'fintech', 'deep_tech_hardware', 'consumer', 'climate_energy', 'marketplace', 'vertical_saas'],
+}
 
 interface Step1Props {
   company_name: string
   fundraise: Partial<FundraisingProfile>
+  is_ai_native: boolean
+  ai_native_score: number
+  ai_answers: [boolean, boolean, boolean, boolean]
   onNameChange: (name: string) => void
   onUpdateFundraise: (updates: Partial<FundraisingProfile>) => void
+  onSetAINative: (value: boolean) => void
+  onUpdateAIAnswer: (index: number, value: boolean) => void
   onNext: () => void
 }
 
@@ -23,8 +36,13 @@ const INSTRUMENTS = Object.entries(INSTRUMENT_LABELS) as [InstrumentType, string
 export default function StartupStep1_Overview({
   company_name,
   fundraise,
+  is_ai_native,
+  ai_native_score,
+  ai_answers,
   onNameChange,
   onUpdateFundraise,
+  onSetAINative,
+  onUpdateAIAnswer,
   onNext,
 }: Step1Props) {
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -104,6 +122,69 @@ export default function StartupStep1_Overview({
           </select>
           {errors.vertical && <p className="text-red-400 text-xs mt-1">{errors.vertical}</p>}
         </div>
+
+        {/* AI-Native Toggle */}
+        {fundraise.vertical && (() => {
+          const vertical = fundraise.vertical as string
+          const isFrozenOn = AI_TOGGLE_CONFIG.frozen_on.includes(vertical)
+          const isFrozenOff = AI_TOGGLE_CONFIG.frozen_off.includes(vertical)
+          const isLocked = isFrozenOn || isFrozenOff
+          const showAssessment = is_ai_native && !isFrozenOn
+
+          return (
+            <>
+              <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium text-slate-300">AI-Native Company</span>
+                    {isFrozenOn && (
+                      <p className="text-xs text-purple-400 mt-1">
+                        This vertical is AI-native by definition.
+                      </p>
+                    )}
+                    {isFrozenOff && (
+                      <p className="text-xs text-slate-500 mt-1">
+                        AI premium does not apply to this vertical.
+                      </p>
+                    )}
+                  </div>
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={is_ai_native}
+                      disabled={isLocked}
+                      onClick={() => onSetAINative(!is_ai_native)}
+                      className={`
+                        relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                        ${is_ai_native ? 'bg-purple-600' : 'bg-slate-600'}
+                        ${isLocked ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}
+                      `}
+                    >
+                      <span className={`
+                        inline-block h-4 w-4 rounded-full bg-white transition-transform
+                        ${is_ai_native ? 'translate-x-6' : 'translate-x-1'}
+                      `} />
+                    </button>
+                    {isLocked && (
+                      <span className="absolute bottom-full right-0 mb-2 px-2 py-1 text-xs text-slate-300 bg-slate-700 rounded shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        {isFrozenOn ? 'This vertical is AI-native by definition' : 'AI premium does not apply to this vertical'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {showAssessment && (
+                <StartupStep1b_AICharacteristics
+                  answers={ai_answers}
+                  onAnswerChange={onUpdateAIAnswer}
+                  ai_native_score={ai_native_score}
+                />
+              )}
+            </>
+          )
+        })()}
 
         {/* Stage */}
         <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">

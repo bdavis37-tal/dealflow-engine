@@ -11,12 +11,24 @@ import type {
   ProductProfile,
   MarketProfile,
   FundraisingProfile,
-  StartupValuationOutput,
   StartupInput,
 } from '../types/startup'
 import { valueStartup } from '../lib/api'
 
 const STORAGE_KEY = 'startup_valuation_state'
+
+const AI_TOGGLE_CONFIG = {
+  frozen_on: ['ai_ml_infrastructure', 'ai_enabled_saas'] as const,
+  frozen_off: ['construction', 'restaurants', 'retail', 'real_estate', 'agriculture', 'waste_management', 'staffing'] as const,
+  default_on: ['defense_tech', 'healthtech', 'biotech_pharma', 'developer_tools'] as const,
+  default_off: ['b2b_saas', 'fintech', 'deep_tech_hardware', 'consumer', 'climate_energy', 'marketplace', 'vertical_saas'] as const,
+}
+
+function getDefaultAIToggle(vertical: string): boolean {
+  if (AI_TOGGLE_CONFIG.frozen_on.includes(vertical as any)) return true
+  if (AI_TOGGLE_CONFIG.default_on.includes(vertical as any)) return true
+  return false
+}
 
 const defaultState: StartupState = {
   step: 1,
@@ -67,7 +79,12 @@ const defaultState: StartupState = {
     safe_discount: 0,
     has_mfn_clause: false,
     existing_safe_stack: 0,
+    is_ai_native: false,
+    ai_native_score: 0,
   },
+  is_ai_native: false,
+  ai_native_score: 0,
+  ai_answers: [false, false, false, false],
   output: null,
   isLoading: false,
   error: null,
@@ -125,12 +142,44 @@ export function useStartupState() {
   }, [])
 
   const updateFundraise = useCallback((updates: Partial<FundraisingProfile>) => {
-    setState(s => ({ ...s, fundraise: { ...s.fundraise, ...updates } }))
+    setState(s => {
+      const newFundraise = { ...s.fundraise, ...updates }
+      // Reset AI toggle when vertical changes
+      if (updates.vertical && updates.vertical !== s.fundraise.vertical) {
+        const defaultOn = getDefaultAIToggle(updates.vertical)
+        return {
+          ...s,
+          fundraise: newFundraise,
+          is_ai_native: defaultOn,
+          ai_native_score: 0,
+          ai_answers: [false, false, false, false] as [boolean, boolean, boolean, boolean],
+        }
+      }
+      return { ...s, fundraise: newFundraise }
+    })
   }, [])
 
   const reset = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
     setState(defaultState)
+  }, [])
+
+  const setAINative = useCallback((value: boolean) => {
+    setState(s => ({
+      ...s,
+      is_ai_native: value,
+      // Reset answers when toggling off
+      ...(value ? {} : { ai_answers: [false, false, false, false] as [boolean, boolean, boolean, boolean], ai_native_score: 0 }),
+    }))
+  }, [])
+
+  const updateAIAnswer = useCallback((index: number, value: boolean) => {
+    setState(s => {
+      const newAnswers = [...s.ai_answers] as [boolean, boolean, boolean, boolean]
+      newAnswers[index] = value
+      const score = newAnswers.filter(Boolean).length / 4
+      return { ...s, ai_answers: newAnswers, ai_native_score: score }
+    })
   }, [])
 
   const runValuation = useCallback(async () => {
@@ -145,7 +194,11 @@ export function useStartupState() {
         traction: traction as TractionMetrics,
         product: product as ProductProfile,
         market: market as MarketProfile,
-        fundraise: fundraise as FundraisingProfile,
+        fundraise: {
+          ...(fundraise as FundraisingProfile),
+          is_ai_native: state.is_ai_native,
+          ai_native_score: state.ai_native_score,
+        },
       }
 
       const output = await valueStartup(input)
@@ -173,5 +226,7 @@ export function useStartupState() {
     updateFundraise,
     reset,
     runValuation,
+    setAINative,
+    updateAIAnswer,
   }
 }

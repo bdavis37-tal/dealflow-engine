@@ -517,7 +517,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         deal_verdict_subtext="",
         deal_scorecard=[],
     )
-    risks = analyze_risks(deal, stub_output, benchmarks)
+    risks, ai_benchmark_context = analyze_risks(deal, stub_output, benchmarks)
 
     # -----------------------------------------------------------------------
     # Defense Positioning (only for Defense & National Security deals)
@@ -783,6 +783,8 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         deal_verdict_subtext=subtext,
         deal_scorecard=scorecard,
         defense_positioning=defense_positioning,
+        ai_modifier_applied=deal.target.is_ai_native and ai_benchmark_context is not None and "fallback" not in ai_benchmark_context,
+        ai_benchmark_context=ai_benchmark_context,
         convergence_warning=any_non_convergence,
         computation_notes=notes,
     )

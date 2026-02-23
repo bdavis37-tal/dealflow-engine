@@ -31,7 +31,9 @@ const defaultState: DealState = {
   step: 1,
   mode: 'quick',
   acquirer: {},
-  target: {},
+  target: {
+    is_ai_native: false,
+  },
   structure: {
     cash_percentage: 1.0,
     stock_percentage: 0.0,

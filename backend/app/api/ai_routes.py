@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ..engine.models import DealInput, DealOutput
+from ..engine.startup_models import StartupInput, StartupValuationOutput
 from ..services.ai_service import (
     ask_claude,
     ask_claude_with_history,
@@ -23,6 +24,7 @@ from ..services.ai_service import (
     get_token_usage,
     deal_parser_system_prompt,
     narrative_system_prompt,
+    startup_narrative_system_prompt,
     chat_system_prompt,
     field_help_system_prompt,
     scenario_system_prompt,
@@ -101,6 +103,19 @@ class ScenarioNarrativeRequest(BaseModel):
     scenario_row_value: float
     scenario_col_value: float
     scenario_accretion_pct: float
+
+
+class StartupNarrativeRequest(BaseModel):
+    startup_input: StartupInput
+    startup_output: StartupValuationOutput
+
+
+class StartupNarrativeResponse(BaseModel):
+    verdict_narrative: str | None
+    scorecard_commentary: dict[str, str]
+    executive_summary: str | None
+    ai_available: bool
+    cached: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -477,3 +492,135 @@ Tell the story of what this scenario means for the deal. Would you still do it a
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/startup-narrative", response_model=StartupNarrativeResponse, summary="Generate AI startup valuation narrative")
+async def startup_narrative(request: StartupNarrativeRequest) -> StartupNarrativeResponse:
+    """
+    Generate three narrative sections for a startup valuation using Claude:
+    - Verdict narrative (VC advisor's take on the valuation)
+    - Per-scorecard-flag commentary
+    - Executive summary (IC-ready)
+
+    Results are cached by startup fingerprint.
+    """
+    if not is_ai_available():
+        return StartupNarrativeResponse(
+            verdict_narrative=None,
+            scorecard_commentary={},
+            executive_summary=None,
+            ai_available=False,
+        )
+
+    inp = request.startup_input
+    out = request.startup_output
+
+    fingerprint = _cache_key(
+        inp.fundraise.vertical,
+        inp.fundraise.stage,
+        str(round(out.blended_valuation, 1)),
+        str(round(out.benchmark_p50, 1)),
+        out.verdict,
+    )
+    ck = f"startup_narrative:{fingerprint}"
+
+    from ..services.ai_service import _get_cached, _set_cached
+    cached_raw = _get_cached(ck)
+    if cached_raw:
+        try:
+            data = json.loads(cached_raw)
+            return StartupNarrativeResponse(
+                verdict_narrative=data.get("verdict_narrative"),
+                scorecard_commentary=data.get("scorecard_commentary", {}),
+                executive_summary=data.get("executive_summary"),
+                ai_available=True,
+                cached=True,
+            )
+        except Exception:
+            pass
+
+    # Build compact context for the prompt
+    context = {
+        "company": inp.company_name,
+        "vertical": inp.fundraise.vertical,
+        "stage": inp.fundraise.stage,
+        "geography": inp.fundraise.geography,
+        "blended_valuation_m": round(out.blended_valuation, 2),
+        "valuation_range": f"{round(out.valuation_range_low, 2)}M – {round(out.valuation_range_high, 2)}M",
+        "benchmark_p50_m": round(out.benchmark_p50, 2),
+        "percentile_in_market": out.percentile_in_market,
+        "verdict": out.verdict,
+        "verdict_headline": out.verdict_headline,
+        "raise_amount_m": inp.fundraise.raise_amount,
+        "pre_money_ask_m": inp.fundraise.pre_money_valuation_ask,
+        "implied_dilution_pct": round(out.implied_dilution * 100, 1),
+        "traction_bar": out.traction_bar,
+        "arr_m": round(inp.traction.annual_recurring_revenue, 3) if inp.traction.annual_recurring_revenue else 0,
+        "mrr_m": round(inp.traction.monthly_recurring_revenue, 3) if inp.traction.monthly_recurring_revenue else 0,
+        "mom_growth_pct": round(inp.traction.mom_growth_rate * 100, 1),
+        "gross_margin_pct": round(inp.traction.gross_margin * 100, 1),
+        "method_results": [
+            {
+                "method": m.method_label,
+                "value_m": round(m.indicated_value, 2) if m.indicated_value is not None else None,
+                "applicable": m.applicable,
+            }
+            for m in out.method_results
+        ],
+        "scorecard_flags": [
+            {
+                "metric": f.metric,
+                "value": f.value,
+                "signal": f.signal,
+                "benchmark": f.benchmark,
+            }
+            for f in out.investor_scorecard
+        ],
+        "warnings": out.warnings,
+    }
+
+    user_msg = f"""Generate a startup valuation assessment for this company:
+
+{json.dumps(context, indent=2)}
+
+Generate the verdict_narrative, scorecard_commentary (one entry per scorecard flag metric), and executive_summary."""
+
+    system = startup_narrative_system_prompt()
+    response = ask_claude(
+        system_prompt=system,
+        user_message=user_msg,
+        max_tokens=MAX_TOKENS_NARRATIVE,
+        cache_key=None,
+    )
+
+    if not response:
+        return StartupNarrativeResponse(
+            verdict_narrative=None,
+            scorecard_commentary={},
+            executive_summary=None,
+            ai_available=True,
+        )
+
+    try:
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("```")[1]
+            if clean.startswith("json"):
+                clean = clean[4:]
+        data = json.loads(clean)
+        _set_cached(ck, json.dumps(data))
+        return StartupNarrativeResponse(
+            verdict_narrative=data.get("verdict_narrative"),
+            scorecard_commentary=data.get("scorecard_commentary", {}),
+            executive_summary=data.get("executive_summary"),
+            ai_available=True,
+            cached=False,
+        )
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.warning("Failed to parse startup narrative response: %s", e)
+        return StartupNarrativeResponse(
+            verdict_narrative=response[:600] if response else None,
+            scorecard_commentary={},
+            executive_summary=None,
+            ai_available=True,
+        )

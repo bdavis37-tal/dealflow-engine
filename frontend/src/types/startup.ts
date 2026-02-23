@@ -97,6 +97,8 @@ export interface FundraisingProfile {
   safe_discount: number
   has_mfn_clause: boolean
   existing_safe_stack: number
+  is_ai_native: boolean
+  ai_native_score: number
 }
 
 export interface StartupInput {
@@ -187,6 +189,13 @@ export interface StartupValuationOutput {
   computation_notes: string[]
 
   vertical_benchmarks: Record<string, unknown>
+
+  // AI modifier outputs (all null/false when modifier not applied)
+  ai_modifier_applied: boolean
+  ai_premium_multiplier: number | null
+  ai_premium_context: string | null
+  blended_before_ai: number | null
+  ai_native_score: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +212,9 @@ export interface StartupState {
   product: Partial<ProductProfile>
   market: Partial<MarketProfile>
   fundraise: Partial<FundraisingProfile>
+  is_ai_native: boolean
+  ai_native_score: number
+  ai_answers: [boolean, boolean, boolean, boolean]
   output: StartupValuationOutput | null
   isLoading: boolean
   error: string | null
@@ -258,4 +270,16 @@ export const PRODUCT_STAGE_LABELS: Record<ProductStage, string> = {
   beta: 'Beta Users',
   paying_customers: 'Paying Customers',
   scaling: 'Scaling Revenue',
+}
+
+// ---------------------------------------------------------------------------
+// AI Narrative
+// ---------------------------------------------------------------------------
+
+export interface StartupNarrativeResponse {
+  verdict_narrative: string | null
+  scorecard_commentary: Record<string, string>
+  executive_summary: string | null
+  ai_available: boolean
+  cached: boolean
 }

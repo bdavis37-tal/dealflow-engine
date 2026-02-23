@@ -127,6 +127,8 @@ class FundraisingProfile(BaseModel):
     safe_discount: float = Field(default=0.0, ge=0.0, le=0.5, description="SAFE discount rate if applicable (0.20 = 20%)")
     has_mfn_clause: bool = Field(default=False)
     existing_safe_stack: float = Field(default=0.0, ge=0.0, description="Total outstanding SAFEs not yet converted, USD millions")
+    is_ai_native: bool = Field(default=False, description="AI-native toggle — enables graduated premium layer")
+    ai_native_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Score from 4-question AI assessment [0.0–1.0]")
 
 
 class StartupInput(BaseModel):
@@ -249,3 +251,10 @@ class StartupValuationOutput(BaseModel):
 
     # Raw benchmark data (pass-through for UI)
     vertical_benchmarks: dict
+
+    # AI modifier outputs (all None/False when modifier not applied)
+    ai_modifier_applied: bool = Field(default=False)
+    ai_premium_multiplier: Optional[float] = Field(default=None, description="Effective premium factor applied")
+    ai_premium_context: Optional[str] = Field(default=None, description="Human-readable premium explanation")
+    blended_before_ai: Optional[float] = Field(default=None, description="Pre-modifier blended value, USD millions")
+    ai_native_score: Optional[float] = Field(default=None, description="Score from 4-question assessment [0.0–1.0]")
