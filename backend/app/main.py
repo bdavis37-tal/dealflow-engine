@@ -38,8 +38,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Dealflow Engine API",
     description=(
-        "Open-source M&A financial modeling engine. "
-        "TurboTax meets Goldman Sachs — guided deal analysis for everyone."
+        "Open-source deal intelligence platform. "
+        "Institutional-grade financial modeling for M&A, startup valuation, and venture capital."
     ),
     version="1.0.0",
     lifespan=lifespan,
