@@ -591,15 +591,23 @@ def _build_dilution_scenarios(
 
     # Next round projections based on typical market data
     next_rounds: list[tuple[str, float, float, float]] = []  # (label, pre_money, raise, option_pool)
+    series_a_median = _BENCHMARKS["market_wide_medians"]["series_a"]["valuation_pre_money_median"]
     if stage == StartupStage.PRE_SEED:
         seed_median = _BENCHMARKS["market_wide_medians"]["seed"]["valuation_pre_money_median"]
+        # Projected Seed pre-money must exceed current post-money (step-up floor: 1.5x post-money)
+        seed_pre = max(seed_median, post_money * 1.5)
+        seed_post = seed_pre + 3.0
+        # Projected Series A pre-money must exceed projected Seed post-money (floor: 2x seed post)
+        series_a_pre = max(series_a_median, seed_post * 2.0)
         next_rounds = [
-            ("Seed (projected)", seed_median, 3.0, 0.10),
-            ("Series A (projected)", 49.3, 10.0, 0.10),
+            ("Seed (projected)", seed_pre, 3.0, 0.10),
+            ("Series A (projected)", series_a_pre, 10.0, 0.10),
         ]
     elif stage == StartupStage.SEED:
+        # Projected Series A pre-money must exceed current post-money (floor: 2x post-money)
+        series_a_pre = max(series_a_median, post_money * 2.0)
         next_rounds = [
-            ("Series A (projected)", 49.3, 10.0, 0.10),
+            ("Series A (projected)", series_a_pre, 10.0, 0.10),
         ]
 
     for label, next_pre, next_raise, option_pool in next_rounds:
