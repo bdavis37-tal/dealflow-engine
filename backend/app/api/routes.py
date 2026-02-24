@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from ..engine import run_deal
+from ..engine import run_deal, round_financial_output
 from ..engine.models import DealInput, DealOutput, Industry
 from ..engine.defaults import get_defaults, get_transaction_fee_pct, get_interest_rate
 
@@ -40,7 +40,7 @@ async def analyze_deal(deal: DealInput) -> DealOutput:
             deal.target.acquisition_price,
         )
         result = run_deal(deal)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except ValidationError as e:
         raise HTTPException(status_code=422, detail="Invalid deal inputs. Please check your values and try again.")
     except Exception:

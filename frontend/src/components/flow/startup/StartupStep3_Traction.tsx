@@ -44,7 +44,7 @@ function NumberInput({
   prefix,
   suffix,
   help,
-  step = 0.01,
+  step: _step = 0.01,
 }: {
   label: string
   value: number
@@ -55,6 +55,9 @@ function NumberInput({
   help?: string
   step?: number
 }) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
@@ -64,11 +67,20 @@ function NumberInput({
       <div className="relative">
         {prefix && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{prefix}</span>}
         <input
-          type="number"
-          min={0}
-          step={step}
-          value={value || ''}
-          onChange={e => onChange(parseFloat(e.target.value) || 0)}
+          type="text"
+          inputMode="decimal"
+          value={focused ? raw : (value || '')}
+          onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
+          onBlur={() => {
+            setFocused(false)
+            const parsed = parseFloat(raw)
+            if (!isNaN(parsed)) onChange(Math.max(parsed, 0))
+          }}
+          onChange={e => {
+            setRaw(e.target.value)
+            const parsed = parseFloat(e.target.value)
+            if (!isNaN(parsed)) onChange(Math.max(parsed, 0))
+          }}
           placeholder={placeholder}
           className={`
             w-full bg-slate-900 border border-slate-600 rounded-lg py-3 text-slate-100 placeholder-slate-500

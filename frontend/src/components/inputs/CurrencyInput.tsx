@@ -56,7 +56,13 @@ export default function CurrencyInput({
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRawInput(e.target.value)
+    const val = e.target.value
+    setRawInput(val)
+    // Propagate valid numbers immediately for live calculations
+    const parsed = parseFloat(val.replace(/[^0-9.-]/g, ''))
+    if (!isNaN(parsed) && parsed >= min) {
+      onChange(parsed)
+    }
   }
 
   return (
@@ -92,14 +98,13 @@ export default function CurrencyInput({
         bg-slate-800/40
       `}>
         <input
-          type={focused ? 'number' : 'text'}
+          type="text"
+          inputMode="decimal"
           value={focused ? rawInput : (value ? formatDisplay(value) : '')}
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder={placeholder}
-          min={min}
-          step="any"
           className="
             flex-1 bg-transparent px-3 py-2.5 text-sm text-slate-100
             placeholder-slate-500 outline-none tabular-nums

@@ -184,8 +184,27 @@ function FLabel({ children }: { children: React.ReactNode }) {
 function FInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
 }
-function FNumInput({ value, onChange, step = 0.1 }: { value: number; onChange: (v: number) => void; step?: number }) {
-  return <input type="number" value={value || ''} step={step} onChange={e => onChange(parseFloat(e.target.value) || 0)} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+function FNumInput({ value, onChange, step: _step = 0.1 }: { value: number; onChange: (v: number) => void; step?: number }) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
+  return <input
+    type="text"
+    inputMode="decimal"
+    value={focused ? raw : (value || '')}
+    onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
+    onBlur={() => {
+      setFocused(false)
+      const parsed = parseFloat(raw)
+      if (!isNaN(parsed)) onChange(parsed)
+    }}
+    onChange={e => {
+      setRaw(e.target.value)
+      const parsed = parseFloat(e.target.value)
+      if (!isNaN(parsed)) onChange(parsed)
+    }}
+    className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+  />
 }
 
 export default function VCPortfolioDash({ fund }: Props) {

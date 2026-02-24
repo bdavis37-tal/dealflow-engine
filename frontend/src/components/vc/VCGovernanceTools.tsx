@@ -20,6 +20,41 @@ function fmt(n: number, dec = 1) {
 }
 function pct(n: number) { return `${(n * 100).toFixed(1)}%` }
 
+/** Shared numeric input with focus/blur pattern to prevent keystroke fighting */
+function GovNumInput({
+  value,
+  onChange,
+  className = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500",
+}: {
+  value: number | string
+  onChange: (raw: string) => void
+  className?: string
+}) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={focused ? raw : value}
+      onFocus={() => {
+        setFocused(true)
+        setRaw(value !== '' && value != null ? String(value) : '')
+      }}
+      onBlur={() => {
+        setFocused(false)
+        onChange(raw)
+      }}
+      onChange={e => {
+        setRaw(e.target.value)
+        onChange(e.target.value)
+      }}
+      className={className}
+    />
+  )
+}
+
 // ---------------------------------------------------------------------------
 // QSBS Screener
 // ---------------------------------------------------------------------------
@@ -88,20 +123,20 @@ function QSBSScreener({ fund }: { fund: FundProfile }) {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Investment Amount ($M)</label>
-            <input type="number" value={form.investment_amount || ''} onChange={e => setForm(f => ({...f, investment_amount: parseFloat(e.target.value) || 0}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.investment_amount || ''} onChange={v => setForm(f => ({...f, investment_amount: parseFloat(v) || 0}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Years Held</label>
-            <input type="number" step={0.5} value={form.holding_period_years || ''} onChange={e => setForm(f => ({...f, holding_period_years: parseFloat(e.target.value) || 0}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.holding_period_years || ''} onChange={v => setForm(f => ({...f, holding_period_years: parseFloat(v) || 0}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">LP Count</label>
-            <input type="number" value={form.lp_count} onChange={e => setForm(f => ({...f, lp_count: parseInt(e.target.value) || 50}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.lp_count} onChange={v => setForm(f => ({...f, lp_count: parseInt(v) || 50}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">LP Marginal Tax Rate</label>
             <div className="flex items-center gap-1.5">
-              <input type="number" value={Math.round(form.lp_marginal_tax_rate * 100)} step={1} onChange={e => setForm(f => ({...f, lp_marginal_tax_rate: (parseFloat(e.target.value) || 37) / 100}))} className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+              <GovNumInput value={Math.round(form.lp_marginal_tax_rate * 100)} onChange={v => setForm(f => ({...f, lp_marginal_tax_rate: (parseFloat(v) || 37) / 100}))} className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
               <span className="text-slate-400 text-sm">%</span>
             </div>
           </div>
@@ -244,7 +279,7 @@ function AntiDilutionModeler() {
           ].map(({ key, label }) => (
             <div key={key}>
               <label className="block text-xs font-medium text-slate-400 mb-1">{label}</label>
-              <input type="number" value={(form[key] as number) || ''} onChange={e => setForm(f => ({...f, [key]: parseFloat(e.target.value) || 0}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+              <GovNumInput value={(form[key] as number) || ''} onChange={v => setForm(f => ({...f, [key]: parseFloat(v) || 0}))} />
             </div>
           ))}
           <div className="col-span-2">
@@ -332,7 +367,7 @@ function BridgeModeler() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Bridge Amount ($M)</label>
-            <input type="number" value={form.bridge_amount || ''} onChange={e => setForm(f => ({...f, bridge_amount: parseFloat(e.target.value) || 0}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.bridge_amount || ''} onChange={v => setForm(f => ({...f, bridge_amount: parseFloat(v) || 0}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Instrument</label>
@@ -344,23 +379,23 @@ function BridgeModeler() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Discount Rate (%)</label>
-            <input type="number" value={Math.round(form.discount_rate * 100)} step={5} onChange={e => setForm(f => ({...f, discount_rate: (parseFloat(e.target.value) || 20) / 100}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={Math.round(form.discount_rate * 100)} onChange={v => setForm(f => ({...f, discount_rate: (parseFloat(v) || 20) / 100}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Pre-Bridge Valuation ($M)</label>
-            <input type="number" value={form.pre_bridge_valuation || ''} onChange={e => setForm(f => ({...f, pre_bridge_valuation: parseFloat(e.target.value) || 0}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.pre_bridge_valuation || ''} onChange={v => setForm(f => ({...f, pre_bridge_valuation: parseFloat(v) || 0}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Expected Next Round ($M)</label>
-            <input type="number" value={form.expected_next_round_valuation || ''} onChange={e => setForm(f => ({...f, expected_next_round_valuation: parseFloat(e.target.value) || 0}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.expected_next_round_valuation || ''} onChange={v => setForm(f => ({...f, expected_next_round_valuation: parseFloat(v) || 0}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Current Ownership (%)</label>
-            <input type="number" step={0.1} value={Math.round(form.current_ownership_pct * 1000) / 10 || ''} onChange={e => setForm(f => ({...f, current_ownership_pct: (parseFloat(e.target.value) || 0) / 100}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={Math.round(form.current_ownership_pct * 1000) / 10 || ''} onChange={v => setForm(f => ({...f, current_ownership_pct: (parseFloat(v) || 0) / 100}))} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Maturity (months)</label>
-            <input type="number" value={form.maturity_months} step={6} onChange={e => setForm(f => ({...f, maturity_months: parseInt(e.target.value) || 18}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500" />
+            <GovNumInput value={form.maturity_months} onChange={v => setForm(f => ({...f, maturity_months: parseInt(v) || 18}))} />
           </div>
         </div>
         <button onClick={run} disabled={!ok || loading} className={`w-full py-2.5 rounded-xl font-semibold text-sm transition-colors ${ok && !loading ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>

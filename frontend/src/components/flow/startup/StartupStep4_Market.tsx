@@ -28,6 +28,43 @@ function Tooltip({ text }: { text: string }) {
   )
 }
 
+function MarketNumInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: number | string
+  onChange: (raw: string) => void
+  placeholder?: string
+  className: string
+}) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={focused ? raw : value}
+      onFocus={() => {
+        setFocused(true)
+        setRaw(value !== '' && value != null ? String(value) : '')
+      }}
+      onBlur={() => {
+        setFocused(false)
+        onChange(raw)
+      }}
+      onChange={e => {
+        setRaw(e.target.value)
+        onChange(e.target.value)
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
+  )
+}
+
 export default function StartupStep4_Market({
   market,
   fundraise,
@@ -60,12 +97,9 @@ export default function StartupStep4_Market({
             </div>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
-              <input
-                type="number"
-                min={0}
-                step={0.1}
+              <MarketNumInput
                 value={market.tam_usd_billions ?? ''}
-                onChange={e => onUpdateMarket({ tam_usd_billions: parseFloat(e.target.value) || 0 })}
+                onChange={v => onUpdateMarket({ tam_usd_billions: parseFloat(v) || 0 })}
                 placeholder="5.0"
                 className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
@@ -85,12 +119,9 @@ export default function StartupStep4_Market({
             </div>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
+              <MarketNumInput
                 value={market.sam_usd_millions ?? ''}
-                onChange={e => onUpdateMarket({ sam_usd_millions: parseFloat(e.target.value) || 0 })}
+                onChange={v => onUpdateMarket({ sam_usd_millions: parseFloat(v) || 0 })}
                 placeholder="200"
                 className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
@@ -104,12 +135,9 @@ export default function StartupStep4_Market({
               <Tooltip text="How fast the overall market is growing. Fast-growing markets (30%+) compress competitive risk and support premium multiples." />
             </div>
             <div className="relative">
-              <input
-                type="number"
-                min={0}
-                step={1}
+              <MarketNumInput
                 value={((market.market_growth_rate ?? 0.15) * 100).toFixed(0)}
-                onChange={e => onUpdateMarket({ market_growth_rate: parseFloat(e.target.value) / 100 || 0 })}
+                onChange={v => onUpdateMarket({ market_growth_rate: parseFloat(v) / 100 || 0 })}
                 placeholder="15"
                 className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 pr-10 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
@@ -162,12 +190,9 @@ export default function StartupStep4_Market({
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
+                <MarketNumInput
                   value={fundraise.pre_money_valuation_ask ?? ''}
-                  onChange={e => onUpdateFundraise({ pre_money_valuation_ask: e.target.value ? parseFloat(e.target.value) : null })}
+                  onChange={v => onUpdateFundraise({ pre_money_valuation_ask: v.trim() ? parseFloat(v) || null : null })}
                   placeholder="Leave blank to use engine output"
                   className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
@@ -181,13 +206,9 @@ export default function StartupStep4_Market({
                 <Tooltip text="A 20% discount means your SAFE converts at 20% below the next round's price. Common but less standard than cap-only SAFEs." />
               </div>
               <div className="relative">
-                <input
-                  type="number"
-                  min={0}
-                  max={50}
-                  step={5}
+                <MarketNumInput
                   value={((fundraise.safe_discount ?? 0) * 100).toFixed(0)}
-                  onChange={e => onUpdateFundraise({ safe_discount: parseFloat(e.target.value) / 100 || 0 })}
+                  onChange={v => onUpdateFundraise({ safe_discount: parseFloat(v) / 100 || 0 })}
                   placeholder="0"
                   className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 pr-10 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
@@ -202,12 +223,9 @@ export default function StartupStep4_Market({
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.1}
+                <MarketNumInput
                   value={fundraise.existing_safe_stack ?? ''}
-                  onChange={e => onUpdateFundraise({ existing_safe_stack: parseFloat(e.target.value) || 0 })}
+                  onChange={v => onUpdateFundraise({ existing_safe_stack: parseFloat(v) || 0 })}
                   placeholder="0"
                   className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />

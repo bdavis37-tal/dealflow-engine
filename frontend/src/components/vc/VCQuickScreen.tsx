@@ -47,13 +47,27 @@ function CurrencyInput({
   placeholder?: string
   suffix?: string
 }) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-slate-400 text-sm">$</span>
       <input
-        type="number"
-        value={value || ''}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        type="text"
+        inputMode="decimal"
+        value={focused ? raw : (value || '')}
+        onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
+        onBlur={() => {
+          setFocused(false)
+          const parsed = parseFloat(raw)
+          if (!isNaN(parsed)) onChange(parsed)
+        }}
+        onChange={e => {
+          setRaw(e.target.value)
+          const parsed = parseFloat(e.target.value)
+          if (!isNaN(parsed)) onChange(parsed)
+        }}
         placeholder={placeholder}
         className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
       />
@@ -65,21 +79,32 @@ function CurrencyInput({
 function PctInput({
   value,
   onChange,
-  step = 5,
+  step: _step = 5,
 }: {
   value: number
   onChange: (v: number) => void
   step?: number
 }) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
   return (
     <div className="flex items-center gap-1.5">
       <input
-        type="number"
-        value={value || ''}
-        step={step}
-        min={0}
-        max={1000}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        type="text"
+        inputMode="decimal"
+        value={focused ? raw : (value || '')}
+        onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
+        onBlur={() => {
+          setFocused(false)
+          const parsed = parseFloat(raw)
+          if (!isNaN(parsed)) onChange(Math.max(parsed, 0))
+        }}
+        onChange={e => {
+          setRaw(e.target.value)
+          const parsed = parseFloat(e.target.value)
+          if (!isNaN(parsed)) onChange(Math.max(parsed, 0))
+        }}
         className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
       />
       <span className="text-slate-400 text-sm w-4">%</span>
