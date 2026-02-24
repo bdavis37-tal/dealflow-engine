@@ -16,19 +16,26 @@ from __future__ import annotations
 import json
 import math
 import os
+from datetime import date
 from typing import Callable
 
 from .models import (
     AccretionDilutionBridge,
     BalanceSheetAtClose,
+    ContributionAnalysis,
+    ContributionRow,
+    CreditMetrics,
     DealInput,
     DealOutput,
     DealVerdict,
     DefensePositioning,
     HealthStatus,
+    ImpliedValuation,
     IncomeStatementYear,
     Industry,
     ScorecardMetric,
+    SourcesAndUses,
+    SourcesAndUsesItem,
     SynergyItem,
 )
 from .circularity_solver import build_debt_schedule, DebtTranche
@@ -229,6 +236,9 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     transaction_costs = get_transaction_costs(deal)
     notes: list[str] = []
 
+    # Fiscal year base: Year 1 = current calendar year
+    fiscal_year_start = date.today().year
+
     # Use explicit debt tranches if provided, else build synthetic
     tranches = deal.structure.debt_tranches if deal.structure.debt_tranches else _build_synthetic_tranches(deal)
     acq_debt_total = sum(t.amount for t in tranches)
@@ -382,6 +392,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
 
         income_statement.append(IncomeStatementYear(
             year=yr,
+            fiscal_year_label=f"FY{fiscal_year_start + yr - 1}E",
             revenue=total_rev,
             cogs=combined_cogs,
             gross_profit=gross_profit,
@@ -396,6 +407,16 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             acquirer_standalone_eps=standalone_eps_yr,
             pro_forma_eps=pro_forma_eps,
             accretion_dilution_pct=accretion_dilution_pct,
+            # Pro forma adjustment detail
+            acquirer_revenue=acq_rev_yr,
+            target_revenue=tgt_rev_yr,
+            synergy_revenue=rev_syn_yr,
+            acquirer_ebitda=acq_rev_yr * acq_ebitda_margin,
+            target_ebitda=tgt_rev_yr * tgt_ebitda_margin,
+            synergy_cost=cost_syn_yr,
+            incremental_da=ppa.total_incremental_annual,
+            acquisition_interest=interest_exp,
+            transaction_costs=transaction_costs if yr == 1 else 0.0,
         ))
 
         # ------------------------------------------------------------------
@@ -531,6 +552,114 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     # Defense Positioning (only for Defense & National Security deals)
     # -----------------------------------------------------------------------
     defense_positioning = _compute_defense_positioning(deal, benchmarks)
+
+    # -----------------------------------------------------------------------
+    # Sources & Uses of Funds
+    # -----------------------------------------------------------------------
+    cash_used = deal.target.acquisition_price * deal.structure.cash_percentage
+    stock_issued_value = new_shares_issued * acq.share_price
+    sources: list[SourcesAndUsesItem] = []
+    if cash_used > 0:
+        sources.append(SourcesAndUsesItem(label="Cash from Acquirer", amount=cash_used))
+    if acq_debt_total > 0:
+        sources.append(SourcesAndUsesItem(label="New Debt Financing", amount=acq_debt_total))
+    if stock_issued_value > 0:
+        sources.append(SourcesAndUsesItem(label="Stock Issuance", amount=stock_issued_value))
+    total_sources = sum(s.amount for s in sources)
+
+    uses: list[SourcesAndUsesItem] = [
+        SourcesAndUsesItem(label="Purchase Price (Equity Value)", amount=deal.target.acquisition_price),
+    ]
+    if tgt.total_debt > 0:
+        uses.append(SourcesAndUsesItem(label="Refinance Target Debt", amount=tgt.total_debt))
+    if transaction_costs > 0:
+        uses.append(SourcesAndUsesItem(label="Transaction Fees & Expenses", amount=transaction_costs))
+    total_uses = sum(u.amount for u in uses)
+
+    sources_and_uses = SourcesAndUses(
+        sources=sources,
+        uses=uses,
+        total_sources=total_sources,
+        total_uses=total_uses,
+        balanced=abs(total_sources - total_uses) < 0.01 * total_sources if total_sources > 0 else True,
+    )
+
+    # -----------------------------------------------------------------------
+    # Contribution Analysis
+    # -----------------------------------------------------------------------
+    def _pct(a: float, b: float) -> tuple[float, float]:
+        total = a + b
+        if total == 0:
+            return 0.0, 0.0
+        return a / total, b / total
+
+    contrib_rows: list[ContributionRow] = []
+    for metric_name, acq_val, tgt_val in [
+        ("Revenue", acq.revenue, tgt.revenue),
+        ("EBITDA", acq.ebitda, tgt.ebitda),
+        ("Net Income", acq.net_income, tgt.net_income),
+    ]:
+        a_pct, t_pct = _pct(acq_val, tgt_val)
+        contrib_rows.append(ContributionRow(
+            metric=metric_name,
+            acquirer_value=acq_val,
+            target_value=tgt_val,
+            acquirer_pct=a_pct,
+            target_pct=t_pct,
+        ))
+
+    # Implied ownership from stock consideration
+    implied_own_target = new_shares_issued / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+    implied_own_acquirer = 1.0 - implied_own_target
+
+    contribution_analysis = ContributionAnalysis(
+        rows=contrib_rows,
+        implied_ownership_acquirer=implied_own_acquirer,
+        implied_ownership_target=implied_own_target,
+    )
+
+    # -----------------------------------------------------------------------
+    # Credit Metrics (Post-Close)
+    # -----------------------------------------------------------------------
+    combined_ebitda_close = acq.ebitda + tgt.ebitda
+    total_post_close_debt = acq_debt_total + acq.total_debt
+    net_debt_close = total_post_close_debt - acq.cash_on_hand + cash_used  # cash used reduces acquirer cash
+    y1_interest = income_statement[0].interest_expense if income_statement else 0.0
+    y1_capex = acq.capex + tgt.capex
+    # Mandatory amortization from year 1 debt schedule
+    y1_mandatory_amort = 0.0
+    if debt_schedules:
+        y1_mandatory_amort = debt_schedules[0].total_debt_paydown - debt_schedules[0].optional_cash_sweep
+
+    credit_metrics = CreditMetrics(
+        total_debt_to_ebitda=_safe_float(total_post_close_debt / combined_ebitda_close if combined_ebitda_close > 0 else 0.0),
+        net_debt_to_ebitda=_safe_float(net_debt_close / combined_ebitda_close if combined_ebitda_close > 0 else 0.0),
+        interest_coverage=_safe_float(combined_ebitda_close / y1_interest if y1_interest > 0 else 99.9),
+        fixed_charge_coverage=_safe_float(
+            (combined_ebitda_close - y1_capex) / (y1_interest + y1_mandatory_amort)
+            if (y1_interest + y1_mandatory_amort) > 0 else 99.9
+        ),
+        debt_to_total_cap=_safe_float(
+            total_post_close_debt / (total_post_close_debt + combined_equity)
+            if (total_post_close_debt + combined_equity) > 0 else 0.0
+        ),
+    )
+
+    # -----------------------------------------------------------------------
+    # Implied Valuation Metrics
+    # -----------------------------------------------------------------------
+    # EV = Purchase price + target debt assumed - target cash acquired
+    ev = deal.target.acquisition_price + tgt.total_debt - tgt.cash_on_hand
+    ntm_ebitda = ebitda_by_year[0] if ebitda_by_year else tgt.ebitda
+
+    implied_valuation = ImpliedValuation(
+        enterprise_value=ev,
+        equity_value=deal.target.acquisition_price,
+        ev_revenue_ltm=_safe_float(ev / tgt.revenue if tgt.revenue > 0 else 0.0),
+        ev_ebitda_ltm=_safe_float(ev / tgt.ebitda if tgt.ebitda > 0 else 0.0),
+        ev_ebitda_ntm=_safe_float(ev / ntm_ebitda if ntm_ebitda > 0 else 0.0),
+        price_to_earnings=_safe_float(deal.target.acquisition_price / tgt.net_income if tgt.net_income > 0 else 0.0),
+    )
 
     # -----------------------------------------------------------------------
     # Deal Scorecard
@@ -792,6 +921,11 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         deal_verdict_headline=headline,
         deal_verdict_subtext=subtext,
         deal_scorecard=scorecard,
+        sources_and_uses=sources_and_uses,
+        contribution_analysis=contribution_analysis,
+        credit_metrics=credit_metrics,
+        implied_valuation=implied_valuation,
+        fiscal_year_start=fiscal_year_start,
         defense_positioning=defense_positioning,
         ai_modifier_applied=deal.target.is_ai_native and ai_benchmark_context is not None and "fallback" not in ai_benchmark_context,
         ai_benchmark_context=ai_benchmark_context,

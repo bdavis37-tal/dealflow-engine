@@ -266,6 +266,7 @@ class DealInput(BaseModel):
 
 class IncomeStatementYear(BaseModel):
     year: int
+    fiscal_year_label: str = ""  # e.g. "FY2026E"
     revenue: float
     cogs: float
     gross_profit: float
@@ -281,6 +282,16 @@ class IncomeStatementYear(BaseModel):
     acquirer_standalone_eps: float
     pro_forma_eps: float
     accretion_dilution_pct: float
+    # Pro forma adjustment detail (Deep mode transparency)
+    acquirer_revenue: float = 0.0
+    target_revenue: float = 0.0
+    synergy_revenue: float = 0.0
+    acquirer_ebitda: float = 0.0
+    target_ebitda: float = 0.0
+    synergy_cost: float = 0.0
+    incremental_da: float = 0.0    # PPA-related D&A only
+    acquisition_interest: float = 0.0  # Interest from new deal debt
+    transaction_costs: float = 0.0  # One-time fees (Year 1 only)
 
 
 class BalanceSheetAtClose(BaseModel):
@@ -317,6 +328,12 @@ class SensitivityMatrix(BaseModel):
     col_values: list[float]
     data: list[list[float]]         # [row][col] = accretion/dilution %
     data_labels: list[list[str]]    # formatted strings
+    # Base case indices for highlighting
+    base_row_idx: int = -1          # Row index of base case (-1 = none)
+    base_col_idx: int = -1          # Col index of base case (-1 = none)
+    # Display labels with absolute values (e.g. "$50M (Base)")
+    row_display_labels: list[str] = Field(default_factory=list)
+    col_display_labels: list[str] = Field(default_factory=list)
 
 
 class ReturnScenario(BaseModel):
@@ -329,7 +346,9 @@ class ReturnScenario(BaseModel):
 
 class ReturnsAnalysis(BaseModel):
     entry_multiple: float
+    equity_invested: float = 0.0           # Cash equity check at close
     scenarios: list[ReturnScenario]
+    annual_fcf_to_equity: list[float] = Field(default_factory=list)  # Annual FCF after debt service
 
 
 class RiskItem(BaseModel):
@@ -353,6 +372,50 @@ class ScorecardMetric(BaseModel):
     description: str
 
 
+class SourcesAndUsesItem(BaseModel):
+    """Single line in sources & uses table."""
+    label: str
+    amount: float
+
+class SourcesAndUses(BaseModel):
+    """Sources & Uses of Funds — foundation of every deal presentation."""
+    sources: list[SourcesAndUsesItem]
+    uses: list[SourcesAndUsesItem]
+    total_sources: float
+    total_uses: float
+    balanced: bool  # True if sources == uses (within tolerance)
+
+class ContributionRow(BaseModel):
+    """Single metric row in contribution analysis."""
+    metric: str
+    acquirer_value: float
+    target_value: float
+    acquirer_pct: float  # decimal, e.g. 0.75 = 75%
+    target_pct: float
+
+class ContributionAnalysis(BaseModel):
+    """What each company contributes to the combined entity."""
+    rows: list[ContributionRow]
+    implied_ownership_acquirer: float  # From deal structure (stock consideration)
+    implied_ownership_target: float
+
+class CreditMetrics(BaseModel):
+    """Post-close credit profile — standard covenant metrics."""
+    total_debt_to_ebitda: float       # Total Debt / EBITDA
+    net_debt_to_ebitda: float         # (Total Debt - Cash) / EBITDA
+    interest_coverage: float          # EBITDA / Interest Expense
+    fixed_charge_coverage: float      # (EBITDA - CapEx) / (Interest + Mandatory Amort)
+    debt_to_total_cap: float          # Debt / (Debt + Equity)
+
+class ImpliedValuation(BaseModel):
+    """Implied valuation multiples from the transaction price."""
+    enterprise_value: float           # Purchase price + assumed debt - cash acquired
+    equity_value: float               # Purchase price (equity component)
+    ev_revenue_ltm: float             # EV / LTM Revenue
+    ev_ebitda_ltm: float              # EV / LTM EBITDA
+    ev_ebitda_ntm: float              # EV / NTM EBITDA (Year 1 projected)
+    price_to_earnings: float          # Price / LTM Net Income
+
 class DealOutput(BaseModel):
     """Complete deal analysis output from the financial engine."""
     pro_forma_income_statement: list[IncomeStatementYear]
@@ -365,6 +428,12 @@ class DealOutput(BaseModel):
     deal_verdict_headline: str
     deal_verdict_subtext: str
     deal_scorecard: list[ScorecardMetric]
+    # New professional analytics
+    sources_and_uses: Optional[SourcesAndUses] = None
+    contribution_analysis: Optional[ContributionAnalysis] = None
+    credit_metrics: Optional[CreditMetrics] = None
+    implied_valuation: Optional[ImpliedValuation] = None
+    fiscal_year_start: int = 2026  # Base fiscal year for projections
     # Defense-specific output (populated only for Defense & National Security deals)
     defense_positioning: Optional[DefensePositioning] = None
     # AI modifier outputs

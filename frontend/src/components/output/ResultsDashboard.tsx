@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Download, RotateCcw } from 'lucide-react'
-import type { DealInput, DealOutput } from '../../types/deal'
+import type { DealInput, DealOutput, ModelMode } from '../../types/deal'
 import Verdict from './Verdict'
 import DealScorecard from './DealScorecard'
 import RiskPanel from './RiskPanel'
@@ -9,6 +9,10 @@ import FinancialStatements from './FinancialStatements'
 import AINarrative from './AINarrative'
 import AIChatPanel from './AIChatPanel'
 import DefensePositioningCard from './DefensePositioningCard'
+import SourcesAndUsesTable from './SourcesAndUsesTable'
+import ContributionAnalysisTable from './ContributionAnalysisTable'
+import CreditProfile from './CreditProfile'
+import ImpliedValuationCard from './ImpliedValuationCard'
 import { checkAIStatus } from '../../lib/ai-api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
@@ -18,9 +22,10 @@ interface ResultsDashboardProps {
   output: DealOutput
   dealInput: DealInput
   onReset: () => void
+  mode?: ModelMode
 }
 
-export default function ResultsDashboard({ output, dealInput, onReset }: ResultsDashboardProps) {
+export default function ResultsDashboard({ output, dealInput, onReset, mode }: ResultsDashboardProps) {
   const [showNotes, setShowNotes] = useState(false)
   const [aiAvailable, setAiAvailable] = useState(false)
 
@@ -31,7 +36,7 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
   }, [])
 
   const chartData = output.pro_forma_income_statement.map(yr => ({
-    year: `Year ${yr.year}`,
+    year: yr.fiscal_year_label || `Year ${yr.year}`,
     proFormaEPS: yr.pro_forma_eps,
     standaloneEPS: yr.acquirer_standalone_eps,
     adPct: yr.accretion_dilution_pct,
@@ -86,8 +91,23 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
         <DefensePositioningCard positioning={output.defense_positioning} />
       )}
 
+      {/* Sources & Uses of Funds — fundamental deal presentation element */}
+      {output.sources_and_uses && (
+        <SourcesAndUsesTable data={output.sources_and_uses} />
+      )}
+
+      {/* Implied Valuation Metrics */}
+      {output.implied_valuation && (
+        <ImpliedValuationCard data={output.implied_valuation} />
+      )}
+
       {/* Scorecard */}
       <DealScorecard metrics={output.deal_scorecard} />
+
+      {/* Credit Profile — post-close credit metrics */}
+      {output.credit_metrics && (
+        <CreditProfile metrics={output.credit_metrics} />
+      )}
 
       {/* EPS Chart */}
       <div>
@@ -139,10 +159,19 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
         </div>
       </div>
 
+      {/* Contribution Analysis */}
+      {output.contribution_analysis && (
+        <ContributionAnalysisTable
+          data={output.contribution_analysis}
+          acquirerName={dealInput.acquirer.company_name}
+          targetName={dealInput.target.company_name}
+        />
+      )}
+
       {/* AI Benchmark Context — only for AI-native targets */}
       {output.ai_modifier_applied && output.ai_benchmark_context && (
         <div className="rounded-xl border border-blue-600/40 bg-blue-900/15 px-5 py-3 flex items-start gap-3">
-          <span className="mt-0.5 text-blue-400 text-sm">ℹ</span>
+          <span className="mt-0.5 text-blue-400 text-sm">i</span>
           <p className="text-sm text-blue-300/90 leading-relaxed">
             {output.ai_benchmark_context}
           </p>
@@ -166,7 +195,10 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
 
       {/* Financial Statements */}
       <div className="rounded-xl border border-slate-700 bg-slate-800/10 p-6">
-        <FinancialStatements incomeStatement={output.pro_forma_income_statement} />
+        <FinancialStatements
+          incomeStatement={output.pro_forma_income_statement}
+          mode={mode}
+        />
       </div>
 
       {/* Computation notes */}
@@ -181,7 +213,7 @@ export default function ResultsDashboard({ output, dealInput, onReset }: Results
           {showNotes && (
             <ul className="mt-2 space-y-1">
               {output.computation_notes.map((note, i) => (
-                <li key={i} className="text-xs text-slate-500">• {note}</li>
+                <li key={i} className="text-xs text-slate-500">- {note}</li>
               ))}
             </ul>
           )}
