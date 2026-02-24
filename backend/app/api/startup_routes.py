@@ -9,8 +9,10 @@ import logging
 import os
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from ..engine import round_financial_output
 from ..engine.startup_models import StartupInput, StartupValuationOutput, StartupVertical, StartupStage
 from ..engine.startup_engine import run_startup_valuation
 
@@ -38,7 +40,7 @@ async def value_startup(inp: StartupInput) -> StartupValuationOutput:
             inp.fundraise.raise_amount,
         )
         result = run_startup_valuation(inp)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except ValidationError as e:
         raise HTTPException(status_code=422, detail="Invalid startup inputs. Please check your values.")
     except Exception:

@@ -12,8 +12,10 @@ import logging
 import os
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
+from ..engine import round_financial_output
 from ..engine.vc_fund_models import (
     AntiDilutionInput,
     BridgeRoundInput,
@@ -77,7 +79,7 @@ async def evaluate_deal(request: DealEvalRequest) -> VCDealOutput:
         fund = request.fund
         deal = VCDealInput(**request.model_dump(exclude={"fund"}))
         result = run_vc_deal_evaluation(deal, fund)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except ValidationError as e:
         raise HTTPException(status_code=422, detail="Invalid deal or fund inputs.")
     except Exception:
@@ -148,7 +150,7 @@ async def analyze_portfolio(inp: PortfolioInput):
     """
     try:
         result = run_portfolio_analysis(inp)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except Exception:
         logger.exception("Portfolio analysis failed")
         raise HTTPException(status_code=500, detail="Portfolio analysis failed.")
@@ -171,7 +173,7 @@ async def analyze_waterfall(request: WaterfallRequest):
     try:
         deal = VCDealInput(**request.model_dump(exclude={"exit_ev"}))
         result = compute_waterfall(deal, request.exit_ev)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except Exception:
         logger.exception("Waterfall analysis failed")
         raise HTTPException(status_code=500, detail="Waterfall analysis failed.")
@@ -208,7 +210,7 @@ async def analyze_pro_rata(request: ProRataRequest):
         with open(_DATA_PATH, "r") as f:
             benchmarks = json.load(f)
         result = compute_pro_rata(deal, fund, ownership, request.next_round_valuation, request.pro_rata_check, benchmarks)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except Exception:
         logger.exception("Pro-rata analysis failed")
         raise HTTPException(status_code=500, detail="Pro-rata analysis failed.")
@@ -226,7 +228,7 @@ async def check_qsbs(inp: QSBSInput):
     """
     try:
         result = run_qsbs_analysis(inp)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except Exception:
         logger.exception("QSBS analysis failed")
         raise HTTPException(status_code=500, detail="QSBS analysis failed.")
@@ -244,7 +246,7 @@ async def analyze_anti_dilution(inp: AntiDilutionInput):
     """
     try:
         result = run_anti_dilution(inp)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except Exception:
         logger.exception("Anti-dilution analysis failed")
         raise HTTPException(status_code=500, detail="Anti-dilution analysis failed.")
@@ -262,7 +264,7 @@ async def analyze_bridge(inp: BridgeRoundInput):
     """
     try:
         result = run_bridge_analysis(inp)
-        return result
+        return JSONResponse(content=round_financial_output(result))
     except Exception:
         logger.exception("Bridge analysis failed")
         raise HTTPException(status_code=500, detail="Bridge analysis failed.")
