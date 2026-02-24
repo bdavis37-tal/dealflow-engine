@@ -13,6 +13,7 @@ import SourcesAndUsesTable from './SourcesAndUsesTable'
 import ContributionAnalysisTable from './ContributionAnalysisTable'
 import CreditProfile from './CreditProfile'
 import ImpliedValuationCard from './ImpliedValuationCard'
+import ReturnsDetail from './ReturnsDetail'
 import { checkAIStatus } from '../../lib/ai-api'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
@@ -198,6 +199,15 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
         <FinancialStatements
           incomeStatement={output.pro_forma_income_statement}
           mode={mode}
+        />
+      </div>
+
+      {/* Returns Analysis — equity check, FCF to equity, IRR/MOIC matrix */}
+      <div className="rounded-xl border border-slate-700 bg-slate-800/10 p-6">
+        <ReturnsDetail
+          returns={output.returns_analysis}
+          dealInput={dealInput}
+          fiscalYearStart={output.fiscal_year_start}
         />
       </div>
 
