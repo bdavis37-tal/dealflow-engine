@@ -7,19 +7,15 @@
 [![React 18](https://img.shields.io/badge/react-18-61dafb.svg)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com)
 
-<p align="center">
-  <img src="screenshot.png" alt="Dealflow Engine — Landing Page" width="800" />
-</p>
-
 ---
 
 ## What This Is
 
 Dealflow Engine is a unified platform that covers the three core activities in private-market deal-making:
 
-1. **M&A Deal Modeling** — Full merger model with pro forma statements, PPA, circularity solving, sensitivity analysis, and accretion/dilution verdicts.
-2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, ARR Multiple) for pre-seed through Series A, calibrated against Carta/PitchBook data across 13 verticals including Defense Tech / National Security.
-3. **VC Fund-Seat Analysis** — Evaluate deals from the investor's chair: ownership math, dilution modeling, fund returner thresholds, waterfall analysis, QSBS eligibility, pro-rata decisions, and auto-generated IC memo financials.
+1. **M&A Deal Modeling** — Full merger model with pro forma statements, sources & uses, contribution analysis, credit metrics, implied valuation multiples, deal returns transparency, PPA, circularity solving, sensitivity analysis, and accretion/dilution verdicts. Includes a Defense & National Security vertical with defense-specific analytics.
+2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, ARR Multiple) for pre-seed through Series A, calibrated against Carta/PitchBook data across 13 verticals including Defense Tech / National Security. Features an AI-Native Valuation Modifier that applies a graduated, vertical-specific premium layer based on a 4-question AI characteristics assessment.
+3. **VC Fund-Seat Analysis** — Evaluate deals from the investor's chair: ownership math with full dilution stack, 3-scenario return modeling, waterfall analysis, pro-rata decisions, portfolio construction, QSBS eligibility, anti-dilution modeling, bridge round analysis, and auto-generated IC memo financials.
 
 Each module runs a deterministic computation engine underneath. An optional Claude AI co-pilot augments the output with plain-English narratives, scenario explanations, and conversational deal entry — but the computed numbers are always the source of truth.
 
@@ -150,13 +146,19 @@ dealflow-engine/
 
 Full acquisition analysis engine. Takes buyer + target financials, financing structure, PPA assumptions, and synergy estimates. Returns:
 
-- 5-year pro forma income statements with iteratively solved interest expense
+- Sources & uses of funds table — full deal financing breakdown at close
+- 5-year pro forma income statements with iteratively solved interest expense and isolated one-time costs
 - Purchase price allocation (ASC 805) with goodwill and incremental D&A
+- Contribution analysis — what each company contributes to the combined entity
+- Credit metrics — post-close leverage ratios: Total Debt/EBITDA, Net Debt/EBITDA, Interest Coverage, Fixed Charge Coverage, Debt/Total Cap
+- Implied valuation multiples — EV/Revenue, EV/EBITDA (LTM and NTM), P/E
+- Deal returns transparency — equity check at close, FCF to equity schedule, IRR/MOIC matrix
 - Accretion/dilution analysis with EPS bridge breakdown
-- IRR and MOIC at exit years 3, 5, 7
-- Three 2D sensitivity matrices (purchase price vs. synergies, cash mix, leverage)
+- Three 2D sensitivity matrices with base case highlighting and absolute axis labels
 - Six automated risk flags with severity ratings
 - Deal scorecard with verdict: green (accretive), yellow (marginal), red (dilutive)
+
+Supported industry verticals include **Defense & National Security**, with defense-specific analytics: clearance level premiums, contract vehicle tracking, programs of record, backlog coverage ratio, revenue visibility, stacking premiums (clearance + certification + POR), and DoD concentration risk checks.
 
 ```python
 from app.engine import run_deal
@@ -178,24 +180,32 @@ Each vertical has its own benchmark dataset (P25/P50/P75 valuations, ARR multipl
 - **Berkus Method** — Qualitative factor scoring (idea, team, prototype, relationships, rollout)
 - **Scorecard Method** — Team, market, product, traction, competition weighted against stage medians
 - **Risk Factor Summation** — 12 risk categories adjusted from a vertical-specific base valuation
-- **ARR Multiple** — Vertical-specific P25/P50/P75 revenue multiples from Carta, PitchBook, and Equidam; adjusts for NRR, growth rate, gross margin, and burn multiple
+- **ARR Multiple** — Vertical-specific P25/P50/P75 revenue multiples; adjusts for NRR, growth rate, gross margin, and burn multiple
 
-Output includes a blended pre-money valuation with confidence range, dilution modeling through future rounds, SAFE conversion mechanics, investor scorecard signals, and a market-calibrated verdict (strong / fair / stretched / at risk).
+Output includes a blended pre-money valuation with confidence range, dilution modeling through future rounds (with step-up floor ensuring each projected round pre-money exceeds current post-money), SAFE conversion mechanics, investor scorecard signals, and a market-calibrated verdict (strong / fair / stretched / at risk).
+
+**AI-Native Valuation Modifier** — An optional graduated premium layer on top of the blended valuation. A 4-question AI Characteristics Assessment produces a score (0.0–1.0), which drives a vertical-specific premium:
+
+```
+blended_after_ai = blended × (1 + base_premium × ai_native_score)
+```
+
+Vertical base premiums range from 1.5× (defense_tech) down to 0.3× (marketplace). The `ai_ml_infrastructure` and `ai_enabled_saas` verticals are frozen — the premium is already embedded in their benchmarks. The modifier defaults on for defense_tech, healthtech, biotech_pharma, and developer_tools.
 
 ### VC Fund-Seat Analysis
 
 Evaluates any deal from the investor's perspective, anchored to fund economics:
 
-- **Ownership math** — Entry % through exit % after a full dilution stack (seed → A → B → C → IPO)
-- **Fund returner thresholds** — "This company needs a $2.1B exit to return 1x your fund"
+- **Ownership math** — Entry % through exit % after a full dilution stack (pre-seed → seed → A → B → C → IPO)
 - **3-scenario return model** — Bear/base/bull with probability-weighted expected MOIC and IRR
 - **Waterfall analysis** — Liquidation preference distribution through a multi-class cap table
 - **Pro-rata decision modeling** — Exercise vs. pass expected value comparison
 - **Portfolio construction** — TVPI/DPI/RVPI, concentration analysis, reserve adequacy
-- **QSBS eligibility** — IRC Section 1202 tax benefit estimation (including 2025 $15M cap changes)
+- **QSBS eligibility** — IRC §1202 tax benefit estimation, including 2025 $15M cap changes
 - **Anti-dilution modeling** — Full ratchet vs. broad-based weighted average in down rounds
 - **Bridge round analysis** — Dilution impact and participation recommendation
-- **IC memo financials** — Auto-generated financial section with investment thesis prompt
+- **IC memo auto-generation** — Financial section with investment thesis prompt
+- **Quick screen** — Recommendation output: pass / look_deeper / strong_interest
 
 ## API Reference
 
@@ -246,7 +256,7 @@ GET  /docs                    — Interactive Swagger documentation
 | UI Components | Radix UI primitives |
 | Backend | Python 3.11, FastAPI, Pydantic v2 |
 | AI Co-pilot | Claude (Anthropic API), streaming SSE |
-| Testing | pytest (backend), Vitest (frontend) |
+| Testing | pytest (171 tests, backend), Vitest (frontend) |
 | Deployment | Docker, docker-compose |
 
 ## Contributing
