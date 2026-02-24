@@ -1,0 +1,29 @@
+{
+  "_comment": "Golden file: hand-verified expected output for simple_cash_deal.json. If this test fails, a core financial computation changed.",
+  "entry_multiple": 8.3333,
+  "goodwill": 38750000.0,
+  "year1": {
+    "revenue": 247600000.0,
+    "ebitda": 37140000.0,
+    "net_income": 21812250.0,
+    "pro_forma_eps": 2.181225,
+    "standalone_eps": 1.545,
+    "accretion_dilution_pct": 41.1796
+  },
+  "year5": {
+    "revenue": 280520930.96,
+    "ebitda": 42078139.64,
+    "net_income": 25862585.21,
+    "pro_forma_eps": 2.586259,
+    "accretion_dilution_pct": 48.7286
+  },
+  "balance_sheet": {
+    "new_acquisition_debt": 0.0,
+    "shares_issued": 0.0,
+    "cash_used": 50000000.0
+  },
+  "verdict": "green",
+  "convergence_warning": false,
+  "risk_count": 0,
+  "scorecard_count": 8
+}

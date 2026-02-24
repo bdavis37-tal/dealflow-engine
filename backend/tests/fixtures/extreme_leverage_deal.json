@@ -1,0 +1,90 @@
+{
+  "description": "Extreme leverage deal. $300M target with 90% debt, 3 tranches, tight coverage. Tests solver under stress and risk flagging.",
+  "input": {
+    "acquirer": {
+      "company_name": "Leverage Partners",
+      "revenue": 150000000,
+      "ebitda": 25000000,
+      "net_income": 10000000,
+      "total_debt": 30000000,
+      "cash_on_hand": 40000000,
+      "shares_outstanding": 15000000,
+      "share_price": 20.00,
+      "tax_rate": 0.25,
+      "depreciation": 4000000,
+      "capex": 3000000,
+      "working_capital": 12000000,
+      "industry": "Professional Services / Consulting"
+    },
+    "target": {
+      "company_name": "ServiceCo",
+      "revenue": 80000000,
+      "ebitda": 12000000,
+      "net_income": 5000000,
+      "total_debt": 5000000,
+      "cash_on_hand": 3000000,
+      "tax_rate": 0.25,
+      "depreciation": 2000000,
+      "capex": 1500000,
+      "working_capital": 6000000,
+      "industry": "Professional Services / Consulting",
+      "acquisition_price": 300000000,
+      "revenue_growth_rate": 0.03
+    },
+    "structure": {
+      "cash_percentage": 0.05,
+      "stock_percentage": 0.05,
+      "debt_percentage": 0.90,
+      "debt_tranches": [
+        {
+          "name": "First Lien",
+          "amount": 135000000,
+          "interest_rate": 0.075,
+          "term_years": 7,
+          "amortization_type": "straight_line"
+        },
+        {
+          "name": "Second Lien",
+          "amount": 90000000,
+          "interest_rate": 0.10,
+          "term_years": 7,
+          "amortization_type": "interest_only"
+        },
+        {
+          "name": "Mezzanine",
+          "amount": 45000000,
+          "interest_rate": 0.14,
+          "term_years": 5,
+          "amortization_type": "bullet"
+        }
+      ],
+      "transaction_fees_pct": 0.025,
+      "advisory_fees": 2000000
+    },
+    "ppa": {
+      "asset_writeup": 3000000,
+      "asset_writeup_useful_life": 15,
+      "identifiable_intangibles": 20000000,
+      "intangible_useful_life": 10
+    },
+    "synergies": {
+      "cost_synergies": [
+        {
+          "category": "Back office",
+          "annual_amount": 5000000,
+          "phase_in_years": 3,
+          "cost_to_achieve": 2000000,
+          "is_revenue": false
+        }
+      ],
+      "revenue_synergies": []
+    },
+    "mode": "deep",
+    "projection_years": 7
+  },
+  "expected": {
+    "high_leverage_risk_flagged": true,
+    "interest_expense_significant": true,
+    "verdict_likely_red_or_yellow": true
+  }
+}
