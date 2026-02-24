@@ -255,7 +255,7 @@ export default function App() {
     }
     return (
       <AppShell appMode="ma" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
-        <ResultsDashboard output={output} dealInput={dealInput} onReset={reset} />
+        <ResultsDashboard output={output} dealInput={dealInput} onReset={reset} mode={mode} />
       </AppShell>
     )
   }

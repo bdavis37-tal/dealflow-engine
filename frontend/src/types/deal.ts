@@ -175,6 +175,7 @@ export interface DealInput {
 
 export interface IncomeStatementYear {
   year: number
+  fiscal_year_label: string
   revenue: number
   cogs: number
   gross_profit: number
@@ -189,6 +190,16 @@ export interface IncomeStatementYear {
   acquirer_standalone_eps: number
   pro_forma_eps: number
   accretion_dilution_pct: number
+  // Pro forma adjustment detail
+  acquirer_revenue: number
+  target_revenue: number
+  synergy_revenue: number
+  acquirer_ebitda: number
+  target_ebitda: number
+  synergy_cost: number
+  incremental_da: number
+  acquisition_interest: number
+  transaction_costs: number
 }
 
 export interface BalanceSheetAtClose {
@@ -224,6 +235,10 @@ export interface SensitivityMatrix {
   col_values: number[]
   data: number[][]
   data_labels: string[][]
+  base_row_idx: number
+  base_col_idx: number
+  row_display_labels: string[]
+  col_display_labels: string[]
 }
 
 export interface ReturnScenario {
@@ -236,7 +251,9 @@ export interface ReturnScenario {
 
 export interface ReturnsAnalysis {
   entry_multiple: number
+  equity_invested: number
   scenarios: ReturnScenario[]
+  annual_fcf_to_equity: number[]
 }
 
 export interface RiskItem {
@@ -260,6 +277,50 @@ export interface ScorecardMetric {
   description: string
 }
 
+export interface SourcesAndUsesItem {
+  label: string
+  amount: number
+}
+
+export interface SourcesAndUses {
+  sources: SourcesAndUsesItem[]
+  uses: SourcesAndUsesItem[]
+  total_sources: number
+  total_uses: number
+  balanced: boolean
+}
+
+export interface ContributionRow {
+  metric: string
+  acquirer_value: number
+  target_value: number
+  acquirer_pct: number
+  target_pct: number
+}
+
+export interface ContributionAnalysis {
+  rows: ContributionRow[]
+  implied_ownership_acquirer: number
+  implied_ownership_target: number
+}
+
+export interface CreditMetrics {
+  total_debt_to_ebitda: number
+  net_debt_to_ebitda: number
+  interest_coverage: number
+  fixed_charge_coverage: number
+  debt_to_total_cap: number
+}
+
+export interface ImpliedValuation {
+  enterprise_value: number
+  equity_value: number
+  ev_revenue_ltm: number
+  ev_ebitda_ltm: number
+  ev_ebitda_ntm: number
+  price_to_earnings: number
+}
+
 export interface DealOutput {
   pro_forma_income_statement: IncomeStatementYear[]
   balance_sheet_at_close: BalanceSheetAtClose
@@ -271,6 +332,11 @@ export interface DealOutput {
   deal_verdict_headline: string
   deal_verdict_subtext: string
   deal_scorecard: ScorecardMetric[]
+  sources_and_uses?: SourcesAndUses
+  contribution_analysis?: ContributionAnalysis
+  credit_metrics?: CreditMetrics
+  implied_valuation?: ImpliedValuation
+  fiscal_year_start: number
   defense_positioning?: DefensePositioning
   ai_modifier_applied: boolean
   ai_benchmark_context: string | null
