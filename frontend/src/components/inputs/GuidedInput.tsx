@@ -48,7 +48,10 @@ export default function GuidedInput({
   industry,
 }: GuidedInputProps) {
   const [showHelp, setShowHelp] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
+  const [rawInput, setRawInput] = useState('')
 
+  const isNumeric = type === 'number'
   const useAIHelp = !!fieldName && !!help
 
   return (
@@ -98,9 +101,25 @@ export default function GuidedInput({
           <span className="pl-3 pr-1 text-slate-400 text-sm select-none">{prefix}</span>
         )}
         <input
-          type={type}
-          value={value}
-          onChange={e => onChange(e.target.value)}
+          type={isNumeric ? 'text' : type}
+          inputMode={isNumeric ? 'decimal' : undefined}
+          value={isNumeric && isFocused ? rawInput : value}
+          onChange={e => {
+            if (isNumeric) setRawInput(e.target.value)
+            onChange(e.target.value)
+          }}
+          onFocus={() => {
+            if (isNumeric) {
+              setIsFocused(true)
+              setRawInput(value !== '' && value != null ? String(value) : '')
+            }
+          }}
+          onBlur={() => {
+            if (isNumeric) {
+              setIsFocused(false)
+              onChange(rawInput)
+            }
+          }}
           placeholder={placeholder}
           disabled={disabled}
           min={min}

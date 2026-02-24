@@ -36,7 +36,7 @@ function NumInput({
   onChange,
   prefix,
   suffix,
-  step = 1,
+  step: _step = 1,
   min = 0,
 }: {
   value: number
@@ -46,15 +46,27 @@ function NumInput({
   step?: number
   min?: number
 }) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
   return (
     <div className="flex items-center gap-1.5">
       {prefix && <span className="text-slate-400 text-sm w-4">{prefix}</span>}
       <input
-        type="number"
-        value={value}
-        step={step}
-        min={min}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        type="text"
+        inputMode="decimal"
+        value={focused ? raw : value}
+        onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
+        onBlur={() => {
+          setFocused(false)
+          const parsed = parseFloat(raw)
+          if (!isNaN(parsed)) onChange(Math.max(parsed, min))
+        }}
+        onChange={e => {
+          setRaw(e.target.value)
+          const parsed = parseFloat(e.target.value)
+          if (!isNaN(parsed)) onChange(Math.max(parsed, min))
+        }}
         className="
           flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2
           text-slate-100 text-sm placeholder-slate-500
