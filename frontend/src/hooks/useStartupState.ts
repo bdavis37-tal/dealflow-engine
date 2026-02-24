@@ -113,7 +113,7 @@ export function useStartupState() {
 
   // Persist inputs to localStorage
   useEffect(() => {
-    const { output, isLoading, error, ...persistable } = state
+    const { output: _output, isLoading: _isLoading, error: _error, ...persistable } = state
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable))
   }, [state])
 

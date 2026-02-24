@@ -56,7 +56,8 @@ export default function ScenarioNarrative({
         setHasLoaded(true)
       },
     )
-  }, [rowValue, colValue]) // Re-run when scenario cell changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-run only when selected cell changes
+  }, [rowValue, colValue])
 
   if (!aiAvailable) return null
 

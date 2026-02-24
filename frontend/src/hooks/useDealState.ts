@@ -85,7 +85,7 @@ export function useDealState() {
 
   // Persist input state (not output) to localStorage
   useEffect(() => {
-    const { output, isLoading, loadingMessage, error, ...persistable } = state
+    const { output: _output, isLoading: _isLoading, loadingMessage: _loadingMessage, error: _error, ...persistable } = state
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable))
   }, [state])
 
