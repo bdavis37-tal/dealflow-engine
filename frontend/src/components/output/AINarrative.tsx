@@ -27,6 +27,7 @@ export default function AINarrative({ dealInput, dealOutput, aiAvailable }: AINa
       .then(setNarrative)
       .catch(() => setNarrative(null))
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once on mount; deal data is stable at this point
   }, [])
 
   if (!aiAvailable) return null

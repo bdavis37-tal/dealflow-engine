@@ -1,0 +1,69 @@
+{
+  "description": "All-stock deal. $80M target, 100% stock consideration. Tests share dilution math when no cash or debt is used.",
+  "input": {
+    "acquirer": {
+      "company_name": "Alpha Holdings",
+      "revenue": 300000000,
+      "ebitda": 45000000,
+      "net_income": 20000000,
+      "total_debt": 10000000,
+      "cash_on_hand": 50000000,
+      "shares_outstanding": 20000000,
+      "share_price": 30.00,
+      "tax_rate": 0.25,
+      "depreciation": 8000000,
+      "capex": 7000000,
+      "working_capital": 25000000,
+      "industry": "Software / SaaS"
+    },
+    "target": {
+      "company_name": "Target SaaS Inc",
+      "revenue": 50000000,
+      "ebitda": 8000000,
+      "net_income": 4000000,
+      "total_debt": 0,
+      "cash_on_hand": 5000000,
+      "tax_rate": 0.25,
+      "depreciation": 1000000,
+      "capex": 800000,
+      "working_capital": 5000000,
+      "industry": "Software / SaaS",
+      "acquisition_price": 80000000,
+      "revenue_growth_rate": 0.08
+    },
+    "structure": {
+      "cash_percentage": 0.0,
+      "stock_percentage": 1.0,
+      "debt_percentage": 0.0,
+      "debt_tranches": [],
+      "transaction_fees_pct": 0.02,
+      "advisory_fees": 500000
+    },
+    "ppa": {
+      "asset_writeup": 1000000,
+      "asset_writeup_useful_life": 10,
+      "identifiable_intangibles": 10000000,
+      "intangible_useful_life": 7
+    },
+    "synergies": {
+      "cost_synergies": [
+        {
+          "category": "R&D consolidation",
+          "annual_amount": 3000000,
+          "phase_in_years": 2,
+          "cost_to_achieve": 1000000,
+          "is_revenue": false
+        }
+      ],
+      "revenue_synergies": []
+    },
+    "mode": "quick",
+    "projection_years": 5
+  },
+  "expected": {
+    "new_shares_issued_positive": true,
+    "no_acquisition_debt": true,
+    "no_convergence_warning": true,
+    "all_years_have_eps": true
+  }
+}

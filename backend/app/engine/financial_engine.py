@@ -14,6 +14,7 @@ Takes a DealInput and returns a DealOutput by:
 from __future__ import annotations
 
 import json
+import math
 import os
 from typing import Callable
 
@@ -86,6 +87,13 @@ def _build_synthetic_tranches(deal: DealInput) -> list[DebtTranche]:
         term_years=7,
         amortization_type=AmortizationType.STRAIGHT_LINE,
     )]
+
+
+def _safe_float(value: float, default: float = 0.0) -> float:
+    """Replace NaN, Infinity, or None with a safe default."""
+    if value is None or math.isnan(value) or math.isinf(value):
+        return default
+    return value
 
 
 def _format_currency(value: float) -> str:
@@ -352,11 +360,11 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         taxes = max(0.0, ebt * acq.tax_rate)
         net_income = ebt - taxes
 
-        pro_forma_eps = net_income / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        pro_forma_eps = _safe_float(net_income / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0)
 
         # Acquirer standalone EPS (grows at 3% per year for simplicity)
-        standalone_eps_yr = acq_standalone_eps * (1.03 ** yr)
-        accretion_dilution_pct = (
+        standalone_eps_yr = _safe_float(acq_standalone_eps * (1.03 ** yr))
+        accretion_dilution_pct = _safe_float(
             (pro_forma_eps - standalone_eps_yr) / abs(standalone_eps_yr) * 100
             if standalone_eps_yr != 0 else 0.0
         )
@@ -528,8 +536,10 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     # Deal Scorecard
     # -----------------------------------------------------------------------
     y1 = income_statement[0]
-    entry_multiple = returns.entry_multiple
-    post_close_leverage = (acq_debt_total + acq.total_debt) / (acq.ebitda + tgt.ebitda) if (acq.ebitda + tgt.ebitda) > 0 else 0
+    entry_multiple = _safe_float(returns.entry_multiple)
+    post_close_leverage = _safe_float(
+        (acq_debt_total + acq.total_debt) / (acq.ebitda + tgt.ebitda) if (acq.ebitda + tgt.ebitda) > 0 else 0
+    )
 
     # IRR at 5yr, base case (entry multiple)
     base_case_5yr = next(
