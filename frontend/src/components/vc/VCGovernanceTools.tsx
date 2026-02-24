@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react'
-import type { FundProfile, QSBSOutput, AntiDilutionOutput, BridgeRoundOutput } from '../../types/vc'
+import type { FundProfile, QSBSOutput, AntiDilutionOutput, BridgeRoundOutput, AntiDilutionType } from '../../types/vc'
 import { checkQSBS, analyzeAntiDilution, analyzeBridge } from '../../lib/vc-api'
 import type { QSBSInput, AntiDilutionInput, BridgeRoundInput } from '../../lib/vc-api'
 
@@ -249,7 +249,7 @@ function AntiDilutionModeler() {
           ))}
           <div className="col-span-2">
             <label className="block text-xs font-medium text-slate-400 mb-1">Anti-Dilution Type</label>
-            <select value={form.anti_dilution_type} onChange={e => setForm(f => ({...f, anti_dilution_type: e.target.value as any}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500">
+            <select value={form.anti_dilution_type} onChange={e => setForm(f => ({...f, anti_dilution_type: e.target.value as AntiDilutionType}))} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500">
               <option value="none">None</option>
               <option value="broad_based_wa">Broad-Based Weighted Average</option>
               <option value="full_ratchet">Full Ratchet</option>

@@ -25,8 +25,8 @@ const AI_TOGGLE_CONFIG = {
 }
 
 function getDefaultAIToggle(vertical: string): boolean {
-  if (AI_TOGGLE_CONFIG.frozen_on.includes(vertical as any)) return true
-  if (AI_TOGGLE_CONFIG.default_on.includes(vertical as any)) return true
+  if ((AI_TOGGLE_CONFIG.frozen_on as readonly string[]).includes(vertical)) return true
+  if ((AI_TOGGLE_CONFIG.default_on as readonly string[]).includes(vertical)) return true
   return false
 }
 

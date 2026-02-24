@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import type { FundProfile, PortfolioPosition, PortfolioOutput } from '../../types/vc'
+import type { FundProfile, PortfolioPosition, PortfolioOutput, VCStage, VCVertical } from '../../types/vc'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
 import { analyzePortfolio } from '../../lib/vc-api'
 
@@ -100,7 +100,7 @@ function AddPositionModal({
             <FLabel>Stage at Entry</FLabel>
             <select
               value={form.stage_at_entry}
-              onChange={e => setForm(f => ({...f, stage_at_entry: e.target.value as any}))}
+              onChange={e => setForm(f => ({...f, stage_at_entry: e.target.value as VCStage}))}
               className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
             >
               {Object.entries(VC_STAGE_LABELS).map(([v, l]) => (
@@ -112,7 +112,7 @@ function AddPositionModal({
             <FLabel>Vertical</FLabel>
             <select
               value={form.vertical}
-              onChange={e => setForm(f => ({...f, vertical: e.target.value as any}))}
+              onChange={e => setForm(f => ({...f, vertical: e.target.value as VCVertical}))}
               className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
             >
               {Object.entries(VC_VERTICAL_LABELS).map(([v, l]) => (
@@ -152,7 +152,7 @@ function AddPositionModal({
             <FLabel>Status</FLabel>
             <select
               value={form.status}
-              onChange={e => setForm(f => ({...f, status: e.target.value as any}))}
+              onChange={e => setForm(f => ({...f, status: e.target.value as PortfolioPosition['status']}))}
               className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
             >
               <option value="active">Active</option>
