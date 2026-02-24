@@ -33,6 +33,36 @@ const STAGES = Object.entries(STAGE_LABELS) as [StartupStage, string][]
 const GEOS = Object.entries(GEOGRAPHY_LABELS) as [Geography, string][]
 const INSTRUMENTS = Object.entries(INSTRUMENT_LABELS) as [InstrumentType, string][]
 
+function RaiseAmountInput({ value, onChange, hasError }: { value: number; onChange: (v: number) => void; hasError: boolean }) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={focused ? raw : (value || '')}
+      onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
+      onBlur={() => {
+        setFocused(false)
+        const parsed = parseFloat(raw)
+        if (!isNaN(parsed)) onChange(parsed)
+      }}
+      onChange={e => {
+        setRaw(e.target.value)
+        const parsed = parseFloat(e.target.value)
+        if (!isNaN(parsed)) onChange(parsed)
+      }}
+      placeholder="1.5"
+      className={`
+        w-full bg-slate-900 border rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500
+        focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors
+        ${hasError ? 'border-red-500' : 'border-slate-600'}
+      `}
+    />
+  )
+}
+
 export default function StartupStep1_Overview({
   company_name,
   fundraise,
@@ -220,18 +250,10 @@ export default function StartupStep1_Overview({
             <p className="text-slate-500 text-xs mb-3">In USD millions (e.g. 1.5 = $1.5M)</p>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">$</span>
-              <input
-                type="number"
-                min={0}
-                step={0.1}
-                value={fundraise.raise_amount ?? ''}
-                onChange={e => onUpdateFundraise({ raise_amount: parseFloat(e.target.value) || 0 })}
-                placeholder="1.5"
-                className={`
-                  w-full bg-slate-900 border rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500
-                  focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors
-                  ${errors.raise ? 'border-red-500' : 'border-slate-600'}
-                `}
+              <RaiseAmountInput
+                value={fundraise.raise_amount ?? 0}
+                onChange={v => onUpdateFundraise({ raise_amount: v })}
+                hasError={!!errors.raise}
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">M</span>
             </div>
