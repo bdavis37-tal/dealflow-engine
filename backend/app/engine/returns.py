@@ -167,5 +167,7 @@ def compute_returns(
 
     return ReturnsAnalysis(
         entry_multiple=entry_multiple,
+        equity_invested=equity_invested,
         scenarios=scenarios,
+        annual_fcf_to_equity=fcf_by_year if fcf_by_year else [],
     )
