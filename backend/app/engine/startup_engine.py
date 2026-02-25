@@ -32,6 +32,8 @@ from .startup_models import (
     ValuationSignal,
     InstrumentType,
     ProductStage,
+    RaiseSignal,
+    RoundTimingSignal,
 )
 
 logger = logging.getLogger(__name__)
@@ -550,6 +552,172 @@ def _run_arr_multiple(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
 
 
 # ---------------------------------------------------------------------------
+# Round timing signal
+# ---------------------------------------------------------------------------
+
+# Typical months between stages based on Carta / PitchBook median data (2023–2025).
+# These represent the median time from close of current round to start of next raise process.
+_STAGE_MONTHS_TO_NEXT: dict[str, float] = {
+    "pre_seed": 18.0,   # Pre-seed → Seed: ~18 months median
+    "seed": 24.0,       # Seed → Series A: ~24 months median
+    "series_a": 0.0,    # Terminal — no next stage modeled
+}
+
+# Milestone checklist per stage. Each entry is (description, bool_check_fn).
+# The check_fn receives (inp: StartupInput) and returns True if milestone is MET.
+_STAGE_MILESTONES: dict[str, list[tuple[str, object]]] = {
+    "pre_seed": [
+        ("Working prototype or MVP", lambda inp: inp.product.stage.value in ("mvp", "beta", "paying_customers", "scaling")),
+        ("At least 1 paying customer or signed LOI", lambda inp: inp.traction.paying_customer_count >= 1 or inp.traction.has_lois),
+        ("Technical co-founder on team", lambda inp: inp.team.technical_cofounder),
+        ("TAM ≥ $1B", lambda inp: inp.market.tam_usd_billions >= 1.0),
+    ],
+    "seed": [
+        ("$100K+ ARR or strong pilot pipeline", lambda inp: (inp.traction.annual_recurring_revenue or inp.traction.monthly_recurring_revenue * 12) >= 0.1 or inp.traction.logo_customer_count >= 2),
+        ("MoM growth ≥ 10%", lambda inp: inp.traction.mom_growth_rate >= 0.10),
+        ("NRR ≥ 100%", lambda inp: inp.traction.net_revenue_retention >= 1.0),
+        ("≥ 3 paying customers", lambda inp: inp.traction.paying_customer_count >= 3),
+        ("Gross margin ≥ 60%", lambda inp: inp.traction.gross_margin >= 0.60),
+    ],
+    "series_a": [
+        ("$1M+ ARR", lambda inp: (inp.traction.annual_recurring_revenue or inp.traction.monthly_recurring_revenue * 12) >= 1.0),
+        ("MoM growth ≥ 15%", lambda inp: inp.traction.mom_growth_rate >= 0.15),
+        ("NRR ≥ 110%", lambda inp: inp.traction.net_revenue_retention >= 1.10),
+        ("≥ 10 paying customers", lambda inp: inp.traction.paying_customer_count >= 10),
+        ("Gross margin ≥ 70%", lambda inp: inp.traction.gross_margin >= 0.70),
+    ],
+}
+
+
+def _next_stage_for(stage: StartupStage) -> Optional[StartupStage]:
+    """Return the next fundraising stage, or None if Series A (terminal)."""
+    _next: dict[StartupStage, Optional[StartupStage]] = {
+        StartupStage.PRE_SEED: StartupStage.SEED,
+        StartupStage.SEED: StartupStage.SERIES_A,
+        StartupStage.SERIES_A: None,
+    }
+    return _next[stage]
+
+
+def _compute_round_timing(inp: StartupInput, vdata: dict) -> RoundTimingSignal:
+    """
+    Compute the round timing signal for the current startup.
+
+    Signal logic:
+    - raise_now:         runway < (months_to_next_round - fundraise_process_months)
+                         i.e. already in or past the raise window
+    - raise_in_months:   runway is sufficient but raise window opens within 12 months
+    - focus_milestones:  runway is healthy AND raise window is > 12 months away
+                         OR Series A terminal stage
+
+    Milestone gaps are computed regardless of signal to surface actionable gaps.
+    """
+    t = inp.traction
+    stage = inp.fundraise.stage
+    FUNDRAISE_PROCESS_MONTHS = 6.0
+
+    # --- Runway ---
+    if t.monthly_burn_rate > 0:
+        runway_months = t.cash_on_hand / t.monthly_burn_rate
+    else:
+        # Zero burn: effectively infinite runway — use a large sentinel
+        runway_months = 999.0
+
+    # --- Stage timeline ---
+    months_to_next = _STAGE_MONTHS_TO_NEXT.get(stage.value, 0.0)
+    months_until_window = months_to_next - FUNDRAISE_PROCESS_MONTHS
+
+    # --- Series A terminal case ---
+    next_stage = _next_stage_for(stage)
+    if next_stage is None:
+        # Series A: no next round modeled — focus on milestones / growth
+        signal = RaiseSignal.FOCUS_MILESTONES
+        signal_label = "Focus on Growth"
+        signal_detail = (
+            "You're at Series A — the next raise (Series B) depends on hitting $5–10M ARR "
+            "and demonstrable unit economics. Focus on growth and efficiency metrics."
+        )
+    else:
+        # --- Signal resolution ---
+        if runway_months < months_until_window:
+            # Runway won't last to the raise window — start now
+            signal = RaiseSignal.RAISE_NOW
+            signal_label = "Raise Now"
+            signal_detail = (
+                f"With {runway_months:.0f} months of runway and a typical "
+                f"{months_to_next:.0f}-month path to your next round, you need to begin "
+                f"fundraising immediately. Allow {FUNDRAISE_PROCESS_MONTHS:.0f} months for the process."
+            )
+        elif runway_months < months_until_window + 12:
+            # Raise window opens within 12 months
+            months_left = runway_months - months_until_window
+            signal = RaiseSignal.RAISE_IN_MONTHS
+            signal_label = f"Raise in ~{max(1, round(months_left)):.0f} Months"
+            signal_detail = (
+                f"Your runway supports waiting, but the raise window opens in roughly "
+                f"{max(1, round(months_left)):.0f} months. Use this time to hit key milestones "
+                f"and warm up investor relationships."
+            )
+        else:
+            # Healthy runway — focus on milestones
+            signal = RaiseSignal.FOCUS_MILESTONES
+            signal_label = "Focus on Milestones"
+            signal_detail = (
+                f"You have {runway_months:.0f} months of runway — well ahead of the raise window. "
+                f"Prioritize hitting the milestones below to maximize your valuation at the next round."
+            )
+
+    # --- Milestone gap analysis ---
+    milestone_defs = _STAGE_MILESTONES.get(stage.value, [])
+    milestone_gaps: list[str] = []
+    met_count = 0
+    for description, check_fn in milestone_defs:
+        try:
+            met = bool(check_fn(inp))  # type: ignore[operator]
+        except Exception:
+            met = False
+        if met:
+            met_count += 1
+        else:
+            milestone_gaps.append(description)
+
+    total_count = len(milestone_defs)
+
+    # --- Warnings ---
+    timing_warnings: list[str] = []
+    if t.monthly_burn_rate > 0 and runway_months < 6:
+        timing_warnings.append(
+            f"Critical: only {runway_months:.0f} months of runway remaining. "
+            "Fundraising at this stage severely limits negotiating leverage."
+        )
+    if t.monthly_burn_rate == 0 and t.cash_on_hand == 0:
+        timing_warnings.append(
+            "No burn rate or cash data provided — runway estimate is unavailable. "
+            "Add cash on hand and monthly burn for an accurate timing signal."
+        )
+
+    # Populate raise_in_months field for the raise_in_months signal
+    raise_in_months_val: Optional[float] = None
+    if signal == RaiseSignal.RAISE_IN_MONTHS:
+        raise_in_months_val = max(1.0, runway_months - months_until_window)
+
+    return RoundTimingSignal(
+        runway_months=round(runway_months if runway_months < 999 else 0.0, 1),
+        months_to_next_round=months_to_next,
+        fundraise_process_months=FUNDRAISE_PROCESS_MONTHS,
+        months_until_raise_window=months_until_window,
+        signal=signal,
+        signal_label=signal_label,
+        signal_detail=signal_detail,
+        milestone_gaps=milestone_gaps,
+        milestone_met_count=met_count,
+        milestone_total_count=total_count,
+        raise_in_months=raise_in_months_val,
+        warnings=timing_warnings,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Dilution modeling
 # ---------------------------------------------------------------------------
 
@@ -978,6 +1146,9 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
 
     traction_bar = vdata.get("traction_bar", "No traction bar available for this vertical/stage.")
 
+    # Round timing signal
+    round_timing = _compute_round_timing(inp, vdata)
+
     return StartupValuationOutput(
         company_name=inp.company_name,
         stage=stage,
@@ -1008,4 +1179,5 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         ai_premium_context=ai_mod_output.ai_premium_context if ai_mod_output else None,
         blended_before_ai=blended_before_ai,
         ai_native_score=inp.fundraise.ai_native_score if inp.fundraise.is_ai_native else None,
+        round_timing=round_timing,
     )

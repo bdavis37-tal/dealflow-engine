@@ -10,6 +10,7 @@ import type { StartupInputState } from '../../../lib/shareUtils'
 import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'
 import { checkAIStatus } from '../../../lib/ai-api'
 import StartupAINarrative from './StartupAINarrative'
+import RoundTimingPanel from './RoundTimingPanel'
 
 interface Props {
   output: StartupValuationOutput
@@ -466,6 +467,9 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
 
       {/* Traction bar */}
       <TractionBarPanel traction_bar={output.traction_bar} vertical={output.vertical} stage={output.stage} />
+
+      {/* Round timing signal */}
+      <RoundTimingPanel roundTiming={output.round_timing} stage={output.stage} />
 
       {/* Warnings / notes */}
       <WarningsPanel warnings={output.warnings} notes={output.computation_notes} />

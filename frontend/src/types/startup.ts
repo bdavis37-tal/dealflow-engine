@@ -43,6 +43,8 @@ export type ValuationSignal = 'strong' | 'fair' | 'weak' | 'warning'
 
 export type ValuationVerdict = 'strong' | 'fair' | 'stretched' | 'at_risk'
 
+export type RaiseSignal = 'raise_now' | 'raise_in_months' | 'focus_milestones'
+
 // ---------------------------------------------------------------------------
 // Input models
 // ---------------------------------------------------------------------------
@@ -148,6 +150,21 @@ export interface SAFEConversionSummary {
   note: string
 }
 
+export interface RoundTimingSignal {
+  runway_months: number
+  months_to_next_round: number
+  fundraise_process_months: number
+  months_until_raise_window: number
+  signal: RaiseSignal
+  signal_label: string
+  signal_detail: string
+  milestone_gaps: string[]
+  milestone_met_count: number
+  milestone_total_count: number
+  raise_in_months: number | null
+  warnings: string[]
+}
+
 export interface ScorecardFlag {
   metric: string
   value: string
@@ -196,6 +213,7 @@ export interface StartupValuationOutput {
   ai_premium_context: string | null
   blended_before_ai: number | null
   ai_native_score: number | null
+  round_timing: RoundTimingSignal
 }
 
 // ---------------------------------------------------------------------------

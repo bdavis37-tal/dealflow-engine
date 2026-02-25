@@ -68,6 +68,12 @@ class ValuationSignal(str, Enum):
     WARNING = "warning"
 
 
+class RaiseSignal(str, Enum):
+    RAISE_NOW = "raise_now"
+    RAISE_IN_MONTHS = "raise_in_months"
+    FOCUS_MILESTONES = "focus_milestones"
+
+
 # ---------------------------------------------------------------------------
 # Input models
 # ---------------------------------------------------------------------------
@@ -193,6 +199,22 @@ class SAFEConversionSummary(BaseModel):
     note: str
 
 
+class RoundTimingSignal(BaseModel):
+    """Round timing recommendation based on runway and stage milestones."""
+    runway_months: float = Field(description="Months of runway remaining (cash / monthly burn). 0 if burn rate is zero.")
+    months_to_next_round: float = Field(description="Typical months from current stage to next raise, per vertical benchmarks.")
+    fundraise_process_months: float = Field(default=6.0, description="Assumed fundraise process duration in months.")
+    months_until_raise_window: float = Field(description="months_to_next_round - fundraise_process_months. Negative = already in window.")
+    signal: RaiseSignal
+    signal_label: str = Field(description="Short human-readable label, e.g. 'Raise Now'.")
+    signal_detail: str = Field(description="1–2 sentence explanation of the signal.")
+    milestone_gaps: list[str] = Field(default_factory=list, description="List of unmet milestone strings for the current stage/vertical.")
+    milestone_met_count: int = Field(default=0)
+    milestone_total_count: int = Field(default=0)
+    raise_in_months: Optional[float] = Field(default=None, description="Populated when signal=raise_in_months; months until raise window opens.")
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ScorecardFlag(BaseModel):
     """A single scorecard signal — investor-grade metric check."""
     metric: str
@@ -258,3 +280,6 @@ class StartupValuationOutput(BaseModel):
     ai_premium_context: Optional[str] = Field(default=None, description="Human-readable premium explanation")
     blended_before_ai: Optional[float] = Field(default=None, description="Pre-modifier blended value, USD millions")
     ai_native_score: Optional[float] = Field(default=None, description="Score from 4-question assessment [0.0–1.0]")
+
+    # Round timing signal
+    round_timing: RoundTimingSignal
