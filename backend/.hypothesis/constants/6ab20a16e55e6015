@@ -1,0 +1,4 @@
+# file: C:\Users\b_dav\OneDrive\Desktop\Deal-Flow\dealflow-engine\backend\app\engine\financial_engine.py
+# hypothesis_version: 6.151.6
+
+[-8.0, -5.0, -2.0, 0.0, 0.01, 0.03, 0.05, 0.1, 0.12, 0.15, 0.2, 0.25, 0.3, 0.5, 0.6, 0.75, 0.8, 0.9, 0.95, 1.0, 1.03, 1.1, 1.15, 1.2, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 10.0, 12.0, 15.0, 20.0, 30.0, 40.0, 99.9, 100, 1000, 1000000, 1000000000, ', ', '-', '.', '. ', '..', 'CMMC Level 2', 'CMMC Level 3', 'Cash from Acquirer', 'EBITDA', 'FedRAMP High', 'FedRAMP Moderate', 'IL4', 'IL5', 'IL6', 'IRR at 5-Year Exit', 'Implied EV/Revenue', 'Net Income', 'New Debt Financing', 'Post-Close Leverage', 'Programs of Record', 'Revenue', 'SAP', 'Secret', 'Stock Issuance', 'Top Secret', 'Top Secret/SCI', 'Unclassified', '_', 'cmmc_level_2', 'cmmc_level_3', 'data', 'defense_specific', 'fallback', 'fedramp_high', 'fedramp_moderate', 'high', 'il4', 'il5', 'il6', 'low', 'median', 'sap', 'secret', 'top_secret', 'ts_sci', 'unclassified']

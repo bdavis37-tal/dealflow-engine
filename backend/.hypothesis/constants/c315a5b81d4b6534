@@ -1,0 +1,4 @@
+# file: C:\Users\b_dav\OneDrive\Desktop\Deal-Flow\dealflow-engine\backend\app\engine\sensitivity.py
+# hypothesis_version: 6.151.6
+
+[-0.2, -0.1, 0.0, 0.005, 0.01, 0.02, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 0.8, 0.95, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 100.0, 100, 1000, 1000000, 1000000000, ' (Base)', '-', 'Base', 'Cash % of Deal', 'Combined savings', 'Debt Interest Rate', 'Purchase Price', 'Synergy Achievement', 'Term Loan', 'Total Debt / EBITDA']

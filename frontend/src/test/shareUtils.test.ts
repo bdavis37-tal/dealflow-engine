@@ -146,28 +146,28 @@ describe('decodeState resilience', () => {
     expect(decodeState(encoded.slice(0, 10))).toBeNull()
   })
 
-  it('returns null for wrong schema version', () => {
+  it('returns null for wrong schema version', async () => {
     const payload = { v: 999, module: 'ma', state: maState }
     const LZString = (await import('lz-string')).default
     const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(payload))
     expect(decodeState(encoded)).toBeNull()
   })
 
-  it('returns null for unknown module', () => {
+  it('returns null for unknown module', async () => {
     const payload = { v: SCHEMA_VERSION, module: 'unknown', state: maState }
     const LZString = (await import('lz-string')).default
     const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(payload))
     expect(decodeState(encoded)).toBeNull()
   })
 
-  it('returns null for missing state field', () => {
+  it('returns null for missing state field', async () => {
     const payload = { v: SCHEMA_VERSION, module: 'ma' }
     const LZString = (await import('lz-string')).default
     const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(payload))
     expect(decodeState(encoded)).toBeNull()
   })
 
-  it('returns null for null state', () => {
+  it('returns null for null state', async () => {
     const payload = { v: SCHEMA_VERSION, module: 'ma', state: null }
     const LZString = (await import('lz-string')).default
     const encoded = LZString.compressToEncodedURIComponent(JSON.stringify(payload))
@@ -239,7 +239,7 @@ describe('property-based: round-trip fidelity for MA state', () => {
           synergies: fc.constant({ cost_synergies: [], revenue_synergies: [] }),
         }),
         (state) => {
-          const encoded = encodeState('ma', state as MAInputState)
+          const encoded = encodeState('ma', state as unknown as MAInputState)
           const decoded = decodeState(encoded)
           expect(decoded).not.toBeNull()
           expect(decoded!.state).toEqual(state)

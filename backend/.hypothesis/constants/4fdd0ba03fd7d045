@@ -1,0 +1,4 @@
+# file: C:\Users\b_dav\OneDrive\Desktop\Deal-Flow\dealflow-engine\backend\app\engine\startup_models.py
+# hypothesis_version: 6.151.6
+
+[0.0, 0.15, 0.5, 0.7, 1.0, 3.0, 6.0, 'ai_enabled_saas', 'ai_ml_infrastructure', 'at_risk', 'austin', 'b2b_saas', 'bay_area', 'beta', 'biotech_pharma', 'boston', 'chicago', 'climate_energy', 'consumer', 'convertible_note', 'deep_tech_hardware', 'defense_tech', 'developer_tools', 'fair', 'fintech', 'focus_milestones', 'healthtech', 'idea', 'international', 'los_angeles', 'low | medium | high', 'marketplace', 'medium', 'mvp', 'new_york', 'other_us', 'paying_customers', 'pre_seed', 'priced_equity', 'raise_in_months', 'raise_now', 'safe', 'scaling', 'seattle', 'seed', 'series_a', 'stretched', 'strong', 'vertical_saas', 'warning', 'weak']

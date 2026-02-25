@@ -444,6 +444,8 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
               market: startupInput.market,
               fundraise: startupInput.fundraise,
               is_ai_native: startupInput.fundraise.is_ai_native,
+              ai_native_score: startupInput.fundraise.ai_native_score ?? 0,
+              ai_answers: [false, false, false, false],
             } satisfies StartupInputState}
             colorScheme="purple"
           />
