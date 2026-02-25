@@ -5,6 +5,8 @@
 import React, { useState, useEffect } from 'react'
 import { RefreshCw, TrendingUp, Users, BarChart2, AlertTriangle, ChevronDown, ChevronUp, CheckCircle, AlertCircle, XCircle, Info } from 'lucide-react'
 import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput } from '../../../types/startup'
+import ShareButton from '../../shared/ShareButton'
+import type { StartupInputState } from '../../../lib/shareUtils'
 import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'
 import { checkAIStatus } from '../../../lib/ai-api'
 import StartupAINarrative from './StartupAINarrative'
@@ -430,12 +432,27 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
           <p className="text-slate-500 text-sm">{STAGE_LABELS[output.stage]} · {VERTICAL_LABELS[output.vertical]}</p>
           <h1 className="text-2xl font-bold text-slate-100">{output.company_name} — Valuation Report</h1>
         </div>
-        <button
-          onClick={onReset}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-500 text-sm transition-all"
-        >
-          <RefreshCw size={14} /> Start over
-        </button>
+        <div className="flex items-center gap-2">
+          <ShareButton
+            module="startup"
+            inputState={{
+              company_name: startupInput.company_name,
+              team: startupInput.team,
+              traction: startupInput.traction,
+              product: startupInput.product,
+              market: startupInput.market,
+              fundraise: startupInput.fundraise,
+              is_ai_native: startupInput.fundraise.is_ai_native,
+            } satisfies StartupInputState}
+            colorScheme="purple"
+          />
+          <button
+            onClick={onReset}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-500 text-sm transition-all"
+          >
+            <RefreshCw size={14} /> Start over
+          </button>
+        </div>
       </div>
 
       {/* Verdict */}

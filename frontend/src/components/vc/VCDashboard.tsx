@@ -6,6 +6,8 @@
 
 import { useState } from 'react'
 import type { VCDealOutput, FundProfile } from '../../types/vc'
+import ShareButton from '../shared/ShareButton'
+import type { VCInputState } from '../../lib/shareUtils'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
 import VCOwnershipPanel from './VCOwnershipPanel'
 import VCReturnScenarios from './VCReturnScenarios'
@@ -71,7 +73,15 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
               {output.quick_screen.recommendation_rationale}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <ShareButton
+              module="vc"
+              inputState={{
+                fund,
+                deal: output.ic_memo as unknown as VCInputState['deal'],
+              } satisfies VCInputState}
+              colorScheme="emerald"
+            />
             <button
               onClick={onNewDeal}
               className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl transition-colors"

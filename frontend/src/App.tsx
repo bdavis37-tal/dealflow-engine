@@ -1,5 +1,7 @@
 // Licensed under the Business Source License 1.1 — see LICENSE file for details
 import { useState, useEffect } from 'react'
+import { parseShareHash, decodeState } from './lib/shareUtils'
+import type { MAInputState, StartupInputState, VCInputState } from './lib/shareUtils'
 import AppShell from './components/layout/AppShell'
 import LandingPage from './components/layout/LandingPage'
 import Step1_DealOverview from './components/flow/Step1_DealOverview'
@@ -47,6 +49,7 @@ export default function App() {
     updateAcquirer,
     updateTarget,
     updateStructure,
+    updatePPA,
     updateSynergies,
     reset,
     runAnalysis,
@@ -84,6 +87,49 @@ export default function App() {
   const [aiAvailable, setAiAvailable] = useState(false)
   const [showConversational, setShowConversational] = useState(true)
 
+  // ---------------------------------------------------------------------------
+  // Share URL hydration — runs once on mount
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const encoded = parseShareHash(window.location.hash)
+    if (!encoded) return
+
+    const payload = decodeState(encoded)
+    if (!payload) return
+
+    if (payload.module === 'ma') {
+      const s = payload.state as MAInputState
+      setMode(s.mode)
+      updateAcquirer(s.acquirer)
+      updateTarget(s.target)
+      updateStructure(s.structure)
+      updatePPA(s.ppa)
+      updateSynergies(s.synergies)
+      setAppView('ma')
+    } else if (payload.module === 'startup') {
+      const s = payload.state as StartupInputState
+      setCompanyName(s.company_name)
+      updateTeam(s.team)
+      updateTraction(s.traction)
+      updateProduct(s.product)
+      updateMarket(s.market)
+      updateFundraise(s.fundraise)
+      setAINative(s.is_ai_native)
+      setAppView('startup')
+    } else if (payload.module === 'vc') {
+      const s = payload.state as VCInputState
+      updateFund(s.fund)
+      updateVCDeal(s.deal)
+      setAppView('vc')
+    }
+
+    // Clean URL so refresh doesn't re-hydrate
+    window.history.replaceState(null, '', window.location.pathname)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------------------------------------------------------------------------
+  // AI availability check — runs once on mount
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     checkAIStatus()
       .then(s => setAiAvailable(s.ai_available))

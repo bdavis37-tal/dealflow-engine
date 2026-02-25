@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Download, RotateCcw } from 'lucide-react'
 import type { DealInput, DealOutput, ModelMode } from '../../types/deal'
+import ShareButton from '../shared/ShareButton'
+import type { MAInputState } from '../../lib/shareUtils'
 import Verdict from './Verdict'
 import DealScorecard from './DealScorecard'
 import RiskPanel from './RiskPanel'
@@ -64,6 +66,18 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
               AI co-pilot enabled
             </span>
           )}
+          <ShareButton
+            module="ma"
+            inputState={{
+              mode: dealInput.mode,
+              acquirer: dealInput.acquirer,
+              target: dealInput.target,
+              structure: dealInput.structure,
+              ppa: dealInput.ppa,
+              synergies: dealInput.synergies,
+            } satisfies MAInputState}
+            colorScheme="blue"
+          />
           <button
             onClick={onReset}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 transition-colors"
