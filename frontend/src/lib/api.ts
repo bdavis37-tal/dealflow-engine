@@ -87,3 +87,39 @@ export async function getStartupVerticals(): Promise<Array<{ value: string; labe
   const res = await fetch(`${STARTUP_BASE}/verticals`)
   return handleResponse<Array<{ value: string; label: string; description: string }>>(res)
 }
+
+
+// ---------------------------------------------------------------------------
+// Startup Sensitivity Analysis (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface StartupSensitivityResult {
+  input_name: string
+  input_field: string
+  low_value: number
+  base_value: number
+  high_value: number
+  low_valuation: number
+  base_valuation: number
+  high_valuation: number
+  impact_low_pct: number
+  impact_high_pct: number
+  total_swing: number
+}
+
+export interface StartupSensitivityOutput {
+  company_name: string
+  base_valuation: number
+  sensitivities: StartupSensitivityResult[]
+  most_impactful: string | null
+  note: string
+}
+
+export async function runStartupSensitivity(input: StartupInput): Promise<StartupSensitivityOutput> {
+  const res = await fetch(`${STARTUP_BASE}/sensitivity`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return handleResponse<StartupSensitivityOutput>(res)
+}

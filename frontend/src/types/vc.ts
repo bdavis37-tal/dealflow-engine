@@ -477,3 +477,227 @@ export const DEFAULT_FUND_PROFILE: FundProfile = {
   recycling_pct: 0.05,
   deployment_period_years: 4,
 }
+
+
+// ---------------------------------------------------------------------------
+// GP Carry Economics (Phase 5)
+// ---------------------------------------------------------------------------
+
+export type CarryStructure = 'deal_by_deal' | 'whole_fund'
+
+export interface GPCarryInput {
+  fund_profile: FundProfile
+  carry_structure: CarryStructure
+  gp_commit_pct: number                  // 0.02 = 2%
+  catch_up_pct: number                   // 1.0 = 100% catch-up
+  catch_up_target: number                // equals carry %
+  clawback_escrow_pct: number            // 0.30 = 30%
+  num_gps: number
+  gp_salary_annual: number               // USD millions
+  total_distributions: number            // USD millions
+  fund_life_years: number
+}
+
+export interface GPCarryOutput {
+  fund_size: number
+  total_distributions: number
+  gross_multiple: number
+
+  // Waterfall steps
+  return_of_capital: number
+  preferred_return_amount: number
+  catch_up_amount: number
+  remaining_after_catch_up: number
+  gp_carry_from_remaining: number
+  total_gp_carry: number
+
+  // GP economics
+  gp_commit_amount: number
+  gp_return_of_commit: number
+  gp_carry_per_gp: number
+  gp_total_comp_per_gp: number
+  carry_as_multiple_of_salary: number
+
+  // Management fees
+  total_management_fees: number
+  management_fee_per_gp_annual: number
+
+  // Clawback
+  clawback_escrow: number
+  clawback_exposure: number
+
+  // LP economics
+  lp_total_distributions: number
+  lp_net_multiple: number
+  lp_net_irr: number | null
+
+  carry_structure: CarryStructure
+  notes: string[]
+}
+
+
+// ---------------------------------------------------------------------------
+// Fund-Level IRR / J-Curve (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface FundCashflow {
+  year: number
+  amount: number                         // positive = distribution, negative = call
+  description: string
+}
+
+export interface FundIRRInput {
+  fund_profile: FundProfile
+  cashflows: FundCashflow[]
+  positions: PortfolioPosition[]
+  current_nav: number | null
+  fund_age_years: number
+}
+
+export interface JCurvePoint {
+  year: number
+  cumulative_cf: number
+  nav_estimate: number
+  tvpi: number
+}
+
+export interface FundIRROutput {
+  fund_size: number
+  fund_age_years: number
+
+  total_called: number
+  total_distributed: number
+  current_nav: number
+  gross_tvpi: number
+  net_tvpi: number
+  gross_irr: number | null
+  net_irr: number | null
+  dpi: number
+  rvpi: number
+
+  j_curve_points: JCurvePoint[]
+  j_curve_trough_year: number | null
+  j_curve_trough_value: number | null
+
+  quartile_estimate: string
+  vintage_context: string
+
+  notes: string[]
+}
+
+
+// ---------------------------------------------------------------------------
+// SAFE Conversion Modeling (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface SAFETerms {
+  investor_name: string
+  safe_amount: number                    // USD millions
+  valuation_cap: number | null           // USD millions, null = uncapped
+  discount_rate: number                  // 0.20 = 20%
+  has_mfn: boolean
+  is_post_money: boolean
+}
+
+export interface SAFEConversionInput {
+  company_name: string
+  safe_stack: SAFETerms[]
+  priced_round_pre_money: number         // USD millions
+  priced_round_amount: number            // USD millions
+  pre_safe_shares_outstanding: number
+  option_pool_pct: number                // 0.10 = 10%
+}
+
+export interface SAFEConversionResult {
+  investor_name: string
+  safe_amount: number
+  conversion_price: number
+  shares_issued: number
+  ownership_pct: number
+  effective_valuation: number
+  discount_applied: string
+  mfn_adjusted: boolean
+}
+
+export interface SAFEConversionOutput {
+  company_name: string
+  priced_round_pre_money: number
+  priced_round_amount: number
+  priced_round_price_per_share: number
+
+  conversions: SAFEConversionResult[]
+
+  // Cap table after conversion
+  founder_shares: number
+  founder_ownership_pct: number
+  option_pool_shares: number
+  option_pool_pct: number
+  safe_shares_total: number
+  safe_ownership_total_pct: number
+  new_investor_shares: number
+  new_investor_ownership_pct: number
+  total_shares: number
+  total_post_money: number
+
+  // Dilution summary
+  founder_dilution_from_safes: number
+  founder_dilution_total: number
+  effective_pre_money_to_founders: number
+
+  notes: string[]
+}
+
+
+// ---------------------------------------------------------------------------
+// Deal Comparison (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface DealComparisonEntry {
+  company_name: string
+  vertical: VCVertical
+  stage: VCStage
+  post_money: number
+  check_size: number
+  arr: number
+  revenue_growth_rate: number
+  gross_margin: number
+  burn_rate_monthly: number
+  runway_months: number | null
+
+  entry_ownership_pct: number
+  exit_ownership_pct: number
+  expected_moic: number
+  expected_irr: number
+  base_case_ev: number
+  fund_returner_threshold: number
+  recommendation: string
+
+  rank_moic: number | null
+  rank_irr: number | null
+  rank_ownership: number | null
+}
+
+export interface DealComparisonOutput {
+  deals: DealComparisonEntry[]
+  best_risk_adjusted: string | null
+  best_ownership: string | null
+  best_fund_fit: string | null
+  comparison_notes: string[]
+}
+
+
+// ---------------------------------------------------------------------------
+// VC AI Narrative (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface VCNarrativeResponse {
+  investment_thesis: string | null
+  bear_narrative: string | null
+  base_narrative: string | null
+  bull_narrative: string | null
+  key_risks: string[]
+  key_mitigants: string[]
+  verdict: string | null
+  ai_available: boolean
+  cached: boolean
+}

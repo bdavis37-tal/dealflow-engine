@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ..engine.models import DealInput, DealOutput
 from ..engine.startup_models import StartupInput, StartupValuationOutput
+from ..engine.vc_fund_models import VCDealInput, VCDealOutput, FundProfile
 from ..services.ai_service import (
     ask_claude,
     ask_claude_with_history,
@@ -25,6 +26,8 @@ from ..services.ai_service import (
     deal_parser_system_prompt,
     narrative_system_prompt,
     startup_narrative_system_prompt,
+    vc_deal_narrative_system_prompt,
+    vc_chat_system_prompt,
     chat_system_prompt,
     field_help_system_prompt,
     scenario_system_prompt,
@@ -34,6 +37,8 @@ from ..services.ai_service import (
     MAX_TOKENS_PARSE,
     MAX_TOKENS_SCENARIO,
     _cache_key,
+    _get_cached,
+    _set_cached,
 )
 
 logger = logging.getLogger(__name__)
@@ -624,3 +629,239 @@ Generate the verdict_narrative, scorecard_commentary (one entry per scorecard fl
             executive_summary=None,
             ai_available=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# VC Deal Narrative & Thesis (Phase 5)
+# ---------------------------------------------------------------------------
+
+class VCNarrativeRequest(BaseModel):
+    deal_input: VCDealInput
+    deal_output: VCDealOutput
+    fund_profile: FundProfile
+
+
+class VCNarrativeResponse(BaseModel):
+    investment_thesis: str | None
+    bear_narrative: str | None
+    base_narrative: str | None
+    bull_narrative: str | None
+    key_risks: list[str]
+    key_mitigants: list[str]
+    verdict: str | None
+    ai_available: bool
+    cached: bool = False
+
+
+@router.post("/vc-narrative", response_model=VCNarrativeResponse,
+             summary="Generate VC deal narrative with bear/base/bull thesis")
+async def generate_vc_narrative(request: VCNarrativeRequest) -> VCNarrativeResponse:
+    """
+    Generate an AI-powered investment thesis narrative for a VC deal.
+
+    Produces:
+    - Investment thesis (why this deal, why now, why this price)
+    - Bear/base/bull scenario narratives (specific stories, not generic)
+    - Key risks and mitigants
+    - IC verdict (go/no-go recommendation)
+
+    Requires the deterministic engine to have already run (deal_output provided).
+    """
+    if not is_ai_available():
+        return VCNarrativeResponse(
+            investment_thesis=None, bear_narrative=None, base_narrative=None,
+            bull_narrative=None, key_risks=[], key_mitigants=[],
+            verdict=None, ai_available=False,
+        )
+
+    inp = request.deal_input
+    out = request.deal_output
+    fund = request.fund_profile
+
+    # Cache key based on deal fingerprint
+    ck = _cache_key(
+        "vc_narrative",
+        inp.company_name,
+        str(inp.post_money_valuation),
+        str(inp.check_size),
+        str(out.expected_moic),
+        out.quick_screen.recommendation,
+    )
+    cached = _get_cached(ck)
+    if cached:
+        try:
+            data = json.loads(cached)
+            return VCNarrativeResponse(
+                investment_thesis=data.get("investment_thesis"),
+                bear_narrative=data.get("bear_narrative"),
+                base_narrative=data.get("base_narrative"),
+                bull_narrative=data.get("bull_narrative"),
+                key_risks=data.get("key_risks", []),
+                key_mitigants=data.get("key_mitigants", []),
+                verdict=data.get("verdict"),
+                ai_available=True,
+                cached=True,
+            )
+        except json.JSONDecodeError:
+            pass
+
+    # Build context for the AI
+    context = {
+        "company": inp.company_name,
+        "vertical": inp.vertical.value,
+        "stage": inp.stage.value,
+        "post_money_m": inp.post_money_valuation,
+        "check_size_m": inp.check_size,
+        "arr_m": inp.arr,
+        "revenue_growth": f"{inp.revenue_growth_rate:.0%}",
+        "gross_margin": f"{inp.gross_margin:.0%}",
+        "burn_monthly_m": inp.burn_rate_monthly,
+        "fund_size_m": fund.fund_size,
+        "entry_ownership": f"{out.ownership.entry_ownership_pct:.1%}",
+        "exit_ownership": f"{out.ownership.exit_ownership_pct:.1%}",
+        "total_dilution": f"{out.ownership.total_dilution_pct:.0%}",
+        "fund_returner_1x_exit_m": out.ownership.fund_returner_1x_exit,
+        "bear": {
+            "exit_ev_m": out.bear_scenario.exit_enterprise_value,
+            "moic": out.bear_scenario.gross_moic,
+            "irr": f"{out.bear_scenario.gross_irr:.0%}",
+            "fund_contribution_x": out.bear_scenario.fund_contribution_x,
+        },
+        "base": {
+            "exit_ev_m": out.base_scenario.exit_enterprise_value,
+            "moic": out.base_scenario.gross_moic,
+            "irr": f"{out.base_scenario.gross_irr:.0%}",
+            "fund_contribution_x": out.base_scenario.fund_contribution_x,
+        },
+        "bull": {
+            "exit_ev_m": out.bull_scenario.exit_enterprise_value,
+            "moic": out.bull_scenario.gross_moic,
+            "irr": f"{out.bull_scenario.gross_irr:.0%}",
+            "fund_contribution_x": out.bull_scenario.fund_contribution_x,
+        },
+        "expected_moic": out.expected_moic,
+        "expected_irr": f"{out.expected_irr:.0%}",
+        "recommendation": out.quick_screen.recommendation,
+        "recommendation_rationale": out.quick_screen.recommendation_rationale,
+        "ownership_adequacy": out.ownership_adequacy,
+        "flags": out.flags,
+        "warnings": out.warnings,
+        "power_law_note": out.power_law_note,
+    }
+
+    user_msg = f"""Generate a VC investment thesis and scenario narratives for this deal:
+
+{json.dumps(context, indent=2, default=str)}
+
+Generate the investment_thesis, bear_narrative, base_narrative, bull_narrative,
+key_risks (3 items), key_mitigants (3 items), and verdict."""
+
+    system = vc_deal_narrative_system_prompt()
+    response = ask_claude(
+        system_prompt=system,
+        user_message=user_msg,
+        max_tokens=MAX_TOKENS_NARRATIVE,
+    )
+
+    if not response:
+        return VCNarrativeResponse(
+            investment_thesis=None, bear_narrative=None, base_narrative=None,
+            bull_narrative=None, key_risks=[], key_mitigants=[],
+            verdict=None, ai_available=True,
+        )
+
+    try:
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("```")[1]
+            if clean.startswith("json"):
+                clean = clean[4:]
+        data = json.loads(clean)
+        _set_cached(ck, json.dumps(data))
+        return VCNarrativeResponse(
+            investment_thesis=data.get("investment_thesis"),
+            bear_narrative=data.get("bear_narrative"),
+            base_narrative=data.get("base_narrative"),
+            bull_narrative=data.get("bull_narrative"),
+            key_risks=data.get("key_risks", []),
+            key_mitigants=data.get("key_mitigants", []),
+            verdict=data.get("verdict"),
+            ai_available=True,
+        )
+    except (json.JSONDecodeError, KeyError) as e:
+        logger.warning("Failed to parse VC narrative response: %s", e)
+        return VCNarrativeResponse(
+            investment_thesis=response[:600] if response else None,
+            bear_narrative=None, base_narrative=None, bull_narrative=None,
+            key_risks=[], key_mitigants=[],
+            verdict=None, ai_available=True,
+        )
+
+
+# ---------------------------------------------------------------------------
+# VC Chat Co-Pilot (Phase 5)
+# ---------------------------------------------------------------------------
+
+class VCChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    deal_input: VCDealInput | None = None
+    deal_output: VCDealOutput | None = None
+    fund_profile: FundProfile | None = None
+
+
+@router.post("/vc-chat", summary="VC deal co-pilot chat (SSE streaming)")
+async def vc_chat(request: VCChatRequest):
+    """
+    Streaming VC co-pilot chat. Provides deal-aware advisory responses
+    in the context of a specific VC deal evaluation.
+
+    Uses SSE (Server-Sent Events) streaming.
+    """
+    if not is_ai_available():
+        async def unavailable():
+            yield "data: [AI_UNAVAILABLE]\n\n"
+        return StreamingResponse(content=unavailable(), media_type="text/event-stream")
+
+    # Build deal context
+    deal_context: dict[str, Any] = {}
+    if request.deal_input and request.deal_output:
+        inp = request.deal_input
+        out = request.deal_output
+        deal_context = {
+            "company": inp.company_name,
+            "vertical": inp.vertical.value,
+            "stage": inp.stage.value,
+            "post_money_m": inp.post_money_valuation,
+            "check_size_m": inp.check_size,
+            "arr_m": inp.arr,
+            "revenue_growth": f"{inp.revenue_growth_rate:.0%}",
+            "entry_ownership": f"{out.ownership.entry_ownership_pct:.1%}",
+            "exit_ownership": f"{out.ownership.exit_ownership_pct:.1%}",
+            "expected_moic": f"{out.expected_moic:.1f}x",
+            "recommendation": out.quick_screen.recommendation,
+            "fund_size_m": request.fund_profile.fund_size if request.fund_profile else "unknown",
+            "flags": out.flags,
+            "scenarios": {
+                "bear": f"{out.bear_scenario.gross_moic:.1f}x MOIC",
+                "base": f"{out.base_scenario.gross_moic:.1f}x MOIC",
+                "bull": f"{out.bull_scenario.gross_moic:.1f}x MOIC",
+            },
+        }
+
+    system = vc_chat_system_prompt(deal_context)
+    messages = [{"role": m.role, "content": m.content} for m in request.messages[-20:]]
+
+    async def generate():
+        try:
+            async for chunk in stream_claude(system, messages, MAX_TOKENS_CHAT):
+                yield f"data: {json.dumps(chunk)}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logger.warning("VC chat stream error: %s", e)
+            yield "data: [STREAM_ERROR]\n\n"
+
+    return StreamingResponse(
+        content=generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

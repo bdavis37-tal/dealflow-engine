@@ -13,15 +13,18 @@ import os
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from ..engine import round_financial_output
 from ..engine.vc_fund_models import (
     AntiDilutionInput,
     BridgeRoundInput,
     FundProfile,
+    FundIRRInput,
+    GPCarryInput,
     PortfolioInput,
     QSBSInput,
+    SAFEConversionInput,
     VCDealInput,
     VCDealOutput,
     VCVertical,
@@ -33,6 +36,10 @@ from ..engine.vc_return_engine import (
     run_qsbs_analysis,
     run_anti_dilution,
     run_bridge_analysis,
+    run_gp_carry_analysis,
+    run_fund_irr_analysis,
+    run_safe_conversion,
+    run_deal_comparison,
     compute_waterfall,
     compute_pro_rata,
 )
@@ -355,3 +362,95 @@ async def list_vc_stages() -> list[dict]:
 @router.get("/health", summary="VC engine health check")
 async def vc_health() -> dict:
     return {"status": "healthy", "service": "vc-fund-engine"}
+
+
+# ---------------------------------------------------------------------------
+# GP Carry Economics
+# ---------------------------------------------------------------------------
+
+@router.post("/gp-carry", summary="Model GP carry economics through the fund waterfall")
+async def analyze_gp_carry(inp: GPCarryInput):
+    """
+    Compute GP carry economics including:
+    - Full waterfall (return of capital → hurdle → catch-up → carry split)
+    - Per-GP compensation breakdown
+    - Clawback exposure (deal-by-deal vs. whole-fund)
+    - LP net returns after carry
+    """
+    try:
+        result = run_gp_carry_analysis(inp)
+        return JSONResponse(content=round_financial_output(result))
+    except Exception:
+        logger.exception("GP carry analysis failed")
+        raise HTTPException(status_code=500, detail="GP carry analysis failed.")
+
+
+# ---------------------------------------------------------------------------
+# Fund-Level IRR & J-Curve
+# ---------------------------------------------------------------------------
+
+@router.post("/fund-irr", summary="Compute fund-level IRR and J-curve")
+async def analyze_fund_irr(inp: FundIRRInput):
+    """
+    Compute fund-level performance metrics:
+    - Gross and net IRR (Newton-Raphson on cashflows)
+    - J-curve visualization data
+    - TVPI/DPI/RVPI
+    - Vintage quartile estimate
+    """
+    try:
+        result = run_fund_irr_analysis(inp)
+        return JSONResponse(content=round_financial_output(result))
+    except Exception:
+        logger.exception("Fund IRR analysis failed")
+        raise HTTPException(status_code=500, detail="Fund IRR analysis failed.")
+
+
+# ---------------------------------------------------------------------------
+# SAFE Conversion Modeling
+# ---------------------------------------------------------------------------
+
+@router.post("/safe-conversion", summary="Model SAFE stack conversion at a priced round")
+async def analyze_safe_conversion(inp: SAFEConversionInput):
+    """
+    Model a stack of SAFEs converting at a priced equity round:
+    - Per-SAFE conversion price and shares
+    - Cap vs. discount determination
+    - MFN clause application
+    - Full post-conversion cap table
+    - Founder dilution breakdown
+    """
+    try:
+        result = run_safe_conversion(inp)
+        return JSONResponse(content=round_financial_output(result))
+    except Exception:
+        logger.exception("SAFE conversion analysis failed")
+        raise HTTPException(status_code=500, detail="SAFE conversion analysis failed.")
+
+
+# ---------------------------------------------------------------------------
+# Deal Comparison
+# ---------------------------------------------------------------------------
+
+class DealComparisonRequest(BaseModel):
+    """Multiple deals for side-by-side comparison."""
+    deals: list[DealEvalRequest]
+
+
+@router.post("/compare", summary="Compare multiple deals side-by-side")
+async def compare_deals(request: DealComparisonRequest):
+    """
+    Evaluate multiple deals and produce a ranked comparison for IC discussion.
+    Returns per-deal metrics with rankings on MOIC, IRR, and ownership.
+    """
+    try:
+        deal_fund_pairs = []
+        for d in request.deals:
+            fund = d.fund
+            deal = VCDealInput(**d.model_dump(exclude={"fund"}))
+            deal_fund_pairs.append((deal, fund))
+        result = run_deal_comparison(deal_fund_pairs)
+        return JSONResponse(content=round_financial_output(result))
+    except Exception:
+        logger.exception("Deal comparison failed")
+        raise HTTPException(status_code=500, detail="Deal comparison failed.")

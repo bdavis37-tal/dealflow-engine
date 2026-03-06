@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from ..engine import round_financial_output
 from ..engine.startup_models import StartupInput, StartupValuationOutput, StartupVertical, StartupStage
-from ..engine.startup_engine import run_startup_valuation
+from ..engine.startup_engine import run_startup_valuation, run_startup_sensitivity
 
 logger = logging.getLogger(__name__)
 
@@ -115,3 +115,25 @@ async def list_stages() -> list[dict]:
         {"value": "seed", "label": "Seed", "description": "Early traction; priced round or SAFE up to ~$4M"},
         {"value": "series_a", "label": "Series A", "description": "Scaling with proven product-market fit; $2M+ ARR typical"},
     ]
+
+
+@router.post("/sensitivity", summary="Run valuation sensitivity analysis")
+async def startup_sensitivity(inp: StartupInput) -> dict:
+    """
+    Show how key inputs move the valuation needle.
+
+    Runs the engine multiple times with perturbed inputs to build a
+    tornado chart of sensitivities. Helps founders understand which
+    levers matter most for their valuation.
+
+    Returns:
+    - base_valuation: the unmodified blended valuation
+    - sensitivities: ranked list of input impacts (most impactful first)
+    - most_impactful: the single input with the largest swing
+    """
+    try:
+        result = run_startup_sensitivity(inp)
+        return JSONResponse(content=result)
+    except Exception:
+        logger.exception("Startup sensitivity analysis failed")
+        raise HTTPException(status_code=500, detail="Sensitivity analysis failed.")
