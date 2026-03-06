@@ -662,3 +662,247 @@ class LPReportOutput(BaseModel):
 
     # Generated narrative
     gp_commentary: str                   # Auto-generated performance commentary
+
+
+# ---------------------------------------------------------------------------
+# GP Carry Economics (Phase 5 — fund-level GP compensation modeling)
+# ---------------------------------------------------------------------------
+
+class CarryStructure(str, Enum):
+    """Common carry distribution structures in VC fund LPAs."""
+    DEAL_BY_DEAL = "deal_by_deal"              # Carry computed per deal (American waterfall)
+    WHOLE_FUND = "whole_fund"                    # Carry computed on aggregate fund returns (European waterfall)
+
+
+class GPCarryInput(BaseModel):
+    """Inputs for GP carry economics modeling.
+
+    Models the GP's economic interest in the fund, including carry waterfall,
+    catch-up provisions, and clawback exposure. This answers the question
+    every emerging manager asks: "What do I actually take home?"
+    """
+    fund_profile: FundProfile
+    carry_structure: CarryStructure = CarryStructure.WHOLE_FUND
+    gp_commit_pct: float = Field(default=0.02, ge=0.0, le=0.10,
+                                  description="GP commitment as % of fund size (0.02 = 2%)")
+    catch_up_pct: float = Field(default=1.00, ge=0.0, le=1.0,
+                                 description="GP catch-up rate after hurdle (1.0 = 100% catch-up)")
+    catch_up_target: float = Field(default=0.20, ge=0.0, le=0.50,
+                                    description="GP share of profits at end of catch-up (equals carry %)")
+    clawback_escrow_pct: float = Field(default=0.30, ge=0.0, le=1.0,
+                                        description="% of carry held in escrow for clawback (0.30 = 30%)")
+    num_gps: int = Field(default=2, ge=1, le=10,
+                          description="Number of GPs splitting carry")
+    gp_salary_annual: float = Field(default=0.0, ge=0.0,
+                                     description="Annual GP salary from mgmt fees, USD millions")
+
+    # Portfolio outcome assumptions for modeling
+    total_distributions: float = Field(gt=0, description="Total distributions to LPs + GP, USD millions")
+    fund_life_years: int = Field(default=10, ge=5, le=15)
+
+
+class GPCarryOutput(BaseModel):
+    """GP carry economics breakdown — what the GP actually earns."""
+    fund_size: float
+    total_distributions: float
+    gross_multiple: float                        # total_distributions / fund_size
+
+    # Waterfall steps
+    return_of_capital: float                     # Step 1: LPs get back their capital
+    preferred_return_amount: float               # Step 2: LPs get hurdle rate compounded
+    catch_up_amount: float                       # Step 3: GP catch-up to target carry split
+    remaining_after_catch_up: float              # Step 4: what's left to split
+    gp_carry_from_remaining: float               # GP share of remaining profits
+    total_gp_carry: float                        # catch_up + carry on remaining
+
+    # GP economics
+    gp_commit_amount: float                      # GP's own capital in the fund
+    gp_return_of_commit: float                   # GP gets back their commitment
+    gp_carry_per_gp: float                       # Per-GP carry (total / num_gps)
+    gp_total_comp_per_gp: float                  # carry + return of commit + salary
+    carry_as_multiple_of_salary: float           # How carry compares to salary
+
+    # Management fee economics
+    total_management_fees: float
+    management_fee_per_gp_annual: float
+
+    # Clawback
+    clawback_escrow: float                       # Amount held in escrow
+    clawback_exposure: float                     # Max potential clawback
+
+    # LP economics (for comparison)
+    lp_total_distributions: float
+    lp_net_multiple: float                       # After carry and fees
+    lp_net_irr: Optional[float]
+
+    # Summary
+    carry_structure: CarryStructure
+    notes: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Fund-Level IRR / J-Curve (Phase 5)
+# ---------------------------------------------------------------------------
+
+class FundCashflow(BaseModel):
+    """A single cashflow event in the fund's life."""
+    year: float = Field(description="Year relative to fund inception (0.0 = closing)")
+    amount: float = Field(description="Positive = distribution, negative = capital call")
+    description: str = Field(default="")
+
+
+class FundIRRInput(BaseModel):
+    """Inputs for fund-level IRR and J-curve computation."""
+    fund_profile: FundProfile
+    cashflows: list[FundCashflow] = Field(default_factory=list,
+                                           description="Actual or projected cashflows")
+    positions: list[PortfolioPosition] = Field(default_factory=list,
+                                                description="Current portfolio for NAV estimation")
+    current_nav: Optional[float] = Field(default=None,
+                                          description="Override: current fund NAV in USD millions")
+    fund_age_years: float = Field(default=3.0, ge=0.0,
+                                   description="Years since first close")
+
+
+class FundIRROutput(BaseModel):
+    """Fund-level IRR and J-curve analysis."""
+    fund_size: float
+    fund_age_years: float
+
+    # Performance
+    total_called: float
+    total_distributed: float
+    current_nav: float
+    gross_tvpi: float
+    net_tvpi: float
+    gross_irr: Optional[float]
+    net_irr: Optional[float]
+    dpi: float
+    rvpi: float
+
+    # J-curve
+    j_curve_points: list[dict]                   # [{year, cumulative_cf, nav, tvpi}]
+    j_curve_trough_year: Optional[float]         # Year of lowest cumulative CF
+    j_curve_trough_value: Optional[float]        # Lowest cumulative CF as % of fund
+
+    # Benchmarks
+    quartile_estimate: str                       # "top quartile", "second quartile", etc.
+    vintage_context: str                         # Plain English comparison
+
+    notes: list[str]
+
+
+# ---------------------------------------------------------------------------
+# SAFE Conversion Scenario Modeling (Phase 5)
+# ---------------------------------------------------------------------------
+
+class SAFETerms(BaseModel):
+    """Individual SAFE instrument terms."""
+    investor_name: str = Field(default="Investor")
+    safe_amount: float = Field(gt=0, description="SAFE investment amount, USD millions")
+    valuation_cap: Optional[float] = Field(default=None, ge=0,
+                                            description="Valuation cap, USD millions. None = uncapped")
+    discount_rate: float = Field(default=0.0, ge=0.0, le=0.50,
+                                  description="Discount rate (0.20 = 20%)")
+    has_mfn: bool = Field(default=False,
+                           description="Most Favored Nation clause — gets best terms of any later SAFE")
+    is_post_money: bool = Field(default=True,
+                                 description="Post-money SAFE (standard YC). False = pre-money SAFE")
+
+
+class SAFEConversionInput(BaseModel):
+    """Model a stack of SAFEs converting at a priced round."""
+    company_name: str
+    safe_stack: list[SAFETerms] = Field(min_length=1,
+                                         description="All outstanding SAFEs")
+    priced_round_pre_money: float = Field(gt=0,
+                                           description="Pre-money valuation at priced round, USD millions")
+    priced_round_amount: float = Field(gt=0,
+                                        description="New money in priced round, USD millions")
+    pre_safe_shares_outstanding: float = Field(default=10_000_000, gt=0,
+                                                description="Shares outstanding before any SAFEs (founder shares)")
+    option_pool_pct: float = Field(default=0.10, ge=0, le=0.30,
+                                    description="Option pool as % of post-money (0.10 = 10%)")
+
+
+class SAFEConversionResult(BaseModel):
+    """Conversion result for a single SAFE."""
+    investor_name: str
+    safe_amount: float
+    conversion_price: float                      # Price per share at conversion
+    shares_issued: float                         # Shares the SAFE converts into
+    ownership_pct: float                         # Post-conversion ownership
+    effective_valuation: float                   # Implied pre-money from SAFE holder's perspective
+    discount_applied: str                        # "cap", "discount", "cap (lower)", "discount (lower)"
+    mfn_adjusted: bool                           # Was MFN clause triggered
+
+
+class SAFEConversionOutput(BaseModel):
+    """Complete SAFE stack conversion analysis at a priced round."""
+    company_name: str
+    priced_round_pre_money: float
+    priced_round_amount: float
+    priced_round_price_per_share: float
+
+    # Conversion results per SAFE
+    conversions: list[SAFEConversionResult]
+
+    # Cap table after conversion
+    founder_shares: float
+    founder_ownership_pct: float
+    option_pool_shares: float
+    option_pool_pct: float
+    safe_shares_total: float
+    safe_ownership_total_pct: float
+    new_investor_shares: float
+    new_investor_ownership_pct: float
+    total_shares: float
+    total_post_money: float
+
+    # Dilution summary
+    founder_dilution_from_safes: float           # How much founders were diluted by SAFEs alone
+    founder_dilution_total: float                # Total dilution from SAFEs + new round + pool
+    effective_pre_money_to_founders: float        # What founders' shares are worth at conversion
+
+    notes: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Deal Comparison (Phase 5)
+# ---------------------------------------------------------------------------
+
+class DealComparisonEntry(BaseModel):
+    """Snapshot of a single deal for side-by-side comparison."""
+    company_name: str
+    vertical: VCVertical
+    stage: VCStage
+    post_money: float
+    check_size: float
+    arr: float
+    revenue_growth_rate: float
+    gross_margin: float
+    burn_rate_monthly: float
+    runway_months: Optional[float]
+
+    # Computed from engine
+    entry_ownership_pct: float
+    exit_ownership_pct: float
+    expected_moic: float
+    expected_irr: float
+    base_case_ev: float
+    fund_returner_threshold: float
+    recommendation: str                          # pass / look_deeper / strong_interest
+
+    # Relative rankings (filled in by comparison engine)
+    rank_moic: Optional[int] = None
+    rank_irr: Optional[int] = None
+    rank_ownership: Optional[int] = None
+
+
+class DealComparisonOutput(BaseModel):
+    """Side-by-side deal comparison for IC discussion."""
+    deals: list[DealComparisonEntry]
+    best_risk_adjusted: Optional[str]            # Company name with best expected value
+    best_ownership: Optional[str]                # Company with highest exit ownership
+    best_fund_fit: Optional[str]                 # Best fit for fund construction
+    comparison_notes: list[str]
