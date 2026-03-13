@@ -17,7 +17,7 @@ Dealflow Engine is a unified platform that covers the three core activities in p
 2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, ARR Multiple) for pre-seed through Series A, calibrated against Carta/PitchBook data across 13 verticals including Defense Tech / National Security. Features an AI-Native Valuation Modifier that applies a graduated, vertical-specific premium layer based on a 4-question AI characteristics assessment.
 3. **VC Fund-Seat Analysis** — Evaluate deals from the investor's chair: ownership math with full dilution stack, 3-scenario return modeling, waterfall analysis, pro-rata decisions, portfolio construction, QSBS eligibility, anti-dilution modeling, bridge round analysis, and auto-generated IC memo financials.
 
-Each module runs a deterministic computation engine underneath. An optional Claude AI co-pilot augments the output with plain-English narratives, scenario explanations, and conversational deal entry — but the computed numbers are always the source of truth.
+Each module runs a deterministic computation engine underneath. An optional Claude AI co-pilot augments the output with plain-English narratives, bear/base/bull investment theses, scenario explanations, and conversational deal entry — but the computed numbers are always the source of truth.
 
 ## Who It's For
 
@@ -184,6 +184,8 @@ Each vertical has its own benchmark dataset (P25/P50/P75 valuations, ARR multipl
 
 Output includes a blended pre-money valuation with confidence range, dilution modeling through future rounds (with step-up floor ensuring each projected round pre-money exceeds current post-money), SAFE conversion mechanics, investor scorecard signals, and a market-calibrated verdict (strong / fair / stretched / at risk).
 
+**Sensitivity analysis** — Tornado chart showing how key inputs (ARR, MoM growth, NRR, TAM, raise amount, repeat founder status) move the valuation needle. Runs the engine multiple times with perturbed inputs and ranks by impact, identifying the single most impactful lever for each startup.
+
 **AI-Native Valuation Modifier** — An optional graduated premium layer on top of the blended valuation. A 4-question AI Characteristics Assessment produces a score (0.0–1.0), which drives a vertical-specific premium:
 
 ```
@@ -201,6 +203,10 @@ Evaluates any deal from the investor's perspective, anchored to fund economics:
 - **Waterfall analysis** — Liquidation preference distribution through a multi-class cap table
 - **Pro-rata decision modeling** — Exercise vs. pass expected value comparison
 - **Portfolio construction** — TVPI/DPI/RVPI, concentration analysis, reserve adequacy
+- **GP carry economics** — Full fund waterfall (return of capital → hurdle → catch-up → carry split), per-GP compensation, clawback exposure, European vs. American waterfall
+- **Fund-level IRR & J-curve** — Newton-Raphson solver on irregular cashflows, J-curve visualization data, vintage quartile estimation, gross and net IRR
+- **SAFE conversion modeling** — Multi-SAFE stack conversion at a priced round with cap vs. discount determination, MFN clause application, post-money vs. pre-money mechanics, and full post-conversion cap table
+- **Deal comparison** — Side-by-side evaluation of multiple deals with rankings on MOIC, IRR, ownership, and fund returner metrics
 - **QSBS eligibility** — IRC §1202 tax benefit estimation, including 2025 $15M cap changes
 - **Anti-dilution modeling** — Full ratchet vs. broad-based weighted average in down rounds
 - **Bridge round analysis** — Dilution impact and participation recommendation
@@ -220,6 +226,7 @@ GET  /api/v1/health           — Health check
 
 # Startup Valuation
 POST /api/startup/value       — Run startup valuation engine
+POST /api/startup/sensitivity — Sensitivity analysis (tornado chart)
 GET  /api/startup/benchmarks  — Benchmark data by vertical + stage
 GET  /api/startup/verticals   — List startup verticals
 GET  /api/startup/stages      — List funding stages
@@ -229,18 +236,27 @@ POST /api/vc/evaluate         — Full deal evaluation from fund seat
 POST /api/vc/portfolio        — Portfolio construction analysis
 POST /api/vc/waterfall        — Liquidation preference waterfall
 POST /api/vc/pro-rata         — Pro-rata exercise analysis
+POST /api/vc/compare          — Side-by-side deal comparison
+POST /api/vc/gp-carry         — GP carry economics & fund waterfall
+POST /api/vc/fund-irr         — Fund-level IRR & J-curve
+POST /api/vc/safe-conversion  — SAFE stack conversion modeling
 POST /api/vc/qsbs             — QSBS eligibility check (IRC §1202)
 POST /api/vc/anti-dilution    — Down-round anti-dilution modeling
 POST /api/vc/bridge           — Bridge/extension round analysis
 GET  /api/vc/fund/defaults    — Fund profile defaults by size
 GET  /api/vc/benchmarks       — VC benchmarks by vertical + stage
+GET  /api/vc/verticals        — List VC-supported verticals
+GET  /api/vc/stages           — List investment stages
 GET  /api/vc/health           — VC engine health check
 
 # AI Co-pilot
 GET  /api/ai/status           — AI availability check
 POST /api/ai/parse-deal       — Natural language deal parsing
-POST /api/ai/generate-narrative — Deal narrative generation
-POST /api/ai/chat             — Streaming chat (SSE)
+POST /api/ai/generate-narrative — M&A deal narrative generation
+POST /api/ai/startup-narrative — Startup valuation narrative
+POST /api/ai/vc-narrative     — VC bear/base/bull investment thesis
+POST /api/ai/chat             — M&A streaming chat (SSE)
+POST /api/ai/vc-chat          — VC deal co-pilot chat (SSE)
 POST /api/ai/scenario-narrative — Scenario explanation (SSE)
 POST /api/ai/explain-field    — Field-level help
 
@@ -285,6 +301,16 @@ This is a build-in-public project. Contributions are welcome.
 
 ## Roadmap
 
+- [x] GP carry economics (European/American waterfall, catch-up, clawback)
+- [x] Fund-level IRR & J-curve (Newton-Raphson solver)
+- [x] SAFE conversion modeling (multi-SAFE stack, cap/discount/MFN)
+- [x] Deal comparison engine (multi-deal side-by-side ranking)
+- [x] Startup sensitivity analysis (tornado chart)
+- [x] VC AI co-pilot (bear/base/bull thesis narrative, streaming chat)
+- [ ] LP reporting dashboard (quarterly statements, DPI/TVPI time series)
+- [ ] Secondary market transaction modeling
+- [ ] Co-investment / SPV structuring
+- [ ] Fund-of-funds / LP portfolio construction
 - [ ] Live market data integration (pull public company financials automatically)
 - [ ] Multi-target (roll-up) M&A modeling
 - [ ] Cross-border / multi-currency deals
@@ -294,8 +320,6 @@ This is a build-in-public project. Contributions are welcome.
 - [ ] PDF report generation (board-ready briefing, IC memos)
 - [ ] LBO modeling mode (pure PE returns analysis)
 - [ ] Comparable transaction database
-- [ ] Secondary market transaction modeling
-- [ ] Fund-of-funds / LP portfolio construction
 - [ ] Convertible notes and preferred equity in M&A structures
 
 ## License

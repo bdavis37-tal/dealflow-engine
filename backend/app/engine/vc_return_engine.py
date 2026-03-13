@@ -28,8 +28,13 @@ from typing import Optional
 from .vc_fund_models import (
     AntiDilutionInput, AntiDilutionOutput, AntiDilutionType,
     BridgeRoundInput, BridgeRoundOutput,
+    CarryStructure,
+    DealComparisonEntry, DealComparisonOutput,
     DilutionAssumptions,
+    FundCashflow,
+    FundIRRInput, FundIRROutput,
     FundProfile,
+    GPCarryInput, GPCarryOutput,
     ICMemoFinancials,
     LPReportInput, LPReportOutput,
     OwnershipMath,
@@ -38,9 +43,10 @@ from .vc_fund_models import (
     ProRataAnalysis,
     QSBSInput, QSBSOutput,
     QuickScreenResult,
+    SAFEConversionInput, SAFEConversionOutput, SAFEConversionResult,
     VCDealInput, VCDealOutput,
     VCScenario,
-    VCStage, VCVertical,
+    VCStage,
     WaterfallDistribution,
 )
 
@@ -1177,4 +1183,605 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
         flags=flags,
         warnings=warnings,
         computation_notes=[],
+    )
+
+
+# ---------------------------------------------------------------------------
+# 11. GP Carry Economics
+# ---------------------------------------------------------------------------
+
+def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
+    """
+    Model GP carry economics through a standard VC fund waterfall.
+
+    Whole-fund (European) waterfall:
+      1. Return of capital — LPs get back 1x committed capital
+      2. Preferred return — LPs earn hurdle rate (compounded annually) on called capital
+      3. GP catch-up — GP receives catch_up_pct of distributions until GP has
+         received catch_up_target share of total profits
+      4. Carried interest — remaining profits split carry_pct to GP, rest to LPs
+
+    Deal-by-deal (American) waterfall:
+      Same structure but applied per realized investment. More GP-friendly
+      (carry paid earlier) but creates clawback exposure.
+    """
+    fund = inp.fund_profile
+    total_dist = inp.total_distributions
+
+    # Step 1: Return of capital
+    return_of_capital = min(total_dist, fund.fund_size)
+    remaining = max(0.0, total_dist - return_of_capital)
+
+    # Step 2: Preferred return (hurdle compounded annually over fund life)
+    # Hurdle is computed on committed capital, compounded over the fund life
+    hurdle_compounded = fund.fund_size * ((1 + fund.hurdle_rate) ** inp.fund_life_years - 1)
+    preferred_return = min(remaining, hurdle_compounded)
+    remaining -= preferred_return
+
+    # Step 3: GP catch-up
+    # GP receives catch_up_pct of distributions until GP has received
+    # catch_up_target of total profits (profits = total_dist - fund_size)
+    total_profit = max(0.0, total_dist - fund.fund_size)
+    gp_target_share_of_profit = total_profit * inp.catch_up_target
+
+    # Catch-up = GP gets catch_up_pct of each dollar until GP reaches target
+    if inp.catch_up_pct > 0 and remaining > 0:
+        # GP needs to "catch up" to their target share. They've received 0 so far.
+        # Each dollar in catch-up gives GP catch_up_pct.
+        # GP needs: gp_target_share_of_profit from catch-up alone (approx)
+        # Max catch-up = target_share / catch_up_pct (dollars that flow through catch-up)
+        catch_up_needed = gp_target_share_of_profit / inp.catch_up_pct if inp.catch_up_pct > 0 else 0.0
+        catch_up_pool = min(remaining, catch_up_needed)
+        catch_up_to_gp = catch_up_pool * inp.catch_up_pct
+        remaining -= catch_up_pool
+    else:
+        catch_up_to_gp = 0.0
+
+    # Step 4: Remaining split at carry rate
+    gp_carry_from_remaining = remaining * fund.carry_pct
+
+    total_gp_carry = catch_up_to_gp + gp_carry_from_remaining
+
+    # GP commitment economics
+    gp_commit = fund.fund_size * inp.gp_commit_pct
+    gp_return_of_commit = min(gp_commit, return_of_capital * inp.gp_commit_pct)
+
+    # Per-GP
+    carry_per_gp = total_gp_carry / inp.num_gps if inp.num_gps > 0 else total_gp_carry
+    total_salary = inp.gp_salary_annual * inp.fund_life_years
+    salary_per_gp = total_salary / inp.num_gps if inp.num_gps > 0 else total_salary
+    total_comp_per_gp = carry_per_gp + gp_return_of_commit / max(inp.num_gps, 1) + salary_per_gp
+
+    carry_vs_salary = (carry_per_gp / salary_per_gp) if salary_per_gp > 0 else float("inf")
+
+    # Management fees
+    total_mgmt_fees = fund.total_management_fees
+    mgmt_per_gp_annual = (
+        (total_mgmt_fees / fund.management_fee_years) / inp.num_gps
+        if inp.num_gps > 0 and fund.management_fee_years > 0
+        else 0.0
+    )
+
+    # Clawback exposure
+    clawback_escrow = total_gp_carry * inp.clawback_escrow_pct
+    # Max clawback = total carry paid (in deal-by-deal, GP may have been overpaid)
+    clawback_exposure = total_gp_carry if inp.carry_structure == CarryStructure.DEAL_BY_DEAL else 0.0
+
+    # LP economics
+    lp_total = return_of_capital + preferred_return + (remaining - gp_carry_from_remaining) + \
+               (catch_up_pool - catch_up_to_gp if inp.catch_up_pct > 0 and total_dist > fund.fund_size else 0.0)
+    lp_paid_in = fund.fund_size * (1 - inp.gp_commit_pct)
+    lp_net_mult = lp_total / lp_paid_in if lp_paid_in > 0 else 0.0
+    lp_net_irr_val = _irr(lp_paid_in, lp_total, inp.fund_life_years) if lp_paid_in > 0 else None
+
+    gross_mult = total_dist / fund.fund_size if fund.fund_size > 0 else 0.0
+
+    notes = []
+    if inp.carry_structure == CarryStructure.DEAL_BY_DEAL:
+        notes.append(
+            "Deal-by-deal (American) waterfall: carry is paid on each realized exit. "
+            "This means the GP receives carry earlier but faces clawback risk if later "
+            "exits underperform."
+        )
+    else:
+        notes.append(
+            "Whole-fund (European) waterfall: carry is only paid after all capital is "
+            "returned to LPs plus the hurdle rate. More LP-friendly; no clawback risk."
+        )
+
+    if gross_mult < 1.0:
+        notes.append(f"Fund is returning {gross_mult:.2f}x — below cost basis. No carry is earned.")
+    elif total_gp_carry > 0:
+        notes.append(
+            f"GP earns ${total_gp_carry:.1f}M in carry on ${total_profit:.1f}M of profits. "
+            f"Effective GP take: {total_gp_carry / total_profit:.1%} of profits."
+        )
+
+    return GPCarryOutput(
+        fund_size=fund.fund_size,
+        total_distributions=total_dist,
+        gross_multiple=gross_mult,
+        return_of_capital=return_of_capital,
+        preferred_return_amount=preferred_return,
+        catch_up_amount=catch_up_to_gp,
+        remaining_after_catch_up=remaining,
+        gp_carry_from_remaining=gp_carry_from_remaining,
+        total_gp_carry=total_gp_carry,
+        gp_commit_amount=gp_commit,
+        gp_return_of_commit=gp_return_of_commit,
+        gp_carry_per_gp=carry_per_gp,
+        gp_total_comp_per_gp=total_comp_per_gp,
+        carry_as_multiple_of_salary=carry_vs_salary,
+        total_management_fees=total_mgmt_fees,
+        management_fee_per_gp_annual=mgmt_per_gp_annual,
+        clawback_escrow=clawback_escrow,
+        clawback_exposure=clawback_exposure,
+        lp_total_distributions=lp_total,
+        lp_net_multiple=lp_net_mult,
+        lp_net_irr=lp_net_irr_val,
+        carry_structure=inp.carry_structure,
+        notes=notes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 12. Fund-Level IRR & J-Curve
+# ---------------------------------------------------------------------------
+
+def run_fund_irr_analysis(inp: FundIRRInput) -> FundIRROutput:
+    """
+    Compute fund-level IRR and model the J-curve.
+
+    The J-curve reflects the typical VC fund lifecycle:
+    - Years 0-3: capital calls exceed distributions (negative cumulative CF)
+    - Years 3-5: first exits begin, curve flattens
+    - Years 5-10: distributions accelerate, curve rises above zero
+
+    If no explicit cashflows are provided, we synthesize a typical deployment
+    schedule based on the fund profile and current positions.
+    """
+    fund = inp.fund_profile
+
+    # Build cashflow timeline
+    if inp.cashflows:
+        cfs = sorted(inp.cashflows, key=lambda c: c.year)
+    else:
+        # Synthesize from positions — capital calls are negative, distributions positive
+        cfs = []
+        for pos in inp.positions:
+            # Initial investment as capital call
+            call_year = max(0.0, pos.vintage_year - fund.vintage_year)
+            cfs.append(FundCashflow(
+                year=call_year,
+                amount=-pos.check_size,
+                description=f"Initial: {pos.company_name}",
+            ))
+            if pos.reserve_deployed > 0:
+                cfs.append(FundCashflow(
+                    year=call_year + 1.5,
+                    amount=-pos.reserve_deployed,
+                    description=f"Follow-on: {pos.company_name}",
+                ))
+            if pos.realized_proceeds > 0:
+                cfs.append(FundCashflow(
+                    year=call_year + 5.0,
+                    amount=pos.realized_proceeds,
+                    description=f"Exit: {pos.company_name}",
+                ))
+
+        # Add management fee calls (annual)
+        annual_fee = fund.fund_size * fund.management_fee_pct
+        for yr in range(fund.management_fee_years):
+            cfs.append(FundCashflow(
+                year=float(yr),
+                amount=-annual_fee,
+                description=f"Management fee Y{yr+1}",
+            ))
+
+        cfs = sorted(cfs, key=lambda c: c.year)
+
+    # Compute aggregates
+    total_called = sum(-c.amount for c in cfs if c.amount < 0)
+    total_distributed = sum(c.amount for c in cfs if c.amount > 0)
+
+    # Current NAV
+    if inp.current_nav is not None:
+        nav = inp.current_nav
+    else:
+        nav = sum(
+            (p.fair_value if p.fair_value is not None else p.cost_basis)
+            for p in inp.positions
+            if p.status in ("active", "partially_exited")
+        )
+
+    # TVPI / DPI / RVPI
+    dpi = total_distributed / total_called if total_called > 0 else 0.0
+    rvpi = nav / total_called if total_called > 0 else 0.0
+    gross_tvpi = dpi + rvpi
+
+    # Net TVPI (after carry on gains)
+    total_value = total_distributed + nav
+    gain = max(0.0, total_value - total_called)
+    carry_on_gain = gain * fund.carry_pct
+    net_tvpi = (total_value - carry_on_gain) / total_called if total_called > 0 else 0.0
+
+    # IRR via Newton's method on cashflows + terminal NAV
+    def _compute_irr_from_cfs(cashflows: list[FundCashflow], terminal_nav: float,
+                               terminal_year: float) -> Optional[float]:
+        """Newton-Raphson IRR solver for irregular cashflows."""
+        all_cfs = [(c.year, c.amount) for c in cashflows]
+        all_cfs.append((terminal_year, terminal_nav))
+
+        # Initial guess
+        r = 0.10
+        for _ in range(200):
+            npv_val = sum(cf / (1 + r) ** t if (1 + r) > 0 else 0.0 for t, cf in all_cfs)
+            dnpv = sum(-t * cf / (1 + r) ** (t + 1) if (1 + r) > 0 else 0.0 for t, cf in all_cfs)
+            if abs(dnpv) < 1e-12:
+                break
+            r_new = r - npv_val / dnpv
+            # Clamp to reasonable range
+            r_new = max(-0.99, min(10.0, r_new))
+            if abs(r_new - r) < 1e-8:
+                r = r_new
+                break
+            r = r_new
+
+        # Validate
+        if math.isnan(r) or math.isinf(r) or r < -0.99 or r > 10.0:
+            return None
+        return r
+
+    gross_irr = _compute_irr_from_cfs(cfs, nav, inp.fund_age_years) if cfs else None
+    net_irr = _compute_irr_from_cfs(cfs, nav - carry_on_gain, inp.fund_age_years) if cfs else None
+
+    # J-curve construction
+    j_points = []
+    cumulative = 0.0
+    trough_year = None
+    trough_val = 0.0
+
+    # Build yearly snapshots
+    max_year = max((c.year for c in cfs), default=inp.fund_age_years)
+    for yr in range(int(max_year) + 1):
+        year_cfs = sum(c.amount for c in cfs if int(c.year) == yr)
+        cumulative += year_cfs
+        # Estimate NAV at this point (linear interpolation to current NAV)
+        if inp.fund_age_years > 0:
+            nav_at_yr = nav * min(1.0, yr / inp.fund_age_years)
+        else:
+            nav_at_yr = nav
+        tvpi_at_yr = (cumulative + nav_at_yr) / total_called if total_called > 0 else 0.0
+
+        j_points.append({
+            "year": yr,
+            "cumulative_cf": cumulative,
+            "nav_estimate": nav_at_yr,
+            "tvpi": tvpi_at_yr,
+        })
+
+        if cumulative < trough_val:
+            trough_val = cumulative
+            trough_year = float(yr)
+
+    # Quartile estimate based on TVPI and vintage age
+    # Cambridge Associates benchmarks (approximate)
+    if gross_tvpi >= 2.5:
+        quartile = "top quartile"
+    elif gross_tvpi >= 1.8:
+        quartile = "second quartile"
+    elif gross_tvpi >= 1.3:
+        quartile = "third quartile"
+    else:
+        quartile = "fourth quartile"
+
+    vintage_context = (
+        f"Fund {fund.fund_name} (vintage {fund.vintage_year}) is {inp.fund_age_years:.0f} years old. "
+        f"At {gross_tvpi:.2f}x gross TVPI, this places it in the {quartile} "
+        f"of comparable vintage funds."
+    )
+
+    notes = []
+    if dpi < 0.5 and inp.fund_age_years > 5:
+        notes.append(
+            f"DPI of {dpi:.2f}x at year {inp.fund_age_years:.0f} is below typical pace. "
+            "Consider accelerating exits or secondaries."
+        )
+    if not cfs:
+        notes.append("No cashflows provided — using position data to estimate fund performance.")
+
+    return FundIRROutput(
+        fund_size=fund.fund_size,
+        fund_age_years=inp.fund_age_years,
+        total_called=total_called,
+        total_distributed=total_distributed,
+        current_nav=nav,
+        gross_tvpi=gross_tvpi,
+        net_tvpi=net_tvpi,
+        gross_irr=gross_irr,
+        net_irr=net_irr,
+        dpi=dpi,
+        rvpi=rvpi,
+        j_curve_points=j_points,
+        j_curve_trough_year=trough_year,
+        j_curve_trough_value=trough_val,
+        quartile_estimate=quartile,
+        vintage_context=vintage_context,
+        notes=notes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 13. SAFE Conversion Modeling
+# ---------------------------------------------------------------------------
+
+def run_safe_conversion(inp: SAFEConversionInput) -> SAFEConversionOutput:
+    """
+    Model a stack of SAFEs converting at a priced equity round.
+
+    Handles:
+    - Valuation cap conversion
+    - Discount rate conversion
+    - MFN (Most Favored Nation) clause
+    - Post-money vs pre-money SAFE mechanics
+    - Option pool shuffle
+
+    The conversion logic follows YC post-money SAFE conventions:
+    - Post-money SAFE: cap includes the SAFE itself in the post-money
+    - Pre-money SAFE: cap is on pre-money valuation (more founder-friendly)
+    """
+    safes = inp.safe_stack[:]
+    pre_money = inp.priced_round_pre_money
+    new_money = inp.priced_round_amount
+    post_money = pre_money + new_money
+
+    # Step 0: Handle MFN — any SAFE with MFN gets the best cap/discount from the stack
+    best_cap = None
+    best_discount = 0.0
+    for s in safes:
+        if s.valuation_cap is not None:
+            if best_cap is None or s.valuation_cap < best_cap:
+                best_cap = s.valuation_cap
+        if s.discount_rate > best_discount:
+            best_discount = s.discount_rate
+
+    for s in safes:
+        if s.has_mfn:
+            if best_cap is not None and (s.valuation_cap is None or best_cap < s.valuation_cap):
+                s.valuation_cap = best_cap
+            if best_discount > s.discount_rate:
+                s.discount_rate = best_discount
+
+    # Step 1: Compute price per share for the priced round
+    # Option pool is carved from pre-money
+    option_pool_shares = inp.pre_safe_shares_outstanding * inp.option_pool_pct / (1 - inp.option_pool_pct)
+
+    # Pre-round capitalization (before SAFEs convert)
+    pre_round_shares = inp.pre_safe_shares_outstanding + option_pool_shares
+
+    # Price per share at the priced round (before SAFE conversion)
+    priced_round_pps = pre_money / pre_round_shares if pre_round_shares > 0 else 0.0
+
+    # Step 2: Convert each SAFE
+    conversions: list[SAFEConversionResult] = []
+    total_safe_shares = 0.0
+
+    for safe in safes:
+        # Price from cap
+        if safe.valuation_cap is not None:
+            if safe.is_post_money:
+                # Post-money SAFE: cap IS the post-money including this SAFE
+                cap_pps = safe.valuation_cap / (pre_round_shares + safe.safe_amount / (safe.valuation_cap / pre_round_shares))
+                # Simplified: shares = safe_amount / (cap / fully_diluted_at_cap)
+                cap_pps = safe.valuation_cap / pre_round_shares
+            else:
+                cap_pps = safe.valuation_cap / pre_round_shares
+        else:
+            cap_pps = float("inf")
+
+        # Price from discount
+        if safe.discount_rate > 0:
+            discount_pps = priced_round_pps * (1 - safe.discount_rate)
+        else:
+            discount_pps = float("inf")
+
+        # SAFE converts at the lower price (more shares = better for investor)
+        if cap_pps <= discount_pps:
+            conversion_pps = cap_pps
+            discount_applied = "cap" if discount_pps == float("inf") else "cap (lower)"
+        elif discount_pps < float("inf"):
+            conversion_pps = discount_pps
+            discount_applied = "discount" if cap_pps == float("inf") else "discount (lower)"
+        else:
+            # Neither cap nor discount — converts at priced round price
+            conversion_pps = priced_round_pps
+            discount_applied = "none (at round price)"
+
+        # Shares issued
+        shares = safe.safe_amount / conversion_pps if conversion_pps > 0 else 0.0
+        effective_val = conversion_pps * pre_round_shares
+
+        conversions.append(SAFEConversionResult(
+            investor_name=safe.investor_name,
+            safe_amount=safe.safe_amount,
+            conversion_price=conversion_pps,
+            shares_issued=shares,
+            ownership_pct=0.0,  # filled after total computed
+            effective_valuation=effective_val,
+            discount_applied=discount_applied,
+            mfn_adjusted=safe.has_mfn,
+        ))
+        total_safe_shares += shares
+
+    # Step 3: New investor shares
+    new_investor_shares = new_money / priced_round_pps if priced_round_pps > 0 else 0.0
+
+    # Step 4: Total cap table
+    total_shares = pre_round_shares + total_safe_shares + new_investor_shares
+    founder_shares = inp.pre_safe_shares_outstanding
+
+    # Compute ownership percentages
+    for conv in conversions:
+        conv.ownership_pct = conv.shares_issued / total_shares if total_shares > 0 else 0.0
+
+    founder_pct = founder_shares / total_shares if total_shares > 0 else 0.0
+    option_pct = option_pool_shares / total_shares if total_shares > 0 else 0.0
+    safe_total_pct = total_safe_shares / total_shares if total_shares > 0 else 0.0
+    new_investor_pct = new_investor_shares / total_shares if total_shares > 0 else 0.0
+
+    total_post_money_actual = total_shares * priced_round_pps
+
+    # Dilution analysis
+    # Without SAFEs, founders would own: founder_shares / (founder_shares + option_pool + new_investor)
+    no_safe_total = founder_shares + option_pool_shares + new_investor_shares
+    founder_pct_without_safes = founder_shares / no_safe_total if no_safe_total > 0 else 0.0
+    dilution_from_safes = founder_pct_without_safes - founder_pct
+
+    # Total dilution from pre-funding
+    original_founder_pct = 1.0  # founders owned 100% before any dilution
+    total_dilution = original_founder_pct - founder_pct
+
+    effective_pre_to_founders = founder_pct * post_money
+
+    notes = []
+    if total_safe_shares > 0:
+        avg_safe_pps = sum(s.safe_amount for s in safes) / total_safe_shares
+        notes.append(
+            f"SAFEs convert at an average price of ${avg_safe_pps:.4f}/share "
+            f"vs. priced round at ${priced_round_pps:.4f}/share "
+            f"({(1 - avg_safe_pps / priced_round_pps):.1%} average discount)."
+        )
+
+    if dilution_from_safes > 0.10:
+        notes.append(
+            f"SAFE stack causes {dilution_from_safes:.1%} additional founder dilution "
+            f"beyond the priced round. Consider the cumulative impact on founder incentives."
+        )
+
+    any_mfn = any(s.has_mfn for s in safes)
+    if any_mfn:
+        notes.append(
+            "MFN clause triggered: SAFE holders with MFN received the best terms "
+            "from the entire SAFE stack."
+        )
+
+    return SAFEConversionOutput(
+        company_name=inp.company_name,
+        priced_round_pre_money=pre_money,
+        priced_round_amount=new_money,
+        priced_round_price_per_share=priced_round_pps,
+        conversions=conversions,
+        founder_shares=founder_shares,
+        founder_ownership_pct=founder_pct,
+        option_pool_shares=option_pool_shares,
+        option_pool_pct=option_pct,
+        safe_shares_total=total_safe_shares,
+        safe_ownership_total_pct=safe_total_pct,
+        new_investor_shares=new_investor_shares,
+        new_investor_ownership_pct=new_investor_pct,
+        total_shares=total_shares,
+        total_post_money=total_post_money_actual,
+        founder_dilution_from_safes=dilution_from_safes,
+        founder_dilution_total=total_dilution,
+        effective_pre_money_to_founders=effective_pre_to_founders,
+        notes=notes,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 14. Deal Comparison
+# ---------------------------------------------------------------------------
+
+def run_deal_comparison(
+    deals: list[tuple[VCDealInput, FundProfile]],
+) -> DealComparisonOutput:
+    """
+    Side-by-side comparison of multiple VC deals for IC discussion.
+
+    Evaluates each deal independently, then ranks them on key metrics
+    to help VCs prioritize which deals to pursue.
+    """
+    entries: list[DealComparisonEntry] = []
+    benchmarks = _load_benchmarks()
+
+    for deal, fund in deals:
+        ownership = compute_ownership_math(
+            check_size=deal.check_size,
+            post_money=deal.post_money_valuation,
+            stage=deal.stage,
+            dilution=deal.dilution,
+            fund_profile=fund,
+            arr=deal.arr,
+        )
+        bear, base, bull = compute_scenarios(deal, fund, ownership.exit_ownership_pct, benchmarks)
+
+        ev = (bear.gross_proceeds_to_fund * bear.probability +
+              base.gross_proceeds_to_fund * base.probability +
+              bull.gross_proceeds_to_fund * bull.probability)
+        expected_moic = ev / deal.check_size if deal.check_size > 0 else 0.0
+        expected_irr = _irr(deal.check_size, ev, deal.expected_exit_years)
+
+        quick = compute_quick_screen(deal, fund, ownership, bear, base, bull, benchmarks)
+        runway = _runway_months(deal.cash_on_hand, deal.burn_rate_monthly)
+
+        entries.append(DealComparisonEntry(
+            company_name=deal.company_name,
+            vertical=deal.vertical,
+            stage=deal.stage,
+            post_money=deal.post_money_valuation,
+            check_size=deal.check_size,
+            arr=deal.arr,
+            revenue_growth_rate=deal.revenue_growth_rate,
+            gross_margin=deal.gross_margin,
+            burn_rate_monthly=deal.burn_rate_monthly,
+            runway_months=runway,
+            entry_ownership_pct=ownership.entry_ownership_pct,
+            exit_ownership_pct=ownership.exit_ownership_pct,
+            expected_moic=expected_moic,
+            expected_irr=expected_irr,
+            base_case_ev=base.exit_enterprise_value,
+            fund_returner_threshold=ownership.fund_returner_1x_exit,
+            recommendation=quick.recommendation,
+        ))
+
+    # Rank on key metrics (1 = best)
+    if entries:
+        by_moic = sorted(range(len(entries)), key=lambda i: entries[i].expected_moic, reverse=True)
+        by_irr = sorted(range(len(entries)), key=lambda i: entries[i].expected_irr, reverse=True)
+        by_ownership = sorted(range(len(entries)), key=lambda i: entries[i].exit_ownership_pct, reverse=True)
+
+        for rank, idx in enumerate(by_moic):
+            entries[idx].rank_moic = rank + 1
+        for rank, idx in enumerate(by_irr):
+            entries[idx].rank_irr = rank + 1
+        for rank, idx in enumerate(by_ownership):
+            entries[idx].rank_ownership = rank + 1
+
+    best_ev = max(entries, key=lambda e: e.expected_moic).company_name if entries else None
+    best_own = max(entries, key=lambda e: e.exit_ownership_pct).company_name if entries else None
+
+    # Best fund fit: strong_interest > look_deeper > pass, then by MOIC
+    rec_order = {"strong_interest": 3, "look_deeper": 2, "pass": 1}
+    best_fit = max(
+        entries,
+        key=lambda e: (rec_order.get(e.recommendation, 0), e.expected_moic)
+    ).company_name if entries else None
+
+    comp_notes = []
+    if len(entries) >= 2:
+        moic_spread = max(e.expected_moic for e in entries) - min(e.expected_moic for e in entries)
+        comp_notes.append(
+            f"MOIC spread across {len(entries)} deals: {moic_spread:.1f}x "
+            f"({min(e.expected_moic for e in entries):.1f}x to {max(e.expected_moic for e in entries):.1f}x)"
+        )
+        strong = [e for e in entries if e.recommendation == "strong_interest"]
+        if strong:
+            comp_notes.append(f"{len(strong)} deal(s) rated 'strong interest': {', '.join(e.company_name for e in strong)}")
+
+    return DealComparisonOutput(
+        deals=entries,
+        best_risk_adjusted=best_ev,
+        best_ownership=best_own,
+        best_fund_fit=best_fit,
+        comparison_notes=comp_notes,
     )

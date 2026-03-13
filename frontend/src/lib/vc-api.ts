@@ -14,6 +14,14 @@ import type {
   BridgeRoundOutput,
   ProRataAnalysis,
   WaterfallDistribution,
+  GPCarryInput,
+  GPCarryOutput,
+  FundIRRInput,
+  FundIRROutput,
+  SAFEConversionInput,
+  SAFEConversionOutput,
+  DealComparisonOutput,
+  VCNarrativeResponse,
 } from '../types/vc'
 
 const BASE = '/api/vc'
@@ -187,4 +195,68 @@ export async function listVCVerticals(): Promise<{ value: string; label: string;
 
 export async function listVCStages(): Promise<{ value: string; label: string; description: string }[]> {
   return apiGet('/stages')
+}
+
+
+// ---------------------------------------------------------------------------
+// GP Carry Economics (Phase 5)
+// ---------------------------------------------------------------------------
+
+export async function analyzeGPCarry(inp: GPCarryInput): Promise<GPCarryOutput> {
+  return apiPost<GPCarryOutput>('/gp-carry', inp)
+}
+
+
+// ---------------------------------------------------------------------------
+// Fund-Level IRR & J-Curve (Phase 5)
+// ---------------------------------------------------------------------------
+
+export async function analyzeFundIRR(inp: FundIRRInput): Promise<FundIRROutput> {
+  return apiPost<FundIRROutput>('/fund-irr', inp)
+}
+
+
+// ---------------------------------------------------------------------------
+// SAFE Conversion Modeling (Phase 5)
+// ---------------------------------------------------------------------------
+
+export async function analyzeSAFEConversion(inp: SAFEConversionInput): Promise<SAFEConversionOutput> {
+  return apiPost<SAFEConversionOutput>('/safe-conversion', inp)
+}
+
+
+// ---------------------------------------------------------------------------
+// Deal Comparison (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface DealComparisonRequest {
+  deals: (VCDealInput & { fund: FundProfile })[]
+}
+
+export async function compareDeals(req: DealComparisonRequest): Promise<DealComparisonOutput> {
+  return apiPost<DealComparisonOutput>('/compare', req)
+}
+
+
+// ---------------------------------------------------------------------------
+// VC AI Narrative (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface VCNarrativeRequest {
+  deal_input: VCDealInput
+  deal_output: VCDealOutput
+  fund_profile: FundProfile
+}
+
+export async function generateVCNarrative(req: VCNarrativeRequest): Promise<VCNarrativeResponse> {
+  const res = await fetch('/api/ai/vc-narrative', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `API error ${res.status}`)
+  }
+  return res.json()
 }

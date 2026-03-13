@@ -1181,3 +1181,184 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         ai_native_score=inp.fundraise.ai_native_score if inp.fundraise.is_ai_native else None,
         round_timing=round_timing,
     )
+
+
+# ---------------------------------------------------------------------------
+# Startup Valuation Sensitivity Analysis
+# ---------------------------------------------------------------------------
+
+def run_startup_sensitivity(inp: StartupInput) -> dict:
+    """
+    Show founders how key inputs move the valuation needle.
+
+    Runs the engine multiple times with perturbed inputs to build
+    a sensitivity table showing the impact of each key lever.
+
+    Returns a dict with:
+    - base_valuation: the unmodified blended valuation
+    - sensitivities: list of {input_name, low_value, base_value, high_value,
+                              low_valuation, base_valuation, high_valuation,
+                              impact_low_pct, impact_high_pct}
+    - most_impactful: name of the input with the largest swing
+
+    This is the "what moves the needle" view that founders ask for.
+    """
+    base_output = run_startup_valuation(inp)
+    base_val = base_output.blended_valuation
+
+    sensitivities = []
+
+    # Define perturbations: (name, getter, setter_low, setter_high)
+    # Each returns a modified copy of the input
+    perturbations = []
+
+    # 1. ARR (if applicable)
+    arr = inp.traction.annual_recurring_revenue or (inp.traction.monthly_recurring_revenue * 12)
+    if arr > 0:
+        perturbations.append({
+            "name": "ARR",
+            "field": "Annual Recurring Revenue",
+            "base": arr,
+            "low": arr * 0.5,
+            "high": arr * 2.0,
+            "apply": lambda v, i=inp: _perturb_arr(i, v),
+        })
+
+    # 2. MoM Growth Rate
+    if inp.traction.mom_growth_rate > 0:
+        base_growth = inp.traction.mom_growth_rate
+        perturbations.append({
+            "name": "MoM Growth",
+            "field": "Month-over-Month Growth Rate",
+            "base": base_growth,
+            "low": max(0.0, base_growth * 0.5),
+            "high": min(1.0, base_growth * 2.0),
+            "apply": lambda v, i=inp: _perturb_mom_growth(i, v),
+        })
+
+    # 3. Net Revenue Retention
+    if inp.traction.has_revenue:
+        base_nrr = inp.traction.net_revenue_retention
+        perturbations.append({
+            "name": "NRR",
+            "field": "Net Revenue Retention",
+            "base": base_nrr,
+            "low": max(0.5, base_nrr - 0.20),
+            "high": min(2.0, base_nrr + 0.20),
+            "apply": lambda v, i=inp: _perturb_nrr(i, v),
+        })
+
+    # 4. TAM
+    base_tam = inp.market.tam_usd_billions
+    perturbations.append({
+        "name": "TAM",
+        "field": "Total Addressable Market ($B)",
+        "base": base_tam,
+        "low": base_tam * 0.5,
+        "high": base_tam * 2.0,
+        "apply": lambda v, i=inp: _perturb_tam(i, v),
+    })
+
+    # 5. Raise Amount
+    base_raise = inp.fundraise.raise_amount
+    perturbations.append({
+        "name": "Raise Amount",
+        "field": "Target Raise ($M)",
+        "base": base_raise,
+        "low": base_raise * 0.5,
+        "high": base_raise * 2.0,
+        "apply": lambda v, i=inp: _perturb_raise(i, v),
+    })
+
+    # 6. Team quality (repeat founder toggle)
+    if not inp.team.repeat_founder:
+        perturbations.append({
+            "name": "Repeat Founder",
+            "field": "Repeat Founder Status",
+            "base": 0,
+            "low": 0,
+            "high": 1,
+            "apply": lambda v, i=inp: _perturb_repeat_founder(i, bool(v)),
+        })
+
+    # Run perturbations
+    for p in perturbations:
+        try:
+            low_inp = p["apply"](p["low"])
+            low_out = run_startup_valuation(low_inp)
+            low_val = low_out.blended_valuation
+        except Exception:
+            low_val = base_val
+
+        try:
+            high_inp = p["apply"](p["high"])
+            high_out = run_startup_valuation(high_inp)
+            high_val = high_out.blended_valuation
+        except Exception:
+            high_val = base_val
+
+        impact_low = (low_val - base_val) / base_val if base_val > 0 else 0.0
+        impact_high = (high_val - base_val) / base_val if base_val > 0 else 0.0
+
+        sensitivities.append({
+            "input_name": p["name"],
+            "input_field": p["field"],
+            "low_value": round(p["low"], 4),
+            "base_value": round(p["base"], 4),
+            "high_value": round(p["high"], 4),
+            "low_valuation": round(low_val, 2),
+            "base_valuation": round(base_val, 2),
+            "high_valuation": round(high_val, 2),
+            "impact_low_pct": round(impact_low, 4),
+            "impact_high_pct": round(impact_high, 4),
+            "total_swing": round(high_val - low_val, 2),
+        })
+
+    # Sort by total swing (most impactful first)
+    sensitivities.sort(key=lambda s: s["total_swing"], reverse=True)
+    most_impactful = sensitivities[0]["input_name"] if sensitivities else None
+
+    return {
+        "company_name": inp.company_name,
+        "base_valuation": round(base_val, 2),
+        "sensitivities": sensitivities,
+        "most_impactful": most_impactful,
+        "note": "Each row shows the blended valuation when that single input is changed to the low or high value, with all other inputs held constant.",
+    }
+
+
+def _perturb_arr(inp: StartupInput, new_arr: float) -> StartupInput:
+    data = inp.model_dump()
+    data["traction"]["annual_recurring_revenue"] = new_arr
+    data["traction"]["monthly_recurring_revenue"] = new_arr / 12.0
+    return StartupInput(**data)
+
+
+def _perturb_mom_growth(inp: StartupInput, new_growth: float) -> StartupInput:
+    data = inp.model_dump()
+    data["traction"]["mom_growth_rate"] = new_growth
+    return StartupInput(**data)
+
+
+def _perturb_nrr(inp: StartupInput, new_nrr: float) -> StartupInput:
+    data = inp.model_dump()
+    data["traction"]["net_revenue_retention"] = new_nrr
+    return StartupInput(**data)
+
+
+def _perturb_tam(inp: StartupInput, new_tam: float) -> StartupInput:
+    data = inp.model_dump()
+    data["market"]["tam_usd_billions"] = new_tam
+    return StartupInput(**data)
+
+
+def _perturb_raise(inp: StartupInput, new_raise: float) -> StartupInput:
+    data = inp.model_dump()
+    data["fundraise"]["raise_amount"] = max(0.01, new_raise)
+    return StartupInput(**data)
+
+
+def _perturb_repeat_founder(inp: StartupInput, is_repeat: bool) -> StartupInput:
+    data = inp.model_dump()
+    data["team"]["repeat_founder"] = is_repeat
+    return StartupInput(**data)
