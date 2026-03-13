@@ -104,16 +104,20 @@ def _safe_float(value: float, default: float = 0.0) -> float:
 
 
 def _format_currency(value: float) -> str:
-    """Format a dollar value for display."""
+    """Format a dollar value for display.
+
+    Per project convention, all monetary values are already in millions USD.
+    E.g. value=50.0 means $50M.
+    """
     abs_val = abs(value)
     sign = "-" if value < 0 else ""
-    if abs_val >= 1_000_000_000:
-        return f"{sign}${abs_val/1_000_000_000:.1f}B"
-    if abs_val >= 1_000_000:
-        return f"{sign}${abs_val/1_000_000:.1f}M"
-    if abs_val >= 1_000:
-        return f"{sign}${abs_val/1_000:.0f}K"
-    return f"{sign}${abs_val:.0f}"
+    if abs_val >= 1000:
+        return f"{sign}${abs_val/1000:.1f}B"
+    if abs_val >= 1:
+        return f"{sign}${abs_val:.1f}M"
+    if abs_val >= 0.001:
+        return f"{sign}${abs_val*1000:.0f}K"
+    return f"{sign}$0"
 
 
 def _format_multiple(value: float) -> str:
@@ -190,7 +194,7 @@ def _compute_defense_positioning(deal: DealInput, benchmarks: dict) -> DefensePo
     if dp.programs_of_record > 0:
         parts.append(f"positions on {dp.programs_of_record} program{'s' if dp.programs_of_record != 1 else ''} of record")
     if combined_backlog > 0:
-        parts.append(f"Combined backlog of ${combined_backlog / 1e6:.0f}M provides {revenue_visibility_years:.1f} years of revenue visibility")
+        parts.append(f"Combined backlog of ${combined_backlog:.0f}M provides {revenue_visibility_years:.1f} years of revenue visibility")
 
     summary = ", ".join(parts[:3])
     if len(parts) > 3:
@@ -246,6 +250,16 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     n_years = deal.projection_years
     acq = deal.acquirer
     tgt = deal.target
+
+    # Warn if any synergy phase-in exceeds projection horizon
+    all_synergies = deal.synergies.cost_synergies + deal.synergies.revenue_synergies
+    for syn in all_synergies:
+        if syn.phase_in_years > n_years:
+            notes.append(
+                f"Synergy '{syn.category}' has a {syn.phase_in_years}-year phase-in "
+                f"but projections only run {n_years} years — full run-rate is never reached."
+            )
+            break  # One warning is enough
 
     # -----------------------------------------------------------------------
     # Year-by-year projections
@@ -357,15 +371,19 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
 
         ebit = ebitda - da_total
 
-        # Interest expense from converged debt schedule
+        # Interest expense from converged debt schedule (new acquisition debt only)
         interest_exp = ds.total_interest_expense
+        # Track acquisition-specific interest for pro forma detail breakdown.
+        # ds.total_interest_expense covers only acquisition debt tranches;
+        # acquirer's existing debt interest is not modeled in the debt schedule.
+        acquisition_interest_only = ds.total_interest_expense
 
         ebt = ebit - interest_exp
 
         # Transaction costs expensed in Year 1 (ASC 805)
         if yr == 1:
             ebt -= transaction_costs
-            notes.append(f"Year 1 includes ${transaction_costs/1e6:.1f}M in transaction fees (one-time, per ASC 805).")
+            notes.append(f"Year 1 includes ${transaction_costs:.1f}M in transaction fees (one-time, per ASC 805).")
 
         taxes = max(0.0, ebt * acq.tax_rate)
         net_income = ebt - taxes
@@ -374,8 +392,11 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
 
         # Acquirer standalone EPS (grows at 3% per year for simplicity)
         standalone_eps_yr = _safe_float(acq_standalone_eps * (1.03 ** yr))
+        # Use standalone_eps_yr directly (no abs()) so that improvements from a
+        # negative base correctly show as accretive (positive %), and deteriorations
+        # from a positive base correctly show as dilutive (negative %).
         accretion_dilution_pct = _safe_float(
-            (pro_forma_eps - standalone_eps_yr) / abs(standalone_eps_yr) * 100
+            (pro_forma_eps - standalone_eps_yr) / standalone_eps_yr * 100
             if standalone_eps_yr != 0 else 0.0
         )
 
@@ -415,7 +436,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             target_ebitda=tgt_rev_yr * tgt_ebitda_margin,
             synergy_cost=cost_syn_yr,
             incremental_da=ppa.total_incremental_annual,
-            acquisition_interest=interest_exp,
+            acquisition_interest=acquisition_interest_only,
             transaction_costs=transaction_costs if yr == 1 else 0.0,
         ))
 
@@ -878,7 +899,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         if defense_uplift and y1_ad < -2.0:
             headline = f"Near-term dilutive ({y1_ad:+.1f}%) but justified by defense backlog"
             subtext = (
-                f"Traditional EPS math shows dilution, but ${defense_positioning.combined_backlog / 1e6:.0f}M "
+                f"Traditional EPS math shows dilution, but ${defense_positioning.combined_backlog:.0f}M "
                 f"of contracted backlog ({defense_positioning.backlog_coverage_ratio:.1f}× revenue) and "
                 f"{defense_positioning.total_defense_premium_pct:.0%} defense premiums provide downside protection. "
                 f"Revenue visibility of {defense_positioning.revenue_visibility_years:.1f} years from funded backlog."
@@ -891,7 +912,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             )
             if is_defense_deal:
                 subtext += (
-                    f" Defense backlog of ${defense_positioning.combined_backlog / 1e6:.0f}M "
+                    f" Defense backlog of ${defense_positioning.combined_backlog:.0f}M "
                     f"provides additional revenue visibility not captured in EPS."
                 )
     else:

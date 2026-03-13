@@ -37,10 +37,19 @@ MAX_TOKENS_PARSE = int(os.environ.get("AI_MAX_TOKENS_PARSE", "800"))
 MAX_TOKENS_SCENARIO = int(os.environ.get("AI_MAX_TOKENS_SCENARIO", "400"))
 
 # ---------------------------------------------------------------------------
-# Simple in-process cache (no Redis needed for V1)
+# In-process TTL + LRU cache (no Redis needed for V1)
 # ---------------------------------------------------------------------------
 
-_cache: dict[str, str] = {}
+import threading
+import time
+from collections import OrderedDict
+
+_CACHE_MAX_SIZE = 500
+_CACHE_TTL_SECONDS = 3600  # 1 hour TTL
+_CACHE_MAX_ENTRY_BYTES = 1_000_000  # 1MB per entry
+
+_cache: OrderedDict[str, tuple[str, float]] = OrderedDict()  # key → (value, expiry_timestamp)
+_cache_lock = threading.Lock()
 _token_usage: dict[str, int] = {"input": 0, "output": 0, "calls": 0}
 
 
@@ -50,15 +59,32 @@ def _cache_key(*parts: str) -> str:
 
 
 def _get_cached(key: str) -> str | None:
-    return _cache.get(key)
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        value, expiry = entry
+        if time.monotonic() > expiry:
+            # Expired — remove and return miss
+            del _cache[key]
+            return None
+        # Move to end (most recently used)
+        _cache.move_to_end(key)
+        return value
 
 
 def _set_cached(key: str, value: str) -> None:
-    # Simple LRU: evict oldest entries if cache grows large
-    if len(_cache) > 500:
-        oldest_key = next(iter(_cache))
-        del _cache[oldest_key]
-    _cache[key] = value
+    # Reject oversized entries
+    if len(value.encode("utf-8", errors="replace")) > _CACHE_MAX_ENTRY_BYTES:
+        return
+    with _cache_lock:
+        # If key exists, update it
+        if key in _cache:
+            _cache.move_to_end(key)
+        _cache[key] = (value, time.monotonic() + _CACHE_TTL_SECONDS)
+        # Evict oldest (LRU) entries when over capacity
+        while len(_cache) > _CACHE_MAX_SIZE:
+            _cache.popitem(last=False)
 
 
 # ---------------------------------------------------------------------------
@@ -114,14 +140,14 @@ def is_ai_available() -> bool:
 # Core ask functions
 # ---------------------------------------------------------------------------
 
-def ask_claude(
+async def ask_claude(
     system_prompt: str,
     user_message: str,
     max_tokens: int = 1000,
     cache_key: str | None = None,
 ) -> str | None:
     """
-    Make a synchronous Claude API call.
+    Make an async Claude API call (non-blocking for the FastAPI event loop).
 
     Args:
         system_prompt: The system prompt that sets Claude's role and context.
@@ -138,12 +164,12 @@ def ask_claude(
         if cached:
             return cached
 
-    client = _get_client()
+    client = _get_async_client()
     if client is None:
         return None
 
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model=AI_MODEL,
             max_tokens=max_tokens,
             system=system_prompt,
@@ -167,13 +193,13 @@ def ask_claude(
         return None
 
 
-def ask_claude_with_history(
+async def ask_claude_with_history(
     system_prompt: str,
     messages: list[dict[str, str]],
     max_tokens: int = 2000,
 ) -> str | None:
     """
-    Make a Claude API call with a conversation history.
+    Make an async Claude API call with a conversation history.
 
     Args:
         system_prompt: System prompt.
@@ -183,12 +209,12 @@ def ask_claude_with_history(
     Returns:
         Claude's response text, or None on failure.
     """
-    client = _get_client()
+    client = _get_async_client()
     if client is None:
         return None
 
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model=AI_MODEL,
             max_tokens=max_tokens,
             system=system_prompt,

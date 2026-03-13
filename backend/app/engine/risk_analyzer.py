@@ -70,7 +70,7 @@ def _leverage_risk(
         threshold_value=threshold_critical,
         tolerance_band=(
             f"Deal hits critical leverage threshold if EBITDA falls by more than "
-            f"{decline_pct:.0f}% (to ${safe_ebitda/1e6:.1f}M)."
+            f"{decline_pct:.0f}% (to ${safe_ebitda:.1f}M)."
         ),
         plain_english=(
             f"For every $1 of annual profit, the combined company owes ${leverage:.1f} "
@@ -110,7 +110,7 @@ def _synergy_execution_risk(
 
     severity = RiskSeverity.HIGH if synergy_pct >= threshold_high else RiskSeverity.MEDIUM
     description = (
-        f"Assumed synergies of ${total_synergies/1e6:.1f}M represent "
+        f"Assumed synergies of ${total_synergies:.1f}M represent "
         f"{synergy_pct:.0%} of target revenue. "
         + ("This is an aggressive assumption that is rarely fully achieved." if synergy_pct >= threshold_high
            else "This is above the typical range for comparable transactions.")
@@ -123,11 +123,11 @@ def _synergy_execution_risk(
         current_value=synergy_pct * 100,
         threshold_value=threshold_high * 100,
         tolerance_band=(
-            f"Synergies must exceed ${target_revenue * 0.03 / 1e6:.1f}M/year "
+            f"Synergies must exceed ${target_revenue * 0.03:.1f}M/year "
             f"(3% of target revenue) for the deal to generate meaningful value."
         ),
         plain_english=(
-            f"You're counting on saving ${total_synergies/1e6:.1f}M per year from combining "
+            f"You're counting on saving ${total_synergies:.1f}M per year from combining "
             "these companies. Deals that assume large savings often end up capturing "
             "only 50-70% of what was projected."
         ),
@@ -326,7 +326,7 @@ def _purchase_price_risk(
         threshold_value=overpay_threshold,
         tolerance_band=(
             f"At the current price, EBITDA must grow to "
-            f"${deal.target.acquisition_price / median_multiple / 1e6:.1f}M "
+            f"${deal.target.acquisition_price / median_multiple:.1f}M "
             f"to reach a fair {median_multiple:.1f}× multiple."
         ),
         plain_english=plain,
@@ -360,8 +360,8 @@ def _integration_cost_risk(deal: DealInput) -> RiskItem | None:
 
     return RiskItem(
         description=(
-            f"One-time integration costs of ${total_cost_to_achieve/1e6:.1f}M exceed "
-            f"Year 1 synergy benefits of ${year1_synergies/1e6:.1f}M by {ratio:.1f}×. "
+            f"One-time integration costs of ${total_cost_to_achieve:.1f}M exceed "
+            f"Year 1 synergy benefits of ${year1_synergies:.1f}M by {ratio:.1f}×. "
             "The deal will be cash flow negative in the near term."
         ),
         severity=severity,
@@ -370,11 +370,11 @@ def _integration_cost_risk(deal: DealInput) -> RiskItem | None:
         threshold_value=1.0,
         tolerance_band=(
             f"Breakeven on integration investment occurs when cumulative synergies "
-            f"reach ${total_cost_to_achieve/1e6:.1f}M — "
+            f"reach ${total_cost_to_achieve:.1f}M — "
             f"approximately {ratio:.1f} years at current phase-in."
         ),
         plain_english=(
-            f"The costs of combining these companies (${total_cost_to_achieve/1e6:.1f}M) "
+            f"The costs of combining these companies (${total_cost_to_achieve:.1f}M) "
             "outweigh what you'll save in the first year. You're investing upfront "
             "for future payoff."
         ),
@@ -414,7 +414,7 @@ def _revenue_synergy_concentration_risk(deal: DealInput) -> RiskItem | None:
         threshold_value=50.0,
         tolerance_band=(
             f"Deal economics hold even if revenue synergies are zero, "
-            f"as long as cost synergies of ${total_cost/1e6:.1f}M are achieved."
+            f"as long as cost synergies of ${total_cost:.1f}M are achieved."
         ),
         plain_english=(
             "You're counting on growing revenue by combining these companies. "

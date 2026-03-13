@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..engine.models import DealInput, DealOutput
 from ..engine.startup_models import StartupInput, StartupValuationOutput
@@ -50,18 +50,18 @@ router = APIRouter(prefix="/api/ai")
 # ---------------------------------------------------------------------------
 
 class ChatMessage(BaseModel):
-    role: str   # "user" | "assistant"
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=10_000)
 
 
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
+    messages: list[ChatMessage] = Field(max_length=50)
     deal_input: DealInput | None = None
     deal_output: DealOutput | None = None
 
 
 class ParseDealRequest(BaseModel):
-    messages: list[ChatMessage]
+    messages: list[ChatMessage] = Field(max_length=20)
 
 
 class ParseDealResponse(BaseModel):
@@ -87,11 +87,11 @@ class NarrativeResponse(BaseModel):
 
 
 class FieldHelpRequest(BaseModel):
-    field_name: str
-    field_label: str
-    industry: str
-    current_value: str | None = None
-    deal_context_summary: str | None = None
+    field_name: str = Field(max_length=100)
+    field_label: str = Field(max_length=200)
+    industry: str = Field(max_length=100)
+    current_value: str | None = Field(default=None, max_length=200)
+    deal_context_summary: str | None = Field(default=None, max_length=2000)
 
 
 class FieldHelpResponse(BaseModel):
@@ -127,18 +127,44 @@ class StartupNarrativeResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _strip_markdown_code_block(text: str) -> str:
+    """Safely strip markdown code block fences from AI responses.
+
+    Handles ```json ... ``` wrapping without IndexError if fences are malformed.
+    """
+    clean = text.strip()
+    if clean.startswith("```"):
+        parts = clean.split("```")
+        if len(parts) >= 3:
+            # Normal case: ```json\n{...}\n```
+            inner = parts[1]
+            if inner.startswith("json"):
+                inner = inner[4:]
+            return inner.strip()
+        elif len(parts) == 2:
+            # Malformed: opening fence only, no closing fence
+            inner = parts[1]
+            if inner.startswith("json"):
+                inner = inner[4:]
+            return inner.strip()
+    return clean
+
+
 def _deal_context_dict(deal_input: DealInput, deal_output: DealOutput) -> dict[str, Any]:
-    """Build a compact deal context dict for system prompts."""
+    """Build a compact deal context dict for system prompts.
+
+    All monetary values are already in millions USD per project convention.
+    """
     y1 = deal_output.pro_forma_income_statement[0] if deal_output.pro_forma_income_statement else None
     return {
         "deal_summary": {
             "acquirer": deal_input.acquirer.company_name,
             "target": deal_input.target.company_name,
-            "acquisition_price_m": round(deal_input.target.acquisition_price / 1e6, 1),
-            "acquirer_revenue_m": round(deal_input.acquirer.revenue / 1e6, 1),
-            "target_revenue_m": round(deal_input.target.revenue / 1e6, 1),
-            "acquirer_ebitda_m": round(deal_input.acquirer.ebitda / 1e6, 1),
-            "target_ebitda_m": round(deal_input.target.ebitda / 1e6, 1),
+            "acquisition_price_m": round(deal_input.target.acquisition_price, 1),
+            "acquirer_revenue_m": round(deal_input.acquirer.revenue, 1),
+            "target_revenue_m": round(deal_input.target.revenue, 1),
+            "acquirer_ebitda_m": round(deal_input.acquirer.ebitda, 1),
+            "target_ebitda_m": round(deal_input.target.ebitda, 1),
             "target_industry": deal_input.target.industry.value,
             "financing": {
                 "cash_pct": round(deal_input.structure.cash_percentage * 100, 0),
@@ -152,9 +178,9 @@ def _deal_context_dict(deal_input: DealInput, deal_output: DealOutput) -> dict[s
             "accretion_dilution_pct": round(y1.accretion_dilution_pct, 2) if y1 else None,
             "pro_forma_eps": round(y1.pro_forma_eps, 2) if y1 else None,
             "standalone_eps": round(y1.acquirer_standalone_eps, 2) if y1 else None,
-            "net_income_m": round(y1.net_income / 1e6, 1) if y1 else None,
-            "interest_expense_m": round(y1.interest_expense / 1e6, 1) if y1 else None,
-            "ebitda_m": round(y1.ebitda / 1e6, 1) if y1 else None,
+            "net_income_m": round(y1.net_income, 1) if y1 else None,
+            "interest_expense_m": round(y1.interest_expense, 1) if y1 else None,
+            "ebitda_m": round(y1.ebitda, 1) if y1 else None,
         },
         "verdict": deal_output.deal_verdict.value,
         "risks": [
@@ -173,10 +199,10 @@ def _deal_context_dict(deal_input: DealInput, deal_output: DealOutput) -> dict[s
         ],
         "synergies": {
             "cost_synergies_m": round(
-                sum(s.annual_amount for s in deal_input.synergies.cost_synergies) / 1e6, 2
+                sum(s.annual_amount for s in deal_input.synergies.cost_synergies), 2
             ),
             "revenue_synergies_m": round(
-                sum(s.annual_amount for s in deal_input.synergies.revenue_synergies) / 1e6, 2
+                sum(s.annual_amount for s in deal_input.synergies.revenue_synergies), 2
             ),
         },
     }
@@ -231,7 +257,7 @@ async def parse_deal(request: ParseDealRequest) -> ParseDealResponse:
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
     system = deal_parser_system_prompt()
 
-    response = ask_claude_with_history(
+    response = await ask_claude_with_history(
         system_prompt=system,
         messages=messages,
         max_tokens=MAX_TOKENS_PARSE,
@@ -248,12 +274,7 @@ async def parse_deal(request: ParseDealRequest) -> ParseDealResponse:
         )
 
     try:
-        # Strip markdown code blocks if present
-        clean = response.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
+        clean = _strip_markdown_code_block(response)
         parsed = json.loads(clean)
         return ParseDealResponse(
             status=parsed.get("status", "need_more_info"),
@@ -288,12 +309,10 @@ async def generate_narrative(request: NarrativeRequest) -> NarrativeResponse:
     if not is_ai_available():
         return _fallback_narrative(request.deal_output)
 
-    # Cache key: hash of key deal parameters
+    # Cache key: hash the full deal input for uniqueness (avoids collisions
+    # from aggressive rounding that previously mapped different deals to same key)
     deal_fingerprint = _cache_key(
-        str(round(request.deal_input.target.acquisition_price, -3)),
-        str(round(request.deal_input.acquirer.ebitda, -3)),
-        str(round(request.deal_input.target.ebitda, -3)),
-        str(len(request.deal_output.risk_assessment)),
+        request.deal_input.model_dump_json(),
         request.deal_input.mode.value,
     )
     ck = f"narrative:{deal_fingerprint}"
@@ -325,7 +344,7 @@ Generate the verdict_narrative, risk_narratives (one per identified risk by metr
         except Exception:
             pass
 
-    response = ask_claude(
+    response = await ask_claude(
         system_prompt=system,
         user_message=user_msg,
         max_tokens=MAX_TOKENS_NARRATIVE,
@@ -336,11 +355,7 @@ Generate the verdict_narrative, risk_narratives (one per identified risk by metr
         return _fallback_narrative(request.deal_output)
 
     try:
-        clean = response.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
+        clean = _strip_markdown_code_block(response)
         data = json.loads(clean)
         _set_cached(ck, json.dumps(data))
         return NarrativeResponse(
@@ -393,7 +408,7 @@ async def explain_field(request: FieldHelpRequest) -> FieldHelpResponse:
         "and what range to expect."
     )
 
-    response = ask_claude(
+    response = await ask_claude(
         system_prompt=system,
         user_message=user_msg,
         max_tokens=MAX_TOKENS_HELP,
@@ -468,7 +483,7 @@ async def scenario_narrative(request: ScenarioNarrativeRequest) -> StreamingResp
         user_msg = f"""Describe this specific deal scenario in one paragraph.
 
 BASE CASE:
-- Acquisition price: ${base_price/1e6:.1f}M ({entry_mult:.1f}× EBITDA)
+- Acquisition price: ${base_price:.1f}M ({entry_mult:.1f}× EBITDA)
 - Year 1 accretion/dilution: {base_ad:+.1f}%
 - Acquirer: {request.base_deal_input.acquirer.company_name}
 - Target: {request.base_deal_input.target.company_name}
@@ -591,7 +606,7 @@ async def startup_narrative(request: StartupNarrativeRequest) -> StartupNarrativ
 Generate the verdict_narrative, scorecard_commentary (one entry per scorecard flag metric), and executive_summary."""
 
     system = startup_narrative_system_prompt()
-    response = ask_claude(
+    response = await ask_claude(
         system_prompt=system,
         user_message=user_msg,
         max_tokens=MAX_TOKENS_NARRATIVE,
@@ -607,11 +622,7 @@ Generate the verdict_narrative, scorecard_commentary (one entry per scorecard fl
         )
 
     try:
-        clean = response.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
+        clean = _strip_markdown_code_block(response)
         data = json.loads(clean)
         _set_cached(ck, json.dumps(data))
         return StartupNarrativeResponse(
@@ -757,7 +768,7 @@ Generate the investment_thesis, bear_narrative, base_narrative, bull_narrative,
 key_risks (3 items), key_mitigants (3 items), and verdict."""
 
     system = vc_deal_narrative_system_prompt()
-    response = ask_claude(
+    response = await ask_claude(
         system_prompt=system,
         user_message=user_msg,
         max_tokens=MAX_TOKENS_NARRATIVE,
@@ -771,11 +782,7 @@ key_risks (3 items), key_mitigants (3 items), and verdict."""
         )
 
     try:
-        clean = response.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
+        clean = _strip_markdown_code_block(response)
         data = json.loads(clean)
         _set_cached(ck, json.dumps(data))
         return VCNarrativeResponse(
@@ -803,7 +810,7 @@ key_risks (3 items), key_mitigants (3 items), and verdict."""
 # ---------------------------------------------------------------------------
 
 class VCChatRequest(BaseModel):
-    messages: list[ChatMessage]
+    messages: list[ChatMessage] = Field(max_length=50)
     deal_input: VCDealInput | None = None
     deal_output: VCDealOutput | None = None
     fund_profile: FundProfile | None = None

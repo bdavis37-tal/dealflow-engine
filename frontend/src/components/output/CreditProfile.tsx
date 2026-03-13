@@ -90,8 +90,8 @@ export default function CreditProfile({ metrics }: CreditProfileProps) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-slate-100 mb-4">Credit Profile</h2>
-      <div className="rounded-xl border border-slate-700 bg-slate-800/20 overflow-hidden">
-        <table className="w-full">
+      <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/20">
+        <table className="w-full min-w-[480px]">
           <thead>
             <tr className="border-b border-slate-700 bg-slate-800/40">
               <th className="py-2.5 pl-4 pr-2 text-left text-xs font-semibold text-slate-400">Metric</th>

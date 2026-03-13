@@ -41,12 +41,24 @@ export interface AIStatus {
   token_usage: { input: number; output: number; calls: number }
 }
 
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const existingSignal = init.signal
+  if (existingSignal?.aborted) {
+    controller.abort(existingSignal.reason)
+  } else {
+    existingSignal?.addEventListener('abort', () => controller.abort(existingSignal.reason))
+  }
+  const timer = setTimeout(() => controller.abort('Request timeout'), timeoutMs)
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer))
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}/ai${path}`, {
+  const res = await fetchWithTimeout(`${BASE_URL}/ai${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  })
+  }, 30_000)
   if (!res.ok) throw new Error(`AI API ${res.status}`)
   return res.json()
 }
@@ -97,7 +109,7 @@ export async function streamChat(
   onError: (err: string) => void,
 ): Promise<void> {
   try {
-    const res = await fetch(`${BASE_URL}/ai/chat`, {
+    const res = await fetchWithTimeout(`${BASE_URL}/ai/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -105,7 +117,7 @@ export async function streamChat(
         deal_input,
         deal_output,
       }),
-    })
+    }, 120_000)
 
     if (!res.ok || !res.body) {
       onError(`AI unavailable (${res.status})`)
@@ -168,11 +180,11 @@ export async function streamScenarioNarrative(
   onDone: () => void,
 ): Promise<void> {
   try {
-    const res = await fetch(`${BASE_URL}/ai/scenario-narrative`, {
+    const res = await fetchWithTimeout(`${BASE_URL}/ai/scenario-narrative`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    })
+    }, 120_000)
 
     if (!res.ok || !res.body) return
 
