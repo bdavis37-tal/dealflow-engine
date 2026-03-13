@@ -68,8 +68,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "Authorization"],
 )
 
 app.include_router(router)
@@ -83,6 +83,5 @@ async def root():
     return {
         "name": "Dealflow Engine",
         "version": "1.0.0",
-        "docs": "/docs",
         "health": "/api/v1/health",
     }

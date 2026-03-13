@@ -1042,7 +1042,7 @@ def run_bridge_analysis(inp: BridgeRoundInput) -> BridgeRoundOutput:
     additional_runway = _runway_months(inp.bridge_amount, inp.bridge_amount / 18.0)  # rough
 
     notes = [
-        f"Bridge converts at {imp_d:.0%} discount to Series A: ${effective_conversion_price:.0f}M valuation cap implied.".replace("imp_d", str(implied_discount)),
+        f"Bridge converts at {implied_discount:.0%} discount to Series A: ${effective_conversion_price:.0f}M valuation cap implied.",
     ]
     notes[0] = (
         f"Bridge converts at {implied_discount:.0%} discount to next round: "

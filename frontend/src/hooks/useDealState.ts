@@ -82,6 +82,20 @@ export function useDealState() {
   const abortControllerRef = useRef<AbortController | null>(null)
   // Track loading message interval to prevent leaks on repeated runs
   const msgIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Generation counter to prevent stale completions from overwriting state
+  const generationRef = useRef(0)
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      if (msgIntervalRef.current) {
+        clearInterval(msgIntervalRef.current)
+      }
+    }
+  }, [])
 
   // Persist input state (not output) to localStorage
   useEffect(() => {
@@ -138,6 +152,8 @@ export function useDealState() {
 
     const controller = new AbortController()
     abortControllerRef.current = controller
+    generationRef.current += 1
+    const thisGeneration = generationRef.current
 
     setState(s => ({ ...s, isLoading: true, error: null, loadingMessage: LOADING_MESSAGES[0] }))
 
@@ -164,7 +180,7 @@ export function useDealState() {
       const output = await analyzeDeal(input, controller.signal)
 
       // Ignore stale response if this request was superseded by a newer one
-      if (controller.signal.aborted) return
+      if (thisGeneration !== generationRef.current) return
 
       if (msgIntervalRef.current) { clearInterval(msgIntervalRef.current); msgIntervalRef.current = null }
       abortControllerRef.current = null
@@ -179,6 +195,8 @@ export function useDealState() {
       if (msgIntervalRef.current) { clearInterval(msgIntervalRef.current); msgIntervalRef.current = null }
       // Ignore abort errors — a newer request has taken over
       if (err instanceof Error && err.name === 'AbortError') return
+      // Ignore if a newer generation has started
+      if (thisGeneration !== generationRef.current) return
       abortControllerRef.current = null
       const message = err instanceof Error ? err.message : 'Analysis failed'
       setState(s => ({ ...s, isLoading: false, loadingMessage: '', error: message }))

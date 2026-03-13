@@ -26,6 +26,22 @@ import type {
 
 const BASE = '/api/vc'
 
+async function handleErrorResponse(res: Response): Promise<never> {
+  let message = `API error ${res.status}`
+  try {
+    const contentType = res.headers.get('content-type')
+    if (contentType?.includes('application/json')) {
+      const body = await res.json()
+      message = body.detail || body.message || message
+    } else {
+      message = res.statusText || message
+    }
+  } catch {
+    // Parsing failed, use generic message
+  }
+  throw new Error(message)
+}
+
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
@@ -33,8 +49,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || `API error ${res.status}`)
+    await handleErrorResponse(res)
   }
   return res.json()
 }
@@ -46,8 +61,7 @@ async function apiGet<T>(path: string, params?: Record<string, string | number>)
   }
   const res = await fetch(url.toString())
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || `API error ${res.status}`)
+    await handleErrorResponse(res)
   }
   return res.json()
 }

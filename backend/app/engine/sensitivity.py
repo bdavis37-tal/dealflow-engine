@@ -20,16 +20,20 @@ def _format_cell(value: float) -> str:
 
 
 def _format_currency_compact(value: float) -> str:
-    """Format a dollar value compactly for axis labels."""
+    """Format a dollar value compactly for axis labels.
+
+    Per project convention, all monetary values are already in millions USD.
+    E.g. value=50.0 means $50M.
+    """
     abs_val = abs(value)
     sign = "-" if value < 0 else ""
-    if abs_val >= 1_000_000_000:
-        return f"{sign}${abs_val/1_000_000_000:.1f}B"
-    if abs_val >= 1_000_000:
-        return f"{sign}${abs_val/1_000_000:.1f}M"
-    if abs_val >= 1_000:
-        return f"{sign}${abs_val/1_000:.0f}K"
-    return f"{sign}${abs_val:.0f}"
+    if abs_val >= 1000:
+        return f"{sign}${abs_val/1000:.1f}B"
+    if abs_val >= 1:
+        return f"{sign}${abs_val:.1f}M"
+    if abs_val >= 0.001:
+        return f"{sign}${abs_val*1000:.0f}K"
+    return f"{sign}$0"
 
 
 def build_sensitivity_matrix(

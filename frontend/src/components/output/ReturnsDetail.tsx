@@ -47,8 +47,8 @@ export default function ReturnsDetail({ returns, dealInput, fiscalYearStart }: R
           {/* Entry Equity Check */}
           <div>
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Equity Investment at Close</h3>
-            <div className="rounded-xl border border-slate-700 bg-slate-800/20 overflow-hidden">
-              <table className="w-full">
+            <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/20">
+              <table className="w-full min-w-[400px]">
                 <tbody>
                   <tr className="border-b border-slate-800/50">
                     <td className="py-2 pl-4 pr-2 text-xs text-slate-400">Acquisition Price</td>
@@ -107,8 +107,8 @@ export default function ReturnsDetail({ returns, dealInput, fiscalYearStart }: R
           {returns.annual_fcf_to_equity.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-slate-300 mb-3">Free Cash Flow to Equity</h3>
-              <div className="rounded-xl border border-slate-700 bg-slate-800/20 overflow-hidden">
-                <table className="w-full">
+              <div className="overflow-x-auto rounded-xl border border-slate-700 bg-slate-800/20">
+                <table className="w-full min-w-[500px]">
                   <thead>
                     <tr className="border-b border-slate-700">
                       <th className="py-2.5 pl-4 pr-2 text-left text-xs font-semibold text-slate-400 w-48" />

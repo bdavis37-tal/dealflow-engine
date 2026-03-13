@@ -1,7 +1,7 @@
 /**
  * Currency input with formatted display and validation.
  */
-import React, { useState } from 'react'
+import React, { useState, useId } from 'react'
 import { HelpCircle } from 'lucide-react'
 
 interface CurrencyInputProps {
@@ -14,6 +14,14 @@ interface CurrencyInputProps {
   required?: boolean
   error?: string
   min?: number
+}
+
+function parseNumericInput(raw: string): number {
+  const cleaned = raw.replace(/[^0-9.\-]/g, '')
+  // Reject multiple decimal points
+  if ((cleaned.match(/\./g) || []).length > 1) return NaN
+  const parsed = parseFloat(cleaned)
+  return Number.isFinite(parsed) ? parsed : NaN
 }
 
 function formatDisplay(value: number): string {
@@ -35,6 +43,7 @@ export default function CurrencyInput({
   error,
   min = 0,
 }: CurrencyInputProps) {
+  const inputId = useId()
   const [focused, setFocused] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [rawInput, setRawInput] = useState('')
@@ -47,7 +56,7 @@ export default function CurrencyInput({
   const handleBlur = () => {
     setFocused(false)
     if (!rawInput.trim()) return // empty is fine, keep previous value
-    const parsed = parseFloat(rawInput.replace(/[^0-9.-]/g, ''))
+    const parsed = parseNumericInput(rawInput)
     if (!isNaN(parsed) && parsed >= min) {
       onChange(parsed)
     }
@@ -59,7 +68,7 @@ export default function CurrencyInput({
     const val = e.target.value
     setRawInput(val)
     // Propagate valid numbers immediately for live calculations
-    const parsed = parseFloat(val.replace(/[^0-9.-]/g, ''))
+    const parsed = parseNumericInput(val)
     if (!isNaN(parsed) && parsed >= min) {
       onChange(parsed)
     }
@@ -68,13 +77,15 @@ export default function CurrencyInput({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
+        <label htmlFor={inputId} className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
           {label}
           {required && <span className="text-red-400 text-xs">*</span>}
           {help && (
             <button
               type="button"
               onClick={() => setShowHelp(v => !v)}
+              aria-expanded={showHelp}
+              aria-label={`Help for ${label}`}
               className="text-slate-500 hover:text-slate-300 transition-colors"
             >
               <HelpCircle size={13} />
@@ -98,6 +109,7 @@ export default function CurrencyInput({
         bg-slate-800/40
       `}>
         <input
+          id={inputId}
           type="text"
           inputMode="decimal"
           value={focused ? rawInput : (value ? formatDisplay(value) : '')}
