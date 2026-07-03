@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react'
 import { RefreshCw, TrendingUp, Users, BarChart2, AlertTriangle, ChevronDown, ChevronUp, CheckCircle, AlertCircle, XCircle, Info } from 'lucide-react'
 import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput } from '../../../types/startup'
 import ShareButton from '../../shared/ShareButton'
+import PDFExportButton from './StartupValuationPDF'
 import type { StartupInputState } from '../../../lib/shareUtils'
 import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'
 import { checkAIStatus } from '../../../lib/ai-api'
@@ -438,6 +439,7 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
           <h1 className="text-2xl font-bold text-slate-100">{output.company_name} — Valuation Report</h1>
         </div>
         <div className="flex items-center gap-2">
+          <PDFExportButton output={output} input={startupInput} />
           <ShareButton
             module="startup"
             inputState={{
