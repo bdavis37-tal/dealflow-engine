@@ -74,6 +74,23 @@ def _synergy_year_value(items: list[SynergyItem], year: int) -> float:
     return total
 
 
+def _cta_year_value(items: list[SynergyItem], year: int) -> float:
+    """
+    Cost-to-achieve expensed in a given year (audit fix F-12).
+
+    Each synergy's one-time cost_to_achieve is expensed straight-line over its
+    phase-in period (years 1..phase_in_years).
+    """
+    total = 0.0
+    for item in items:
+        if item.cost_to_achieve <= 0:
+            continue
+        n = max(1, item.phase_in_years)
+        if year <= n:
+            total += item.cost_to_achieve / n
+    return total
+
+
 def _build_synthetic_tranches(deal: DealInput) -> list[DebtTranche]:
     """
     If the deal has no explicit debt tranches, build a single synthetic tranche
@@ -240,6 +257,20 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     transaction_costs = get_transaction_costs(deal)
     notes: list[str] = []
 
+    # Unit-convention guard (audit fix F-8): all monetary inputs are expected in
+    # MILLIONS USD (e.g. 50.0 = $50M). Inputs above $1 trillion-in-millions almost
+    # certainly indicate raw-dollar inputs — warn but never raise.
+    if (
+        deal.acquirer.revenue > 1e6
+        or deal.target.revenue > 1e6
+        or deal.target.acquisition_price > 1e6
+    ):
+        notes.append(
+            "Warning: inputs appear to be in raw dollars, but the engine convention "
+            "is millions USD (e.g. 50.0 = $50M). Size-based defaults (fee tiers, "
+            "interest rates) and formatted outputs will be misscaled."
+        )
+
     # Fiscal year base: Year 1 = current calendar year
     fiscal_year_start = date.today().year
 
@@ -280,39 +311,106 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     # Standalone acquirer EPS (for accretion/dilution comparison)
     acq_standalone_eps = acq.eps
 
+    # acquisition_price is ENTERPRISE VALUE by convention (audit fix F-10).
+    # The equity consideration (what is paid for the target's shares) backs out
+    # target net debt: EV - debt + cash.
+    enterprise_value = deal.target.acquisition_price
+    equity_consideration = ppa.equity_consideration
+
+    # Consideration split (cash/stock/debt percentages apply to EV — the total
+    # transaction funding, since target debt is refinanced with new financing)
+    cash_used = enterprise_value * deal.structure.cash_percentage
+
     # New shares issued (for stock consideration)
     new_shares_issued = 0.0
     if deal.structure.stock_percentage > 0 and acq.share_price > 0:
-        stock_consideration = deal.target.acquisition_price * deal.structure.stock_percentage
+        stock_consideration = enterprise_value * deal.structure.stock_percentage
         new_shares_issued = stock_consideration / acq.share_price
 
     total_shares_pro_forma = acq.shares_outstanding + new_shares_issued
 
-    # Build ebitda_by_year for circularity solver (initial estimate before synergies)
-    raw_ebitda_by_year: list[float] = []
-    raw_da_by_year: list[float] = []
-    raw_capex_by_year: list[float] = []
+    # Foregone interest on cash consideration (audit fix F-3): cash paid out at
+    # close no longer earns the short-term yield. Deducted pre-tax every year.
+    cash_yield = deal.structure.cash_yield
+    foregone_interest_annual = cash_used * cash_yield
+
+    # Implied pre-existing below-EBIT items (mostly existing interest expense),
+    # backed out so pro forma NI anchors to actual reported net income instead of
+    # an EBITDA-margin rebuild that deleted them (audit fix F-2):
+    #   existing items₀ = EBIT₀ - EBT₀ = (EBITDA - D&A) - NI / (1 - tax)
+    # These are grown at each company's growth rate so the anchored EBT identity
+    # holds exactly: EBT_yr = EBT₀ × (1+g)^yr + deal adjustments.
+    acq_ebt0 = acq.net_income / (1 - acq.tax_rate) if acq.tax_rate < 1 else acq.net_income
+    tgt_ebt0 = tgt.net_income / (1 - tgt.tax_rate) if tgt.tax_rate < 1 else tgt.net_income
+    acq_existing_items0 = (acq.ebitda - acq.depreciation) - acq_ebt0
+    tgt_existing_items0 = (tgt.ebitda - tgt.depreciation) - tgt_ebt0
+
+    # Pre-compute yearly operating streams (also feeds the circularity solver
+    # with consistent, synergy-inclusive, grown inputs — audit fix F-11)
+    yr_acq_rev: list[float] = []
+    yr_tgt_rev: list[float] = []
+    yr_rev_syn: list[float] = []
+    yr_cost_syn: list[float] = []
+    yr_cta: list[float] = []
+    yr_ebitda: list[float] = []
+    yr_da: list[float] = []
+    yr_capex: list[float] = []
+    yr_existing_interest: list[float] = []
+    solver_ebitda_by_year: list[float] = []
 
     for yr in range(1, n_years + 1):
-        acq_rev_yr = acq.revenue * (1 + acquirer_revenue_growth) ** yr
-        tgt_rev_yr = tgt.revenue * (1 + target_growth) ** yr
-        combined_rev = acq_rev_yr + tgt_rev_yr
-        combined_ebitda = (
+        acq_g = (1 + acquirer_revenue_growth) ** yr
+        tgt_g = (1 + target_growth) ** yr
+        acq_rev_yr = acq.revenue * acq_g
+        tgt_rev_yr = tgt.revenue * tgt_g
+        # Revenue synergies contribute at the target's EBITDA margin, not at
+        # 100% margin (audit fix F-13)
+        rev_syn_yr = _synergy_year_value(deal.synergies.revenue_synergies, yr)
+        cost_syn_yr = _synergy_year_value(deal.synergies.cost_synergies, yr)
+        cta_yr = _cta_year_value(all_synergies, yr)
+
+        ebitda_yr = (
             acq_rev_yr * acq_ebitda_margin
             + tgt_rev_yr * tgt_ebitda_margin
+            + rev_syn_yr * tgt_ebitda_margin
+            + cost_syn_yr
+            - cta_yr
         )
-        raw_ebitda_by_year.append(combined_ebitda)
-        combined_da = (acq.depreciation + tgt.depreciation) + ppa.total_incremental_annual
-        raw_da_by_year.append(combined_da)
-        raw_capex_by_year.append(acq.capex + tgt.capex)
+        da_yr = (
+            acq.depreciation * acq_g
+            + tgt.depreciation * tgt_g
+            + ppa.total_incremental_annual
+        )
+        capex_yr = acq.capex * acq_g + tgt.capex * tgt_g
+        existing_int_yr = acq_existing_items0 * acq_g + tgt_existing_items0 * tgt_g
+
+        yr_acq_rev.append(acq_rev_yr)
+        yr_tgt_rev.append(tgt_rev_yr)
+        yr_rev_syn.append(rev_syn_yr)
+        yr_cost_syn.append(cost_syn_yr)
+        yr_cta.append(cta_yr)
+        yr_ebitda.append(ebitda_yr)
+        yr_da.append(da_yr)
+        yr_capex.append(capex_yr)
+        yr_existing_interest.append(existing_int_yr)
+
+        # The solver treats its "ebitda" input as pre-acquisition-interest,
+        # pre-tax earnings + D&A. Net out other fixed charges (existing interest,
+        # foregone cash yield, Year-1 fees) so solver FCF matches engine FCF.
+        solver_ebitda_by_year.append(
+            ebitda_yr
+            - existing_int_yr
+            - foregone_interest_annual
+            - (transaction_costs if yr == 1 else 0.0)
+        )
 
     # Solve circularity across all years
     debt_schedules, any_non_convergence = build_debt_schedule(
         tranches=tranches,
         projection_years=n_years,
-        ebitda_by_year=raw_ebitda_by_year,
-        da_by_year=raw_da_by_year,
-        capex_by_year=raw_capex_by_year,
+        ebitda_by_year=solver_ebitda_by_year,
+        da_by_year=yr_da,
+        capex_by_year=yr_capex,
         tax_rate=acq.tax_rate,
     )
 
@@ -329,54 +427,51 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     net_income_by_year: list[float] = []
     ending_debt_by_year: list[float] = []
     fcf_by_year: list[float] = []
+    # Deal-attributable (target + synergy) streams for the returns module (F-1)
+    deal_ebitda_by_year: list[float] = []
+    deal_fcf_by_year: list[float] = []
 
     for yr in range(1, n_years + 1):
         ds = debt_schedules[yr - 1]
+        acq_g = (1 + acquirer_revenue_growth) ** yr
+        tgt_g = (1 + target_growth) ** yr
 
-        # Revenue projections
-        acq_rev_yr = acq.revenue * (1 + acquirer_revenue_growth) ** yr
-        tgt_rev_yr = tgt.revenue * (1 + target_growth) ** yr
-        combined_rev = acq_rev_yr + tgt_rev_yr
+        acq_rev_yr = yr_acq_rev[yr - 1]
+        tgt_rev_yr = yr_tgt_rev[yr - 1]
+        rev_syn_yr = yr_rev_syn[yr - 1]
+        cost_syn_yr = yr_cost_syn[yr - 1]
+        cta_yr = yr_cta[yr - 1]
 
-        # Revenue synergies realized this year
-        rev_syn_yr = _synergy_year_value(deal.synergies.revenue_synergies, yr)
-        total_rev = combined_rev + rev_syn_yr
+        total_rev = acq_rev_yr + tgt_rev_yr + rev_syn_yr
 
-        # COGS (derive from gross margin; simplified combined approach)
-        # acq_gross_margin_base / tgt_gross_margin_base are pre-computed above
+        # COGS: synergy revenue carries target COGS (revenue synergies flow
+        # through at the target's margins, not 100% — audit fix F-13)
         combined_cogs = (
             acq_rev_yr * (1 - acq_gross_margin_base)
-            + tgt_rev_yr * (1 - tgt_gross_margin_base)
+            + (tgt_rev_yr + rev_syn_yr) * (1 - tgt_gross_margin_base)
         )
-
-        # Cost synergies (reduce SG&A / COGS)
-        cost_syn_yr = _synergy_year_value(deal.synergies.cost_synergies, yr)
-
         gross_profit = total_rev - combined_cogs
 
-        # SG&A: (gross_margin - ebitda_margin) × revenue for each entity, scaled by growth
-        # No division by acq.revenue needed — use the base margin gap directly
+        # SG&A: margin-gap based; cost synergies reduce it, synergy revenue adds
+        # its share, and cost-to-achieve is expensed as an operating cost (F-12)
         acq_sga = acq_rev_yr * (acq_gross_margin_base - acq_ebitda_margin)
-        tgt_sga = tgt_rev_yr * (tgt_gross_margin_base - tgt_ebitda_margin)
-        combined_sga = acq_sga + tgt_sga - cost_syn_yr
+        tgt_sga = (tgt_rev_yr + rev_syn_yr) * (tgt_gross_margin_base - tgt_ebitda_margin)
+        combined_sga = acq_sga + tgt_sga - cost_syn_yr + cta_yr
 
-        ebitda = gross_profit - combined_sga
+        ebitda = gross_profit - combined_sga  # == yr_ebitda[yr-1]
 
-        # D&A: acquirer + target + PPA incremental
-        da_total = (
-            acq.depreciation * (1 + acquirer_revenue_growth) ** yr
-            + tgt.depreciation * (1 + target_growth) ** yr
-            + ppa.total_incremental_annual
-        )
+        # D&A: acquirer + target (grown) + PPA incremental
+        da_total = yr_da[yr - 1]
 
         ebit = ebitda - da_total
 
-        # Interest expense from converged debt schedule (new acquisition debt only)
-        interest_exp = ds.total_interest_expense
-        # Track acquisition-specific interest for pro forma detail breakdown.
-        # ds.total_interest_expense covers only acquisition debt tranches;
-        # acquirer's existing debt interest is not modeled in the debt schedule.
+        # Interest expense (audit fixes F-2 / F-3):
+        #   acquisition interest (converged debt schedule)
+        # + implied existing below-EBIT items for both companies (grown)
+        # + foregone yield on cash consideration
         acquisition_interest_only = ds.total_interest_expense
+        existing_int_yr = yr_existing_interest[yr - 1]
+        interest_exp = acquisition_interest_only + existing_int_yr + foregone_interest_annual
 
         ebt = ebit - interest_exp
 
@@ -392,24 +487,53 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
 
         # Acquirer standalone EPS (grows at 3% per year for simplicity)
         standalone_eps_yr = _safe_float(acq_standalone_eps * (1.03 ** yr))
-        # Use standalone_eps_yr directly (no abs()) so that improvements from a
-        # negative base correctly show as accretive (positive %), and deteriorations
-        # from a positive base correctly show as dilutive (negative %).
+        # Audit fix F-4: divide by |standalone EPS| so the sign of the accretion %
+        # always matches the direction of the EPS change (an improvement from a
+        # negative base is positive, a deterioration from a positive base is
+        # negative). When standalone EPS <= 0 the percentage is Not Meaningful —
+        # flagged via accretion_is_nm; judge the deal on the EPS delta.
+        accretion_is_nm = standalone_eps_yr <= 0
         accretion_dilution_pct = _safe_float(
-            (pro_forma_eps - standalone_eps_yr) / standalone_eps_yr * 100
+            (pro_forma_eps - standalone_eps_yr) / abs(standalone_eps_yr) * 100
             if standalone_eps_yr != 0 else 0.0
         )
 
-        # FCF for returns roll-forward: NI + D&A - capex - WC change
-        # Optional cash sweep (debt paydown from excess FCF) is already reflected
-        # in ds.ending_debt_balance, so we track only what remains as free cash.
-        capex_yr = (acq.capex + tgt.capex)
-        fcf_yr = net_income + da_total - capex_yr - ds.optional_cash_sweep
+        # Combined FCF: NI + D&A - capex - ALL debt paydown (mandatory + optional).
+        # Audit fix F-5: mandatory principal is cash out the door too — subtracting
+        # only the optional sweep double-counted those dollars in exit equity.
+        capex_yr = yr_capex[yr - 1]
+        fcf_yr = net_income + da_total - capex_yr - ds.total_debt_paydown
+
+        # Deal-attributable earnings & FCF (target + synergies + deal effects) —
+        # the stream the returns module values (audit fix F-1)
+        syn_eff_yr = cost_syn_yr + rev_syn_yr * tgt_ebitda_margin
+        deal_ebt_yr = (
+            tgt_ebt0 * tgt_g
+            + syn_eff_yr
+            - cta_yr
+            - ppa.total_incremental_annual
+            - acquisition_interest_only
+            - foregone_interest_annual
+            - (transaction_costs if yr == 1 else 0.0)
+        )
+        deal_ni_yr = deal_ebt_yr * (1 - acq.tax_rate)
+        deal_ebitda_yr = (
+            tgt_rev_yr * tgt_ebitda_margin + syn_eff_yr - cta_yr
+        )
+        deal_fcf_yr = (
+            deal_ni_yr
+            + tgt.depreciation * tgt_g
+            + ppa.total_incremental_annual
+            - tgt.capex * tgt_g
+            - ds.total_debt_paydown
+        )
 
         ebitda_by_year.append(ebitda)
         net_income_by_year.append(net_income)
         ending_debt_by_year.append(ds.ending_debt_balance)
         fcf_by_year.append(fcf_yr)
+        deal_ebitda_by_year.append(deal_ebitda_yr)
+        deal_fcf_by_year.append(deal_fcf_yr)
 
         income_statement.append(IncomeStatementYear(
             year=yr,
@@ -428,6 +552,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             acquirer_standalone_eps=standalone_eps_yr,
             pro_forma_eps=pro_forma_eps,
             accretion_dilution_pct=accretion_dilution_pct,
+            accretion_is_nm=accretion_is_nm,
             # Pro forma adjustment detail
             acquirer_revenue=acq_rev_yr,
             target_revenue=tgt_rev_yr,
@@ -437,6 +562,9 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             synergy_cost=cost_syn_yr,
             incremental_da=ppa.total_incremental_annual,
             acquisition_interest=acquisition_interest_only,
+            existing_interest=existing_int_yr,
+            foregone_cash_interest=foregone_interest_annual,
+            integration_costs=cta_yr,
             transaction_costs=transaction_costs if yr == 1 else 0.0,
         ))
 
@@ -460,9 +588,14 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
 
         # Per-share deltas (denominator = pro forma shares for comparability)
         target_earnings_contribution = target_ni_yr / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
-        interest_drag = -(interest_exp * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        # Interest drag = NEW acquisition debt only (existing interest is part of
+        # each company's standalone earnings, already in the anchored baseline)
+        interest_drag = -(acquisition_interest_only * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        # Foregone yield on cash consideration (audit fix F-3)
+        foregone_drag = -(foregone_interest_annual * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
         da_adj = -(ppa.total_incremental_annual * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
-        syn_benefit = ((cost_syn_yr + rev_syn_yr) * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
+        # Synergies net of cost-to-achieve; revenue synergies at target margin (F-12/F-13)
+        syn_benefit = ((syn_eff_yr - cta_yr) * (1 - acq.tax_rate)) / total_shares_pro_forma if total_shares_pro_forma > 0 else 0.0
         share_dilution = (
             # EPS is diluted because the same standalone NI is spread over more shares
             -((acq_standalone_ni_yr / total_shares_pro_forma) - standalone_eps_yr)
@@ -473,6 +606,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         components_sum = (
             target_earnings_contribution
             + interest_drag
+            + foregone_drag
             + da_adj
             + syn_benefit
             + share_dilution
@@ -492,17 +626,18 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             da_adjustment=da_adj,
             synergy_benefit=syn_benefit,
             share_dilution_impact=share_dilution,
+            foregone_interest_drag=foregone_drag,
             tax_impact=tax_impact,
             total_accretion_dilution=total_bridge,
             total_accretion_dilution_pct=accretion_dilution_pct,
         ))
 
     # -----------------------------------------------------------------------
-    # Balance Sheet at Close (simplified opening BS; see F3 in review for full fix)
+    # Balance Sheet at Close (simplified opening BS with balancing plug — F-22)
     # -----------------------------------------------------------------------
     # Assets: acquirer book assets (proxied) + target intangibles + goodwill + PP&E writeup
     acq_combined_assets = (acq.revenue * 1.2) + ppa.goodwill + ppa.identifiable_intangibles + ppa.asset_writeup
-    combined_total_assets = acq_combined_assets + tgt.revenue * 0.8
+    assets_before_plug = acq_combined_assets + tgt.revenue * 0.8
 
     # Liabilities: acquirer existing debt + new acquisition debt + DTL on step-ups
     combined_total_liabilities = (
@@ -513,41 +648,66 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     # Equity: acquirer market cap + new shares at issue price
     combined_equity = acq.market_cap + new_shares_issued * acq.share_price
 
+    # Balancing plug (audit fix F-22): the asset side is a revenue-based proxy,
+    # so it will not tie to L+E exactly. Plug the difference into assets so the
+    # statement balances, and disclose it.
+    balancing_plug = (combined_total_liabilities + combined_equity) - assets_before_plug
+    combined_total_assets = assets_before_plug + balancing_plug
+    if abs(balancing_plug) > 0.5:  # > $0.5M
+        notes.append(
+            f"Opening balance sheet is simplified (revenue-based asset proxies); "
+            f"a balancing plug of {_format_currency(balancing_plug)} was applied to "
+            f"total assets so that Assets = Liabilities + Equity."
+        )
+
     balance_sheet = BalanceSheetAtClose(
         goodwill=ppa.goodwill,
         identifiable_intangibles=ppa.identifiable_intangibles,
         ppe_writeup=ppa.asset_writeup,
         new_acquisition_debt=acq_debt_total,
-        cash_used=deal.target.acquisition_price * deal.structure.cash_percentage,
+        cash_used=cash_used,
         shares_issued=new_shares_issued,
         target_equity_eliminated=max(0.0, tgt.working_capital + tgt.cash_on_hand - tgt.total_debt),
         combined_total_assets=combined_total_assets,
         combined_total_liabilities=combined_total_liabilities,
         combined_equity=combined_equity,
+        balancing_plug=balancing_plug,
     )
 
     # -----------------------------------------------------------------------
-    # Returns Analysis
+    # Returns Analysis — on the deal-attributable (target + synergy) stream (F-1)
     # -----------------------------------------------------------------------
-    returns = compute_returns(deal, ebitda_by_year, net_income_by_year, ending_debt_by_year, fcf_by_year)
+    returns = compute_returns(
+        deal,
+        deal_ebitda_by_year=deal_ebitda_by_year,
+        ending_debt_by_year=ending_debt_by_year,
+        deal_fcf_by_year=deal_fcf_by_year,
+        transaction_costs=transaction_costs,
+    )
+    notes.extend(returns.notes)
 
     # -----------------------------------------------------------------------
     # Sensitivity Matrices
     # -----------------------------------------------------------------------
     if include_sensitivity:
-        def _accretion_fn(modified_deal: DealInput) -> float:
+        def _accretion_fn(modified_deal: DealInput) -> float | None:
             """Quick re-run for sensitivity — returns Year 1 accretion as decimal.
             Calls run_deal with include_sensitivity=False to prevent recursive re-entry.
+            Returns None when the scenario fails to compute (audit fix F-21) —
+            never silently 0.0, which would render as a plausible "flat" cell.
             """
             try:
                 out = run_deal(modified_deal, include_sensitivity=False)
                 if out.pro_forma_income_statement:
                     return out.pro_forma_income_statement[0].accretion_dilution_pct / 100
-                return 0.0
+                return None
             except Exception:
-                return 0.0
+                return None
 
         sensitivity_matrices = generate_all_sensitivity_matrices(deal, _accretion_fn)
+        for m in sensitivity_matrices:
+            if m.note and "failed" in m.note:
+                notes.append(f"Sensitivity matrix '{m.title}': {m.note}")
     else:
         sensitivity_matrices = []
 
@@ -575,10 +735,22 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     defense_positioning = _compute_defense_positioning(deal, benchmarks)
 
     # -----------------------------------------------------------------------
-    # Sources & Uses of Funds
+    # Sources & Uses of Funds (audit fixes F-9 / F-10)
+    # Uses = equity purchase (EV - debt + cash) + target debt refinance + fees.
+    # Sources = consideration funding + target cash acquired; any remaining gap
+    # (typically the fees and refinance) is funded from acquirer balance-sheet
+    # cash so the table always balances.
     # -----------------------------------------------------------------------
-    cash_used = deal.target.acquisition_price * deal.structure.cash_percentage
     stock_issued_value = new_shares_issued * acq.share_price
+
+    uses: list[SourcesAndUsesItem] = [
+        SourcesAndUsesItem(label="Purchase of Target Equity", amount=equity_consideration),
+    ]
+    if tgt.total_debt > 0:
+        uses.append(SourcesAndUsesItem(label="Refinance Target Debt", amount=tgt.total_debt))
+    if transaction_costs > 0:
+        uses.append(SourcesAndUsesItem(label="Transaction Fees & Expenses", amount=transaction_costs))
+
     sources: list[SourcesAndUsesItem] = []
     if cash_used > 0:
         sources.append(SourcesAndUsesItem(label="Cash from Acquirer", amount=cash_used))
@@ -586,15 +758,26 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         sources.append(SourcesAndUsesItem(label="New Debt Financing", amount=acq_debt_total))
     if stock_issued_value > 0:
         sources.append(SourcesAndUsesItem(label="Stock Issuance", amount=stock_issued_value))
-    total_sources = sum(s.amount for s in sources)
+    if tgt.cash_on_hand > 0:
+        sources.append(SourcesAndUsesItem(label="Target Cash Acquired", amount=tgt.cash_on_hand))
 
-    uses: list[SourcesAndUsesItem] = [
-        SourcesAndUsesItem(label="Purchase Price (Equity Value)", amount=deal.target.acquisition_price),
-    ]
-    if tgt.total_debt > 0:
-        uses.append(SourcesAndUsesItem(label="Refinance Target Debt", amount=tgt.total_debt))
-    if transaction_costs > 0:
-        uses.append(SourcesAndUsesItem(label="Transaction Fees & Expenses", amount=transaction_costs))
+    funding_gap = sum(u.amount for u in uses) - sum(s.amount for s in sources)
+    additional_acquirer_cash = 0.0
+    if funding_gap > 0.005:
+        additional_acquirer_cash = funding_gap
+        sources.append(SourcesAndUsesItem(
+            label="Additional Cash from Acquirer (fees / refinancing)",
+            amount=additional_acquirer_cash,
+        ))
+    elif funding_gap < -0.005:
+        # Sources exceed uses (e.g. oversized debt tranches) — excess goes to the
+        # combined balance sheet as cash.
+        uses.append(SourcesAndUsesItem(
+            label="Cash to Combined Balance Sheet",
+            amount=-funding_gap,
+        ))
+
+    total_sources = sum(s.amount for s in sources)
     total_uses = sum(u.amount for u in uses)
 
     sources_and_uses = SourcesAndUses(
@@ -602,8 +785,19 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         uses=uses,
         total_sources=total_sources,
         total_uses=total_uses,
-        balanced=abs(total_sources - total_uses) < 0.01 * total_sources if total_sources > 0 else True,
+        balanced=abs(total_sources - total_uses) < max(0.01, 0.001 * max(total_sources, 1.0)),
     )
+
+    # Cash sufficiency validation (audit fixes F-3 / F-9): warn — never raise —
+    # when the acquirer's balance-sheet cash cannot cover its cash obligations.
+    total_acquirer_cash_needed = cash_used + additional_acquirer_cash
+    if total_acquirer_cash_needed > acq.cash_on_hand + 0.005:
+        notes.append(
+            f"Warning: acquirer cash required at close "
+            f"({_format_currency(total_acquirer_cash_needed)} including fees/refinancing) "
+            f"exceeds cash on hand ({_format_currency(acq.cash_on_hand)}). "
+            f"The deal is underfunded as structured — increase debt or stock consideration."
+        )
 
     # -----------------------------------------------------------------------
     # Contribution Analysis
@@ -644,7 +838,11 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     # -----------------------------------------------------------------------
     combined_ebitda_close = acq.ebitda + tgt.ebitda
     total_post_close_debt = acq_debt_total + acq.total_debt
-    net_debt_close = total_post_close_debt - acq.cash_on_hand + cash_used  # cash used reduces acquirer cash
+    # Net debt (audit fix F-18): net BOTH the acquirer's remaining cash (after
+    # cash consideration, fees, and any refinancing gap funded from cash) AND
+    # the target cash acquired in the transaction.
+    acq_remaining_cash = max(0.0, acq.cash_on_hand - total_acquirer_cash_needed)
+    net_debt_close = total_post_close_debt - acq_remaining_cash - tgt.cash_on_hand
     y1_interest = income_statement[0].interest_expense if income_statement else 0.0
     y1_capex = acq.capex + tgt.capex
     # Mandatory amortization from year 1 debt schedule
@@ -667,19 +865,24 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     )
 
     # -----------------------------------------------------------------------
-    # Implied Valuation Metrics
+    # Implied Valuation Metrics (audit fix F-10)
+    # acquisition_price IS the enterprise value; equity value backs out net debt.
+    # EV multiples use EV; P/E uses the equity consideration.
     # -----------------------------------------------------------------------
-    # EV = Purchase price + target debt assumed - target cash acquired
-    ev = deal.target.acquisition_price + tgt.total_debt - tgt.cash_on_hand
-    ntm_ebitda = ebitda_by_year[0] if ebitda_by_year else tgt.ebitda
+    ev = enterprise_value
+    # NTM EBITDA for the EV multiple must be target-side (EV was paid for the
+    # target, not the combined company): target Year 1 EBITDA.
+    ntm_target_ebitda = (
+        tgt.revenue * (1 + target_growth) * tgt_ebitda_margin if tgt.revenue > 0 else tgt.ebitda
+    )
 
     implied_valuation = ImpliedValuation(
         enterprise_value=ev,
-        equity_value=deal.target.acquisition_price,
+        equity_value=equity_consideration,
         ev_revenue_ltm=_safe_float(ev / tgt.revenue if tgt.revenue > 0 else 0.0),
         ev_ebitda_ltm=_safe_float(ev / tgt.ebitda if tgt.ebitda > 0 else 0.0),
-        ev_ebitda_ntm=_safe_float(ev / ntm_ebitda if ntm_ebitda > 0 else 0.0),
-        price_to_earnings=_safe_float(deal.target.acquisition_price / tgt.net_income if tgt.net_income > 0 else 0.0),
+        ev_ebitda_ntm=_safe_float(ev / ntm_target_ebitda if ntm_target_ebitda > 0 else 0.0),
+        price_to_earnings=_safe_float(equity_consideration / tgt.net_income if tgt.net_income > 0 else 0.0),
     )
 
     # -----------------------------------------------------------------------
@@ -705,12 +908,23 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         for yr in range(1, 6)
     )
 
-    # Breakeven synergy: minimum synergies for Year 1 accretion
-    # At zero synergies, what's the accretion? If negative, how much synergy to break even?
-    y1_no_syn = income_statement[0].accretion_dilution_pct  # Already includes synergies
-    syn_yr1 = _synergy_year_value(deal.synergies.cost_synergies + deal.synergies.revenue_synergies, 1)
-    # Approximate: each dollar of synergy (after tax) per share adds to accretion
-    breakeven_synergy = max(0.0, total_annual_synergies * 0.3)  # 30% of assumed synergies as minimum threshold
+    # Breakeven synergy (audit fix F-14): closed-form Year-1 EPS-neutral synergy.
+    # Year-1 NI is linear in pre-tax synergies S (in the taxable region):
+    #   NI(S) = NI_actual + (S - S_actual) × (1 - tax)
+    # EPS-neutral requires NI(S) = standalone_EPS₁ × pro forma shares, so:
+    #   S* = S_actual + (required_NI - NI_actual) / (1 - tax)
+    y1_is = income_statement[0]
+    required_ni_y1 = y1_is.acquirer_standalone_eps * total_shares_pro_forma
+    syn_y1_effective = (
+        _synergy_year_value(deal.synergies.cost_synergies, 1)
+        + _synergy_year_value(deal.synergies.revenue_synergies, 1) * tgt_ebitda_margin
+    )
+    tax_factor = (1 - acq.tax_rate) if y1_is.ebt > 0 else 1.0  # NI = EBT when EBT <= 0
+    breakeven_synergy = max(
+        0.0,
+        syn_y1_effective + (required_ni_y1 - y1_is.net_income) / tax_factor
+        if tax_factor > 0 else 0.0,
+    )
 
     # Debt paydown timeline
     paydown_year = n_years
@@ -751,12 +965,15 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         ScorecardMetric(
             name="Year 1 Accretion / Dilution",
             value=y1.accretion_dilution_pct,
-            formatted_value=_format_pct(y1.accretion_dilution_pct),
+            formatted_value="NM" if y1.accretion_is_nm else _format_pct(y1.accretion_dilution_pct),
             benchmark_low=-5.0,
             benchmark_median=0.0,
             benchmark_high=10.0,
             health_status=HealthStatus.GOOD if y1.accretion_dilution_pct > 2 else (HealthStatus.FAIR if y1.accretion_dilution_pct > 0 else HealthStatus.POOR),
-            description="Change in earnings per share vs acquirer standalone in Year 1",
+            description=(
+                "Change in earnings per share vs acquirer standalone in Year 1"
+                + (" (% is Not Meaningful — standalone EPS is negative; judge the EPS delta)" if y1.accretion_is_nm else "")
+            ),
         ),
         ScorecardMetric(
             name="Pro Forma EPS (Year 1)",
@@ -871,7 +1088,20 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     # -----------------------------------------------------------------------
     # Verdict
     # -----------------------------------------------------------------------
+    # Audit fix F-4: with the abs(standalone) convention, the sign of the
+    # accretion % always matches the direction of the Year-1 EPS delta, so the
+    # thresholds below remain valid even for a loss-making acquirer. When
+    # standalone EPS <= 0 the % magnitude is Not Meaningful — the verdict is
+    # effectively driven by the EPS delta and the copy references the delta.
     y1_ad = y1.accretion_dilution_pct
+    y1_eps_delta = y1.pro_forma_eps - y1.acquirer_standalone_eps
+    y1_is_nm = y1.accretion_is_nm
+
+    def _ad_text() -> str:
+        """Human-readable Year-1 impact — % when meaningful, $ delta when NM."""
+        if y1_is_nm:
+            return f"${y1_eps_delta:+.2f} EPS vs a negative standalone base"
+        return f"{y1_ad:+.1f}%"
 
     # Defense deals get adjusted verdict logic — backlog and certifications
     # can justify a higher price that would look dilutive on pure EPS math
@@ -882,13 +1112,21 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
 
     if y1_ad > 2.0:
         verdict = DealVerdict.GREEN
-        headline = f"This deal is accretive to earnings by {y1_ad:+.1f}% in Year 1"
+        headline = (
+            f"This deal improves Year 1 EPS by {_ad_text()}" if y1_is_nm
+            else f"This deal is accretive to earnings by {y1_ad:+.1f}% in Year 1"
+        )
         subtext = (
             f"The combined company would earn ${y1.pro_forma_eps:.2f} per share vs "
             f"${y1.acquirer_standalone_eps:.2f} standalone — a "
-            f"${(y1.pro_forma_eps - y1.acquirer_standalone_eps):.2f} improvement "
+            f"${y1_eps_delta:.2f} improvement "
             f"driven primarily by {'cost savings' if sum(s.annual_amount for s in deal.synergies.cost_synergies) > 0 else 'target earnings contribution'}."
         )
+        if y1_is_nm:
+            subtext += (
+                " Standalone EPS is negative, so the accretion percentage is not "
+                "meaningful — the verdict is based on the dollar EPS improvement."
+            )
         if is_defense_deal:
             subtext += (
                 f" Defense positioning adds {defense_positioning.total_defense_premium_pct:.0%} "
@@ -905,11 +1143,16 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
                 f"Revenue visibility of {defense_positioning.revenue_visibility_years:.1f} years from funded backlog."
             )
         else:
-            headline = f"This deal is marginally neutral ({y1_ad:+.1f}% in Year 1)"
+            headline = f"This deal is marginally neutral ({_ad_text()} in Year 1)"
             subtext = (
                 "At this price, the deal has minimal EPS impact in Year 1. "
                 "It becomes more meaningful as synergies phase in and debt is repaid."
             )
+            if y1_is_nm:
+                subtext += (
+                    " Standalone EPS is negative, so percentage accretion is not "
+                    "meaningful — judge the dollar EPS delta."
+                )
             if is_defense_deal:
                 subtext += (
                     f" Defense backlog of ${defense_positioning.combined_backlog:.0f}M "
@@ -917,8 +1160,12 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
                 )
     else:
         verdict = DealVerdict.RED
-        min_syn = abs(y1_ad / 100 * y1.acquirer_standalone_eps * total_shares_pro_forma / (1 - acq.tax_rate))
-        headline = f"At this price, the deal destroys near-term earnings by {y1_ad:.1f}%"
+        # Pre-tax annual synergies needed to close the Year-1 EPS gap
+        min_syn = abs(y1_eps_delta) * total_shares_pro_forma / max(1e-9, (1 - acq.tax_rate))
+        headline = (
+            f"At this price, the deal worsens Year 1 EPS by ${abs(y1_eps_delta):.2f}" if y1_is_nm
+            else f"At this price, the deal destroys near-term earnings by {y1_ad:.1f}%"
+        )
         subtext = (
             f"The deal requires synergies exceeding approximately "
             f"{_format_currency(min_syn)}/year to break even. "

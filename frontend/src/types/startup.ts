@@ -41,7 +41,18 @@ export type ProductStage = 'idea' | 'mvp' | 'beta' | 'paying_customers' | 'scali
 
 export type ValuationSignal = 'strong' | 'fair' | 'weak' | 'warning'
 
+/**
+ * Verdict vs. the vertical/stage benchmark distribution (see
+ * startup_engine._assign_verdict):
+ *   stretched: blended >= P75 — above-market; strong story required
+ *   strong:    P50–P75 — top half; founder has pricing power
+ *   fair:      P25–P50 — below median but market-rate terms
+ *   at_risk:   < P25 — below-market; hit milestones before raising
+ */
 export type ValuationVerdict = 'strong' | 'fair' | 'stretched' | 'at_risk'
+
+/** SAFE mechanics: post_money (YC 2018+ standard) = raise/cap; pre_money (legacy) = raise/(cap+raise) */
+export type SAFEType = 'post_money' | 'pre_money'
 
 export type RaiseSignal = 'raise_now' | 'raise_in_months' | 'focus_milestones'
 
@@ -96,6 +107,7 @@ export interface FundraisingProfile {
   raise_amount: number
   instrument: InstrumentType
   pre_money_valuation_ask: number | null
+  safe_type: SAFEType
   safe_discount: number
   has_mfn_clause: boolean
   existing_safe_stack: number
@@ -145,8 +157,19 @@ export interface SAFEConversionSummary {
   safe_amount: number
   valuation_cap: number
   discount_rate: number
-  conversion_price_at_cap: number
+  safe_type: string
+  /** null unless shares outstanding are known — per-share price is not modeled */
+  conversion_price_at_cap: number | null
+  /** ownership implied by the cap alone */
   implied_ownership_pct: number
+  /** projected next priced round pre-money */
+  next_round_pre_money: number | null
+  /** min(cap, next_round_pre × (1 − discount)) */
+  conversion_valuation: number | null
+  /** ownership at the projected conversion */
+  conversion_ownership_pct: number | null
+  /** which term set the conversion price: 'cap' | 'discount' */
+  governing_term: string | null
   note: string
 }
 

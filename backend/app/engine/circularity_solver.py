@@ -15,14 +15,20 @@ We resolve this with an iterative approach using average-balance interest:
   7. Compare to previous iteration; apply damping.
   8. Repeat until convergence or max iterations.
 
-NOTE: Prior convention used beginning-of-year (BOY) balances for interest, which
-removed the intra-year circular dependency but also prevented FCF-driven paydown
-from affecting interest within the year. This implementation switches to average-
-balance interest to model the full circularity accurately. The change is documented
-here per CLAUDE.md convention.
+INTEREST CONVENTION NOTE: The original convention computed interest on
+beginning-of-year (BOY) balances (standard banking convention), which removed the
+intra-year circular dependency but also prevented FCF-driven paydown from affecting
+interest within the year. The current implementation computes interest on the
+AVERAGE balance ((BOY + EOY) / 2) to model the full circularity accurately.
+Any change to this convention must be documented here.
 
-Convergence tolerance: $1 or 0.01% of interest, whichever is smaller.
-Max iterations: 100. Damping factor: 0.5 (prevents oscillation).
+Convergence: iteration stops when EITHER the absolute interest change is <= $1
+(1e-6 in millions-USD units) OR the relative change is <= 0.01% — whichever
+criterion is met first. Max iterations: 100. Damping factor: 0.5 (prevents
+oscillation). Non-convergence never raises; it sets converged=False and the
+engine surfaces a convergence warning.
+
+UNITS: all monetary inputs/outputs are in millions USD per project convention.
 """
 from __future__ import annotations
 
@@ -34,7 +40,7 @@ from .models import DebtTranche, AmortizationType
 logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 100
-ABSOLUTE_TOLERANCE = 1.0          # $1
+ABSOLUTE_TOLERANCE = 1e-6         # $1 (inputs are in millions USD: 1e-6 = $1)
 RELATIVE_TOLERANCE = 0.0001       # 0.01%
 DAMPING = 0.5                     # Blend old/new estimate to prevent oscillation
 
@@ -225,7 +231,7 @@ def solve_year(
 
         # Step 4: check convergence
         abs_diff = abs(total_new_interest - prev_interest)
-        rel_diff = abs_diff / max(abs(prev_interest), 1.0)
+        rel_diff = abs_diff / max(abs(prev_interest), 1e-9)
 
         final_schedules = schedules
         final_ni = net_income
@@ -241,7 +247,7 @@ def solve_year(
     if not converged:
         logger.warning(
             "Circularity solver did not converge in %d iterations (year %d). "
-            "Using best estimate: interest=$%.0f",
+            "Using best estimate: interest=$%.2fM",
             MAX_ITERATIONS,
             year,
             prev_interest,

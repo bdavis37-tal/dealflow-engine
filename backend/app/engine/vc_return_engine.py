@@ -59,13 +59,20 @@ _DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "vc_benchmark
 # Helpers
 # ---------------------------------------------------------------------------
 
+_BENCHMARKS_CACHE: Optional[dict] = None
+
+
 def _load_benchmarks() -> dict:
-    try:
-        with open(_DATA_PATH, "r") as f:
-            return json.load(f)
-    except Exception:
-        logger.warning("Could not load vc_benchmarks.json — using hardcoded defaults")
-        return {}
+    """Load vc_benchmarks.json once and cache at module level (the file is static)."""
+    global _BENCHMARKS_CACHE
+    if _BENCHMARKS_CACHE is None:
+        try:
+            with open(_DATA_PATH, "r") as f:
+                _BENCHMARKS_CACHE = json.load(f)
+        except Exception:
+            logger.warning("Could not load vc_benchmarks.json — using hardcoded defaults")
+            _BENCHMARKS_CACHE = {}
+    return _BENCHMARKS_CACHE
 
 
 def _irr(investment: float, proceeds: float, years: float) -> float:
@@ -81,7 +88,12 @@ def _npv(rate: float, cashflows: list[tuple[float, float]]) -> float:
 
 
 def _xirr(investment: float, proceeds: float, years: float) -> float:
-    """Binary-search IRR (same as _irr for single cashflow)."""
+    """Alias of :func:`_irr` kept for API compatibility.
+
+    Despite the name, this is NOT an irregular-cashflow XIRR — it handles the
+    single cash-in / single cash-out case only (closed form, no search).
+    For true multi-cashflow IRR see ``run_fund_irr_analysis``.
+    """
     return _irr(investment, proceeds, years)
 
 
@@ -161,16 +173,38 @@ def compute_ownership_math(
     exit_pct = current_pct
     total_dilution = 1.0 - (exit_pct / entry_pct) if entry_pct > 0 else 0.0
 
-    # Fund returner thresholds
+    # Fund returner thresholds — GROSS: the exit EV at which this position's
+    # gross proceeds equal target_x × fund size (before fees and carry).
     def fund_returner_exit(target_x: float) -> float:
         target_proceeds = fund_profile.fund_size * target_x
         if exit_pct <= 0:
             return float("inf")
         return target_proceeds / exit_pct
 
+    # NET variant: exit EV at which LPs receive target_x × fund size AFTER
+    # carry. Required gross distribution D solves:
+    #   D − carry × max(0, D − check) = target_x × fund_size
+    #   → D = (target_x × fund_size − carry × check) / (1 − carry)
+    # Management fees are implicitly covered because the target is stated on
+    # committed capital (which is what funds the fees); no separate fee term
+    # is added on top.
+    def fund_returner_exit_net(target_x: float) -> float:
+        if exit_pct <= 0:
+            return float("inf")
+        target_net = fund_profile.fund_size * target_x
+        c = fund_profile.carry_pct
+        if c < 1.0 and target_net > check_size:
+            gross_needed = (target_net - c * check_size) / (1.0 - c)
+        else:
+            gross_needed = target_net
+        return gross_needed / exit_pct
+
     fr_1x = fund_returner_exit(1.0)
     fr_3x = fund_returner_exit(3.0)
     fr_5x = fund_returner_exit(5.0)
+    fr_1x_net = fund_returner_exit_net(1.0)
+    fr_3x_net = fund_returner_exit_net(3.0)
+    fr_5x_net = fund_returner_exit_net(5.0)
 
     # Test exits at round numbers
     test_exits = [50, 100, 250, 500, 1000, 2000, 5000, 10000]
@@ -189,6 +223,9 @@ def compute_ownership_math(
         fund_returner_1x_exit=fr_1x,
         fund_returner_3x_exit=fr_3x,
         fund_returner_5x_exit=fr_5x,
+        fund_returner_1x_exit_net=fr_1x_net,
+        fund_returner_3x_exit_net=fr_3x_net,
+        fund_returner_5x_exit_net=fr_5x_net,
         exit_values_tested=[float(e) for e in test_exits],
         gross_proceeds_at_exits=gross_at_exits,
         fund_contribution_at_exits=contribution_at_exits,
@@ -200,6 +237,62 @@ def compute_ownership_math(
 # ---------------------------------------------------------------------------
 # 2. Scenario Engine
 # ---------------------------------------------------------------------------
+
+GROWTH_DECAY_FACTOR = 0.70   # each year, growth rate decays to 70% of prior year
+TERMINAL_GROWTH_FLOOR = 0.15  # growth never decays below 15% (healthy SaaS terminal pace)
+ARR_PROJECTION_CAP_X = 100.0  # hard guardrail: projected ARR ≤ 100x current ARR
+
+
+def _project_arr(current_arr: float, initial_growth: float, years: int) -> float:
+    """Project ARR forward with annual growth-rate decay.
+
+    Startups do not compound a constant hypergrowth rate for 7+ years; growth
+    fades as base revenue scales. We decay the growth rate geometrically each
+    year (g_{t+1} = g_t × GROWTH_DECAY_FACTOR) toward a terminal floor of
+    TERMINAL_GROWTH_FLOOR. The result is capped at ARR_PROJECTION_CAP_X ×
+    current ARR — an aggressive but bounded guardrail for long horizons.
+    """
+    arr = current_arr
+    g = max(0.0, initial_growth)
+    for _ in range(max(0, years)):
+        arr *= (1.0 + g)
+        g = max(TERMINAL_GROWTH_FLOOR, g * GROWTH_DECAY_FACTOR)
+    return min(arr, current_arr * ARR_PROJECTION_CAP_X)
+
+
+def _stage_scenario_weights(stage: VCStage, benchmarks: dict) -> tuple[float, float, float]:
+    """Derive (bear, base, bull) probabilities for the entry stage.
+
+    Bear is the FAILURE branch (write-off / near-total loss). Its probability
+    is seeded from stage_transition_probabilities in vc_benchmarks.json:
+      - seed:      seed_to_failure directly (Carta/Correlation Ventures ~0.62)
+      - pre-seed:  fail the pre-seed→seed graduation OR fail later as a seed
+                   company: 1 − P(graduate) × (1 − P(seed failure))
+      - later stages: heuristic loss rates anchored on Correlation Ventures
+        loss-rate curves (loss rates fall as companies mature).
+    Bull is the power-law tail: 25% of the survival mass, capped at 15%.
+    Base absorbs the remainder.
+    """
+    st = benchmarks.get("stage_transition_probabilities", {})
+    seed_fail = st.get("seed_to_failure", 0.60)
+    if stage == VCStage.SEED:
+        p_fail = seed_fail
+    elif stage == VCStage.PRE_SEED:
+        p_graduate = st.get("pre_seed_to_seed", 0.50)
+        p_fail = 1.0 - p_graduate * (1.0 - seed_fail)
+    elif stage == VCStage.SERIES_A:
+        p_fail = 0.45
+    elif stage == VCStage.SERIES_B:
+        p_fail = 0.30
+    elif stage == VCStage.SERIES_C:
+        p_fail = 0.20
+    else:  # GROWTH
+        p_fail = 0.10
+    p_fail = min(0.85, max(0.05, p_fail))
+    p_bull = min(0.15, 0.25 * (1.0 - p_fail))
+    p_base = max(0.0, 1.0 - p_fail - p_bull)
+    return p_fail, p_base, p_bull
+
 
 def _build_scenario(
     label: str,
@@ -216,11 +309,11 @@ def _build_scenario(
     outcome_description: str,
     revenue_growth_rate: float = 1.5,
 ) -> VCScenario:
-    """Build a single scenario.
+    """Build a single upside (base/bull) scenario.
 
     Exit EV = exit_multiple × projected_ARR_at_exit_year.
-    ARR is projected forward using the deal's revenue growth rate, which
-    itself is scenario-adjusted (bear: 0.5x, base: 1.0x, bull: 1.3x of stated rate).
+    ARR is projected with annual growth decay (see _project_arr); the deal's
+    stated growth rate is scenario-adjusted (base: 1.0x, bull: 1.3x).
     If no ARR/revenue data, uses a $10M ARR placeholder.
     """
     # Use ARR if available, fall back to revenue
@@ -228,12 +321,10 @@ def _build_scenario(
 
     if current_revenue and current_revenue > 0:
         # Scenario-specific growth rate modifier
-        growth_mods = {"Bear": 0.5, "Base": 1.0, "Bull": 1.3}
+        growth_mods = {"Base": 1.0, "Bull": 1.3}
         mod = growth_mods.get(label, 1.0)
         effective_growth = max(0.0, revenue_growth_rate * mod)
-        # Project ARR to exit year (capped at 10x current to avoid unrealistic projections)
-        projected_arr = current_revenue * ((1 + effective_growth) ** exit_year)
-        projected_arr = min(projected_arr, current_revenue * 100)  # cap at 100x current
+        projected_arr = _project_arr(current_revenue, effective_growth, exit_year)
         exit_ev = exit_multiple_arr * projected_arr
     else:
         # No revenue data — use a conservative placeholder
@@ -267,6 +358,63 @@ def _build_scenario(
     )
 
 
+def _build_bear_scenario(
+    deal: VCDealInput,
+    fund: FundProfile,
+    exit_ownership_pct: float,
+    probability: float,
+) -> VCScenario:
+    """Build the bear (failure) scenario: write-off / near-total loss.
+
+    By default the bear branch is a full write-off (exit EV = 0). If the user
+    supplies bear_exit_multiple_arr, it is treated as a salvage multiple on
+    CURRENT ARR (no growth projection) — e.g. an acqui-hire or fire sale.
+    """
+    current_revenue = deal.arr if deal.arr > 0 else (deal.revenue_ttm if deal.revenue_ttm > 0 else 10.0)
+    if deal.bear_exit_multiple_arr is not None:
+        bear_mult = deal.bear_exit_multiple_arr
+        exit_ev = bear_mult * current_revenue
+        description = (
+            f"Downside: salvage exit at {bear_mult:.1f}x current ARR "
+            f"(user override). Fire sale / acqui-hire recovery; "
+            "most invested capital is lost."
+        )
+    else:
+        bear_mult = 0.0
+        exit_ev = 0.0
+        description = (
+            "Failure case: company shuts down or exits below the preference "
+            "stack — invested capital is written off. Probability seeded from "
+            "stage transition/failure benchmarks."
+        )
+
+    exit_yr = deal.expected_exit_years
+    gross_proceeds = exit_ev * exit_ownership_pct
+    net_proceeds = _carry_adj_proceeds(gross_proceeds, deal.check_size, fund.carry_pct,
+                                       fund.hurdle_rate, exit_yr)
+    gross_moic = gross_proceeds / deal.check_size if deal.check_size > 0 else 0.0
+    net_moic = net_proceeds / deal.check_size if deal.check_size > 0 else 0.0
+    # Total loss → IRR is -100%, not 0%
+    gross_irr = _irr(deal.check_size, gross_proceeds, exit_yr) if gross_proceeds > 0 else -1.0
+    net_irr = _irr(deal.check_size, net_proceeds, exit_yr) if net_proceeds > 0 else -1.0
+
+    return VCScenario(
+        label="Bear",
+        probability=probability,
+        exit_year=exit_yr,
+        exit_multiple_arr=bear_mult,
+        exit_enterprise_value=exit_ev,
+        gross_proceeds_to_fund=gross_proceeds,
+        net_proceeds_to_fund=net_proceeds,
+        gross_moic=gross_moic,
+        net_moic=net_moic,
+        gross_irr=gross_irr,
+        net_irr=net_irr,
+        fund_contribution_x=gross_proceeds / fund.fund_size,
+        outcome_description=description,
+    )
+
+
 def compute_scenarios(
     deal: VCDealInput,
     fund: FundProfile,
@@ -277,43 +425,28 @@ def compute_scenarios(
     Build bear/base/bull scenarios using vertical benchmarks or overrides.
 
     Exit multiples are ARR multiples (or revenue multiples for non-SaaS).
-    Probabilities follow typical VC power-law distribution:
-      - Bear:  40% probability (includes 0x write-off scenarios)
-      - Base:  40% probability
-      - Bull:  20% probability
+
+    Scenario weights are derived per entry stage from the benchmark stage
+    transition/failure probabilities (see _stage_scenario_weights):
+      - Bear = failure mass (write-off / near-total loss)
+      - Bull = power-law tail of the survival mass
+      - Base = the remainder
     """
     vertical_data = benchmarks.get("verticals", {}).get(deal.vertical.value, {})
     exit_multiples = vertical_data.get("exit_multiples", {})
 
-    bear_mult = deal.bear_exit_multiple_arr or exit_multiples.get("bear", 2.0)
     base_mult = deal.base_exit_multiple_arr or exit_multiples.get("base", 5.0)
     bull_mult = deal.bull_exit_multiple_arr or exit_multiples.get("bull", 12.0)
 
+    p_bear, p_base, p_bull = _stage_scenario_weights(deal.stage, benchmarks)
+
     exit_yr = deal.expected_exit_years
 
-    bear = _build_scenario(
-        label="Bear",
-        probability=0.40,
-        exit_multiple_arr=bear_mult,
-        arr=deal.arr,
-        revenue_ttm=deal.revenue_ttm,
-        exit_year=exit_yr,
-        exit_ownership_pct=exit_ownership_pct,
-        check_size=deal.check_size,
-        fund_size=fund.fund_size,
-        carry_pct=fund.carry_pct,
-        hurdle=fund.hurdle_rate,
-        revenue_growth_rate=deal.revenue_growth_rate,
-        outcome_description=(
-            f"Modest outcome: {bear_mult:.0f}x ARR at exit. "
-            "Company reaches product-market fit but faces execution challenges, "
-            "competitive pressure, or unfavorable exit environment."
-        ),
-    )
+    bear = _build_bear_scenario(deal, fund, exit_ownership_pct, p_bear)
 
     base = _build_scenario(
         label="Base",
-        probability=0.40,
+        probability=p_base,
         exit_multiple_arr=base_mult,
         arr=deal.arr,
         revenue_ttm=deal.revenue_ttm,
@@ -325,7 +458,7 @@ def compute_scenarios(
         hurdle=fund.hurdle_rate,
         revenue_growth_rate=deal.revenue_growth_rate,
         outcome_description=(
-            f"Expected case: {base_mult:.0f}x ARR at exit. "
+            f"Expected surviving case: {base_mult:.0f}x ARR at exit. "
             "Company executes on plan, reaches growth milestones, "
             "and achieves a strategic M&A exit or IPO at median valuations."
         ),
@@ -333,7 +466,7 @@ def compute_scenarios(
 
     bull = _build_scenario(
         label="Bull",
-        probability=0.20,
+        probability=p_bull,
         exit_multiple_arr=bull_mult,
         arr=deal.arr,
         revenue_ttm=deal.revenue_ttm,
@@ -376,74 +509,113 @@ def compute_quick_screen(
     bull: VCScenario,
     benchmarks: dict,
 ) -> QuickScreenResult:
-    """Single-screen pass/look-deeper/strong-interest recommendation."""
-    flags: list[str] = []
+    """Single-screen pass/look-deeper/strong-interest recommendation.
+
+    Anchored on (a) the bull case's fund contribution — can this deal move the
+    needle for the fund if it works — and (b) the probability-weighted expected
+    MOIC across the corrected distribution (which includes the failure mass in
+    the bear branch).
+    """
+    # Structured flags: (code, message). Codes drive the recommendation logic;
+    # messages are surfaced to the UI. Avoids brittle substring matching.
+    structured_flags: list[tuple[str, str]] = []
     entry_pct = ownership.entry_ownership_pct
     exit_pct = ownership.exit_ownership_pct
 
     # Ownership check
     adequacy = _ownership_adequacy(entry_pct, fund.target_ownership_pct)
     if adequacy == "thin":
-        flags.append(f"Ownership thin: {entry_pct:.1%} entry vs {fund.target_ownership_pct:.1%} target")
+        structured_flags.append((
+            "thin_ownership",
+            f"Ownership thin: {entry_pct:.1%} entry vs {fund.target_ownership_pct:.1%} target",
+        ))
 
     # Check size vs target
     target_check = fund.target_initial_check_size
     if target_check > 0 and deal.check_size > target_check * 1.5:
-        flags.append(f"Check size ${deal.check_size:.1f}M exceeds target ${target_check:.1f}M by >50%")
+        structured_flags.append((
+            "oversized_check",
+            f"Check size ${deal.check_size:.1f}M exceeds target ${target_check:.1f}M by >50%",
+        ))
 
     # Valuation vs benchmark
     vdata = benchmarks.get("verticals", {}).get(deal.vertical.value, {})
     stage_data = vdata.get(deal.stage.value, {})
     median_post = stage_data.get("median_post_money_usd_m", None)
     if median_post and deal.post_money_valuation > median_post * 1.5:
-        flags.append(
+        structured_flags.append((
+            "rich_valuation",
             f"Valuation ${deal.post_money_valuation:.0f}M is >1.5x median ${median_post:.0f}M for "
-            f"{deal.stage.value} {deal.vertical.value}"
-        )
+            f"{deal.stage.value} {deal.vertical.value}",
+        ))
 
-    # Fund returner check
+    # Fund returner check (base surviving case vs gross 1x-fund threshold)
     fr_threshold = ownership.fund_returner_1x_exit
     if base.exit_enterprise_value < fr_threshold:
-        flags.append(
+        structured_flags.append((
+            "below_fund_returner",
             f"Base case exit (${base.exit_enterprise_value:.0f}M) below fund-returner "
-            f"threshold (${fr_threshold:.0f}M)"
-        )
+            f"threshold (${fr_threshold:.0f}M)",
+        ))
 
     # Runway
     if deal.burn_rate_monthly > 0 and deal.cash_on_hand > 0:
         runway = _runway_months(deal.cash_on_hand, deal.burn_rate_monthly)
         if runway and runway < 12:
-            flags.append(f"Short runway: {runway:.0f} months")
+            structured_flags.append(("short_runway", f"Short runway: {runway:.0f} months"))
 
     # ARR multiple at entry
     if deal.arr > 0:
         arr_multiple = deal.post_money_valuation / deal.arr
         benchmark_arr_mult = stage_data.get("median_arr_multiple", None)
         if benchmark_arr_mult and arr_multiple > benchmark_arr_mult * 1.5:
-            flags.append(
+            structured_flags.append((
+                "rich_arr_multiple",
                 f"Entry ARR multiple {arr_multiple:.0f}x vs benchmark {benchmark_arr_mult:.0f}x "
-                f"(paying {arr_multiple/benchmark_arr_mult:.1f}x median)"
-            )
+                f"(paying {arr_multiple/benchmark_arr_mult:.1f}x median)",
+            ))
 
-    # Recommendation
-    serious_flags = len([f for f in flags if "thin" in f or "below fund-returner" in f or "Short runway" in f])
-    if base.gross_moic >= 10 and adequacy in ("strong", "acceptable") and serious_flags == 0:
+    flags = [msg for _, msg in structured_flags]
+
+    # Recommendation — probability-weighted expected MOIC (includes failure mass)
+    # plus bull-case fund contribution.
+    expected_moic = (
+        bear.probability * bear.gross_moic
+        + base.probability * base.gross_moic
+        + bull.probability * bull.gross_moic
+    )
+    bull_fund_contribution = bull.fund_contribution_x
+
+    serious_codes = {"thin_ownership", "below_fund_returner", "short_runway"}
+    serious_flags = len([c for c, _ in structured_flags if c in serious_codes])
+
+    if (
+        bull_fund_contribution >= 1.0
+        and expected_moic >= 3.0
+        and adequacy in ("strong", "acceptable")
+        and serious_flags == 0
+    ):
         rec = "strong_interest"
         rec_rationale = (
-            f"Base case {base.gross_moic:.1f}x MOIC, ownership adequate at {entry_pct:.1%} entry, "
-            "no blocking flags. Merits serious diligence."
+            f"Bull case returns {bull_fund_contribution:.1f}x the fund, probability-weighted "
+            f"expected MOIC {expected_moic:.1f}x (after {bear.probability:.0%} failure mass), "
+            f"ownership adequate at {entry_pct:.1%} entry, no blocking flags. Merits serious diligence."
         )
-    elif base.gross_moic >= 5 and serious_flags <= 1:
+    elif (bull_fund_contribution >= 0.5 or expected_moic >= 2.0) and serious_flags <= 1:
         rec = "look_deeper"
         rec_rationale = (
-            f"Base case {base.gross_moic:.1f}x MOIC is attractive. "
+            f"Bull case contributes {bull_fund_contribution:.1f}x of the fund; probability-weighted "
+            f"expected MOIC {expected_moic:.1f}x. "
             f"{'Address flags before proceeding.' if flags else 'Conduct standard diligence.'}"
         )
     else:
         rec = "pass"
         rec_rationale = (
-            f"Base case {base.gross_moic:.1f}x MOIC insufficient given fund math, "
-            f"or {len(flags)} blocking flag(s). Pass or revisit at better terms."
+            f"Even in the bull case this deal contributes only {bull_fund_contribution:.1f}x of the "
+            f"fund, and probability-weighted expected MOIC is {expected_moic:.1f}x after the "
+            f"{bear.probability:.0%} failure probability — insufficient given fund math"
+            f"{f', with {serious_flags} blocking flag(s)' if serious_flags else ''}. "
+            "Pass or revisit at better terms."
         )
 
     arr_multiple_entry = (deal.post_money_valuation / deal.arr) if deal.arr > 0 else None
@@ -479,72 +651,151 @@ def compute_waterfall(deal: VCDealInput, exit_ev: float) -> WaterfallDistributio
     """
     Distribute exit proceeds through the liquidation preference stack.
     Handles non-participating, participating, and capped participating preferred.
+
+    Mechanics:
+    - Preferences are paid senior → junior; a class that converts to common
+      forfeits its preference (which returns to the residual pool).
+    - The residual is shared pro-rata (on as-converted ownership) among common,
+      converted classes, and participating classes.
+    - Convert/stay decisions are re-solved to a fixed point: each class's
+      decision is evaluated against the distribution implied by everyone
+      else's current decision (senior → junior), iterating until stable.
+    - Capped participating classes hold the conversion option too:
+      gets = max(min(pref + participation, cap), as-converted value).
+    - As-converted ownership uses LiquidationPreference.ownership_pct when
+      provided; otherwise falls back to dollar-proportional estimation
+      (invested / total invested, scaled by 1 − common%) with a note.
     """
     stack = sorted(deal.liquidation_stack, key=lambda x: x.seniority)
-    remaining = exit_ev
-    distributions: list[dict] = []
-
-    # Step 1: Pay liquidation preferences in seniority order
-    for pref in stack:
-        pref_amount = pref.invested_amount * pref.preference_multiple
-        paid = min(remaining, pref_amount)
-        remaining -= paid
-        distributions.append({
-            "share_class": pref.share_class,
-            "type": pref.preference_type.value,
-            "preference_amount": pref.invested_amount,
-            "preference_multiple": pref.preference_multiple,
-            "liquidation_payout": paid,
-            "conversion_value": 0.0,  # filled later
-            "gets": paid,
-            "converted": False,
-        })
-
-    # Step 2: Distribute remainder to common (and participating preferred if applicable)
-    # Estimate total shares to allocate remainder proportionally
-    total_preferred_invested = sum(p.invested_amount for p in stack) if stack else 1.0
+    n = len(stack)
+    notes: list[str] = []
     common_fraction = deal.common_shares_pct
 
-    for i, (d, pref) in enumerate(zip(distributions, stack)):
-        if pref.preference_type == PreferenceType.NON_PARTICIPATING:
-            # Check if conversion is better
-            preferred_fraction = (pref.invested_amount / total_preferred_invested) * (1 - common_fraction)
-            conversion_value = exit_ev * preferred_fraction
-            if conversion_value > d["liquidation_payout"]:
-                d["gets"] = conversion_value
-                d["converted"] = True
-                d["conversion_value"] = conversion_value
+    if n == 0:
+        return WaterfallDistribution(
+            exit_ev=exit_ev, share_classes=[], common_gets=max(0.0, exit_ev),
+            total_distributed=max(0.0, exit_ev), investor_total=0.0,
+            investor_moic=0.0, conversion_was_optimal=False, notes=notes,
+        )
 
-        elif pref.preference_type == PreferenceType.PARTICIPATING:
-            # Gets liquidation preference + pro-rata on remainder
-            preferred_fraction = (pref.invested_amount / total_preferred_invested) * (1 - common_fraction)
-            participation = remaining * preferred_fraction
-            d["gets"] = d["liquidation_payout"] + participation
-            d["conversion_value"] = d["gets"]
+    total_invested = sum(p.invested_amount for p in stack) or 1.0
+    fracs: list[float] = []
+    used_fallback = False
+    for p in stack:
+        if p.ownership_pct is not None:
+            fracs.append(p.ownership_pct)
+        else:
+            fracs.append((p.invested_amount / total_invested) * (1 - common_fraction))
+            used_fallback = True
+    if used_fallback:
+        notes.append(
+            "As-converted ownership for one or more classes was estimated dollar-proportionally "
+            "from invested amounts (ownership_pct not provided). This overweights late, expensive "
+            "money — provide ownership_pct per share class for exact conversion math."
+        )
 
-        elif pref.preference_type == PreferenceType.PARTICIPATING_CAPPED:
-            preferred_fraction = (pref.invested_amount / total_preferred_invested) * (1 - common_fraction)
-            participation = remaining * preferred_fraction
-            cap_value = pref.invested_amount * (pref.participation_cap or 3.0)
-            d["gets"] = min(d["liquidation_payout"] + participation, cap_value)
-            d["conversion_value"] = d["gets"]
+    def _distribute(convert: list[bool]) -> tuple[list[float], list[float], float]:
+        """Given convert decisions, return (pref_paid, gets, common_gets)."""
+        remaining = exit_ev
+        pref_paid = [0.0] * n
+        for i, p in enumerate(stack):  # already in seniority order
+            if convert[i]:
+                continue  # converting class forfeits its preference
+            paid = min(remaining, p.invested_amount * p.preference_multiple)
+            pref_paid[i] = paid
+            remaining -= paid
+        residual = max(0.0, remaining)
 
-    # Common gets remainder after preferences
-    total_preferred_gets = sum(d["gets"] for d in distributions)
-    common_gets = max(0.0, exit_ev - total_preferred_gets)
+        # Residual pool participants: common + converted classes + participating classes
+        weights = [0.0] * n
+        for i, p in enumerate(stack):
+            if convert[i]:
+                weights[i] = fracs[i]
+            elif p.preference_type in (PreferenceType.PARTICIPATING,
+                                       PreferenceType.PARTICIPATING_CAPPED):
+                weights[i] = fracs[i]
+        pool_weight = common_fraction + sum(weights)
+
+        gets = [0.0] * n
+        overflow = 0.0  # participation clipped by caps flows back to common
+        if pool_weight > 0 and residual > 0:
+            for i, p in enumerate(stack):
+                share = residual * weights[i] / pool_weight
+                if convert[i]:
+                    gets[i] = share
+                elif p.preference_type == PreferenceType.PARTICIPATING:
+                    gets[i] = pref_paid[i] + share
+                elif p.preference_type == PreferenceType.PARTICIPATING_CAPPED:
+                    cap_value = p.invested_amount * (p.participation_cap or 3.0)
+                    uncapped = pref_paid[i] + share
+                    gets[i] = min(uncapped, cap_value)
+                    overflow += max(0.0, uncapped - cap_value)
+                else:
+                    gets[i] = pref_paid[i]
+            common_gets = residual * common_fraction / pool_weight + overflow
+        else:
+            for i in range(n):
+                gets[i] = pref_paid[i]
+            common_gets = residual
+        return pref_paid, gets, common_gets
+
+    # Fixed-point convert/stay solve (senior → junior each sweep).
+    # Uncapped participating never converts (pref + participation dominates).
+    convert = [False] * n
+    for _ in range(2 * n + 4):
+        changed = False
+        for i, p in enumerate(stack):
+            if p.preference_type == PreferenceType.PARTICIPATING:
+                continue
+            _, gets_cur, _ = _distribute(convert)
+            alt = convert.copy()
+            alt[i] = not alt[i]
+            _, gets_alt, _ = _distribute(alt)
+            if gets_alt[i] > gets_cur[i] + 1e-9:
+                convert = alt
+                changed = True
+        if not changed:
+            break
+
+    pref_paid, gets, common_gets = _distribute(convert)
+
+    distributions: list[dict] = []
+    for i, p in enumerate(stack):
+        # Hypothetical as-converted value under the final decision set
+        if convert[i]:
+            conversion_value = gets[i]
+        else:
+            alt = convert.copy()
+            alt[i] = True
+            _, gets_alt, _ = _distribute(alt)
+            conversion_value = gets_alt[i]
+        distributions.append({
+            "share_class": p.share_class,
+            "type": p.preference_type.value,
+            "invested_amount": p.invested_amount,
+            "preference_amount": p.invested_amount * p.preference_multiple,
+            "preference_multiple": p.preference_multiple,
+            "liquidation_payout": pref_paid[i],
+            "conversion_value": conversion_value,
+            "gets": gets[i],
+            "converted": convert[i],
+        })
+
+    total_distributed = sum(gets) + common_gets
 
     # Find "our" position (first preferred, or most junior)
-    investor_total = distributions[0]["gets"] if distributions else 0.0
-    investor_moic = investor_total / stack[0].invested_amount if (stack and stack[0].invested_amount > 0) else 0.0
+    investor_total = distributions[0]["gets"]
+    investor_moic = investor_total / stack[0].invested_amount if stack[0].invested_amount > 0 else 0.0
 
     return WaterfallDistribution(
         exit_ev=exit_ev,
         share_classes=distributions,
         common_gets=common_gets,
-        total_distributed=exit_ev,
+        total_distributed=total_distributed,
         investor_total=investor_total,
         investor_moic=investor_moic,
-        conversion_was_optimal=distributions[0]["converted"] if distributions else False,
+        conversion_was_optimal=distributions[0]["converted"],
+        notes=notes,
     )
 
 
@@ -561,14 +812,38 @@ def compute_pro_rata(
     benchmarks: dict,
 ) -> ProRataAnalysis:
     """
-    Should you exercise your pro-rata right?
+    Should you exercise your pro-rata right at the next round?
 
-    Builds two scenario sets (exercise vs. pass) and computes expected value of each.
+    Legs:
+    - PASS: keep the current diluted trajectory. Exit ownership is
+      ownership.exit_ownership_pct, which ALREADY includes all future round
+      dilution — no additional dilution is applied.
+    - EXERCISE: buying pro-rata at the next round offsets that round's
+      new-money dilution (the option-pool refresh still dilutes everyone),
+      so maintained exit % = exit % with the next round's new-money dilution
+      backed out.
+
+    Exit EVs and probabilities reuse the main scenario engine (bear = failure
+    mass, base/bull = growth-decayed projections) rather than ad-hoc multiples.
+
+    Decision rule: exercise if the expected incremental proceeds exceed the
+    pro-rata check; partial if positive but below the check; else pass.
     """
-    # Dilution from here (partial stack)
-    # Simplified: assume 2 more rounds of dilution remain
-    maintained_pct = ownership.exit_ownership_pct  # If we exercise
-    diluted_pct = maintained_pct * (1 - deal.dilution.a_to_b)  # If we pass
+    exit_pct_pass = ownership.exit_ownership_pct
+
+    # Maintain leg: back out the NEXT round's new-money dilution (pro-rata does
+    # not offset the option-pool refresh, which dilutes all shareholders).
+    if ownership.dilution_stack:
+        next_round = ownership.dilution_stack[0]
+        pool = deal.dilution.option_pool_expansion
+        round_only_dilution = max(0.0, next_round["dilution_pct"] - pool)
+    else:
+        round_only_dilution = 0.0
+    maintained_pct = (
+        exit_pct_pass / (1 - round_only_dilution)
+        if round_only_dilution < 1.0
+        else exit_pct_pass
+    )
 
     reserve_after_pct = (
         (fund.reserve_pool - pro_rata_check) / fund.reserve_pool
@@ -576,76 +851,94 @@ def compute_pro_rata(
         else 0.0
     )
 
-    # Build simplified scenarios for both choices
-    exercise_scenarios = []
-    pass_scenarios = []
+    # Reuse the scenario engine for exit EVs and probabilities
+    bear0, base0, bull0 = compute_scenarios(deal, fund, exit_pct_pass, benchmarks)
 
-    for sc_label, sc_prob, sc_mult in [("Bear", 0.40, 2.0), ("Base", 0.40, 7.0), ("Bull", 0.20, 15.0)]:
-        exit_ev = sc_mult * (deal.arr if deal.arr > 0 else deal.revenue_ttm or 10.0)
+    exercise_scenarios: list[VCScenario] = []
+    pass_scenarios: list[VCScenario] = []
+    exit_yr = deal.expected_exit_years
 
-        # With exercise (maintain ownership)
+    for sc in (bear0, base0, bull0):
+        exit_ev = sc.exit_enterprise_value
+
+        # With exercise (maintain ownership through the next round)
+        cost_exercise = deal.check_size + pro_rata_check
         proceeds_exercise = exit_ev * maintained_pct
-        moic_exercise = proceeds_exercise / (deal.check_size + pro_rata_check)
-        irr_exercise = _irr(deal.check_size + pro_rata_check, proceeds_exercise, deal.expected_exit_years)
+        net_exercise = _carry_adj_proceeds(proceeds_exercise, cost_exercise,
+                                           fund.carry_pct, fund.hurdle_rate, exit_yr)
         exercise_scenarios.append(VCScenario(
-            label=f"{sc_label} (exercise)",
-            probability=sc_prob,
-            exit_year=deal.expected_exit_years,
-            exit_multiple_arr=sc_mult,
+            label=f"{sc.label} (exercise)",
+            probability=sc.probability,
+            exit_year=exit_yr,
+            exit_multiple_arr=sc.exit_multiple_arr,
             exit_enterprise_value=exit_ev,
             gross_proceeds_to_fund=proceeds_exercise,
-            net_proceeds_to_fund=_carry_adj_proceeds(proceeds_exercise, deal.check_size + pro_rata_check,
-                                                     fund.carry_pct, fund.hurdle_rate, deal.expected_exit_years),
-            gross_moic=moic_exercise,
-            net_moic=moic_exercise * (1 - fund.carry_pct),
-            gross_irr=irr_exercise,
-            net_irr=irr_exercise * 0.85,
+            net_proceeds_to_fund=net_exercise,
+            gross_moic=proceeds_exercise / cost_exercise if cost_exercise > 0 else 0.0,
+            net_moic=net_exercise / cost_exercise if cost_exercise > 0 else 0.0,
+            gross_irr=_irr(cost_exercise, proceeds_exercise, exit_yr) if proceeds_exercise > 0 else -1.0,
+            net_irr=_irr(cost_exercise, net_exercise, exit_yr) if net_exercise > 0 else -1.0,
             fund_contribution_x=proceeds_exercise / fund.fund_size,
             outcome_description=f"Pro-rata exercised at ${next_round_valuation:.0f}M valuation",
         ))
 
-        # Without exercise (diluted)
-        proceeds_pass = exit_ev * diluted_pct
-        moic_pass = proceeds_pass / deal.check_size
-        irr_pass = _irr(deal.check_size, proceeds_pass, deal.expected_exit_years)
+        # Without exercise (already-diluted exit trajectory as-is)
+        proceeds_pass = exit_ev * exit_pct_pass
+        net_pass = _carry_adj_proceeds(proceeds_pass, deal.check_size,
+                                       fund.carry_pct, fund.hurdle_rate, exit_yr)
         pass_scenarios.append(VCScenario(
-            label=f"{sc_label} (pass)",
-            probability=sc_prob,
-            exit_year=deal.expected_exit_years,
-            exit_multiple_arr=sc_mult,
+            label=f"{sc.label} (pass)",
+            probability=sc.probability,
+            exit_year=exit_yr,
+            exit_multiple_arr=sc.exit_multiple_arr,
             exit_enterprise_value=exit_ev,
             gross_proceeds_to_fund=proceeds_pass,
-            net_proceeds_to_fund=_carry_adj_proceeds(proceeds_pass, deal.check_size,
-                                                     fund.carry_pct, fund.hurdle_rate, deal.expected_exit_years),
-            gross_moic=moic_pass,
-            net_moic=moic_pass * (1 - fund.carry_pct),
-            gross_irr=irr_pass,
-            net_irr=irr_pass * 0.85,
+            net_proceeds_to_fund=net_pass,
+            gross_moic=proceeds_pass / deal.check_size if deal.check_size > 0 else 0.0,
+            net_moic=net_pass / deal.check_size if deal.check_size > 0 else 0.0,
+            gross_irr=_irr(deal.check_size, proceeds_pass, exit_yr) if proceeds_pass > 0 else -1.0,
+            net_irr=_irr(deal.check_size, net_pass, exit_yr) if net_pass > 0 else -1.0,
             fund_contribution_x=proceeds_pass / fund.fund_size,
-            outcome_description=f"Diluted to {diluted_pct:.1%} ownership",
+            outcome_description=f"Diluted trajectory: {exit_pct_pass:.1%} ownership at exit",
         ))
 
     ev_exercise = sum(s.gross_proceeds_to_fund * s.probability for s in exercise_scenarios)
     ev_pass = sum(s.gross_proceeds_to_fund * s.probability for s in pass_scenarios)
-
     incremental_value = ev_exercise - ev_pass
-    if pro_rata_check <= 0 or incremental_value > pro_rata_check * 2:
+
+    # Sanity-check the pro-rata check size: it should approximate
+    # current ownership % × next-round new money (new money ≈ post-money ×
+    # round dilution fraction).
+    size_warning = ""
+    if round_only_dilution > 0 and next_round_valuation > 0 and pro_rata_check > 0:
+        implied_round_size = next_round_valuation * round_only_dilution
+        expected_check = ownership.entry_ownership_pct * implied_round_size
+        if expected_check > 0 and abs(pro_rata_check - expected_check) / expected_check > 0.5:
+            size_warning = (
+                f" Note: pro-rata check ${pro_rata_check:.2f}M deviates >50% from the implied "
+                f"pro-rata amount ${expected_check:.2f}M "
+                f"(≈{ownership.entry_ownership_pct:.1%} of an implied ${implied_round_size:.1f}M round)."
+            )
+
+    if incremental_value > pro_rata_check:
         rec = "exercise"
         rec_rationale = (
-            f"Expected value of maintaining ownership (${ev_exercise:.1f}M) outweighs "
-            f"cost of pro-rata (${pro_rata_check:.1f}M). Exercise if reserve available."
+            f"Expected incremental proceeds from maintaining ownership "
+            f"(${incremental_value:.1f}M) exceed the ${pro_rata_check:.1f}M pro-rata check. "
+            f"Exercise if reserve available.{size_warning}"
         )
     elif incremental_value > 0:
         rec = "partial"
         rec_rationale = (
-            f"Marginal incremental value (${incremental_value:.1f}M) from exercise. "
-            "Consider partial exercise to conserve reserves."
+            f"Expected incremental proceeds (${incremental_value:.1f}M) are positive but below "
+            f"the ${pro_rata_check:.1f}M check. Consider partial exercise to conserve "
+            f"reserves.{size_warning}"
         )
     else:
         rec = "pass"
         rec_rationale = (
-            f"Expected dilution impact (${ev_pass - ev_exercise:.1f}M) insufficient to justify "
-            f"${pro_rata_check:.1f}M reserve deployment."
+            f"Expected incremental proceeds (${incremental_value:.1f}M) do not justify "
+            f"${pro_rata_check:.1f}M of reserve deployment.{size_warning}"
         )
 
     return ProRataAnalysis(
@@ -653,7 +946,7 @@ def compute_pro_rata(
         next_round_valuation=next_round_valuation,
         pro_rata_amount=pro_rata_check,
         maintained_ownership_pct=maintained_pct,
-        diluted_ownership_if_pass=diluted_pct,
+        diluted_ownership_if_pass=exit_pct_pass,
         reserve_impact=pro_rata_check,
         reserve_pct_remaining_after=max(0.0, reserve_after_pct),
         exercise_scenarios=exercise_scenarios,
@@ -701,21 +994,36 @@ def compute_portfolio_stats(
     total_cost = sum(p.cost_basis for p in positions)
     largest_pct = max((p.cost_basis / total_cost for p in positions), default=0.0) if total_cost > 0 else 0.0
 
-    total_fv = sum(p.fair_value or p.cost_basis for p in positions)
+    # Residual fair value: only positions still held. A fair_value of 0.0 is a
+    # real mark (written off), so use `is not None`, never `or cost_basis`.
+    # Exited / written-off positions carry no residual value — exit proceeds
+    # belong in DPI, not RVPI.
+    residual_positions = [p for p in positions if p.status in ("active", "partially_exited")]
+    total_fv = sum(
+        (p.fair_value if p.fair_value is not None else p.cost_basis)
+        for p in residual_positions
+    )
     total_realized = sum(p.realized_proceeds for p in positions)
 
-    dpi = total_realized / total_cost if total_cost > 0 else 0.0
-    rvpi = total_fv / total_cost if total_cost > 0 else 0.0
+    # TVPI/DPI/RVPI are NET-style multiples on called capital INCLUDING the
+    # management-fee load (consistent with run_fund_irr_analysis, which counts
+    # fee calls in total_called). unrealized_tvpi below remains the GROSS
+    # fair-value-on-cost multiple.
+    called_capital = total_deployed + fund.total_management_fees
+    dpi = total_realized / called_capital if called_capital > 0 else 0.0
+    rvpi = total_fv / called_capital if called_capital > 0 else 0.0
     tvpi = dpi + rvpi
 
-    # Reserve adequacy
+    # Reserve adequacy: comparing follow-on capital ALLOCATED vs the reserve
+    # pool. Allocations above 110% of the pool mean the fund has promised more
+    # follow-on than it holds — over-committed (not "over-reserved").
     total_reserve_alloc = sum(p.reserve_allocated for p in positions)
     if total_reserve_alloc <= fund.reserve_pool * 0.90:
         reserve_adequacy = "adequate"
     elif total_reserve_alloc <= fund.reserve_pool * 1.10:
         reserve_adequacy = "tight"
     else:
-        reserve_adequacy = "over-reserved"
+        reserve_adequacy = "over-committed"
 
     avg_followon = (
         (total_reserve / total_initial) if total_initial > 0 else 0.0
@@ -739,7 +1047,7 @@ def compute_portfolio_stats(
         largest_position_pct=largest_pct,
         total_cost_basis=total_cost,
         total_fair_value=total_fv,
-        unrealized_tvpi=rvpi,
+        unrealized_tvpi=(total_fv / total_cost if total_cost > 0 else 0.0),
         realized_proceeds=total_realized,
         dpi=dpi,
         rvpi=rvpi,
@@ -764,8 +1072,8 @@ def run_portfolio_analysis(inp: PortfolioInput) -> PortfolioOutput:
     if stats.largest_position_pct > 0.20:
         alerts.append(f"Single position represents {stats.largest_position_pct:.0%} of cost basis")
 
-    if stats.reserve_adequacy == "over-reserved":
-        alerts.append("Reserve pool over-allocated — review reserve assignments")
+    if stats.reserve_adequacy == "over-committed":
+        alerts.append("Follow-on allocations exceed the reserve pool — fund is over-committed")
         recs.append("Consider reducing reserves on early-stage positions with uncertain follow-on opportunity")
 
     if stats.reserve_adequacy == "tight":
@@ -883,8 +1191,29 @@ def build_ic_memo(
 def run_qsbs_analysis(inp: QSBSInput) -> QSBSOutput:
     """
     IRC § 1202 QSBS eligibility analysis.
-    Post-July 4, 2025: new $15M exclusion cap per taxpayer (up from $10M).
+
+    OBBBA (July 4, 2025) changes for stock issued after that date:
+      - Per-taxpayer exclusion cap raised to $15M (from $10M)
+      - Gross-asset test threshold raised to $75M (from $50M)
+      - Tiered exclusion by holding period: 50% at 3 years, 75% at 4 years,
+        100% at 5 years (pre-July-2025 stock remains 5yr / 100%-or-nothing,
+        assuming post-Sept-2010 acquisition).
+
+    Exclusion cap per §1202(b)(1) is the GREATER of the per-taxpayer dollar
+    cap and 10× the taxpayer's basis in the stock.
+
+    LP-level benefit: each LP is a separate taxpayer with an allocable share
+    of the fund's gain and basis. We allocate gain and basis pro-rata across
+    lp_count, apply the per-taxpayer caps at the LP level, then aggregate.
+
+    Tax rate assumption: the benefit of exclusion is measured against the
+    federal LTCG rate of 23.8% (20% LTCG + 3.8% NIIT) — the tax an LP would
+    otherwise pay on the gain. (The 28% §1202 collectibles-style rate + NIIT
+    applies only to the NON-excluded portion of §1202 stock gain, so it does
+    not apply to the excluded amount modeled here.)
     """
+    post_obbba = inp.issuance_date_post_july_2025
+    asset_threshold = 75.0 if post_obbba else 50.0
     checks = [
         {
             "name": "C-Corporation",
@@ -902,9 +1231,12 @@ def run_qsbs_analysis(inp: QSBSInput) -> QSBSOutput:
             "note": "Cannot be a professional services firm, finance/insurance company, or holding company.",
         },
         {
-            "name": "Assets ≤ $50M at Issuance",
+            "name": f"Assets ≤ ${asset_threshold:.0f}M at Issuance",
             "passed": inp.assets_at_issuance_under_50m,
-            "note": "Aggregate gross assets must be ≤$50M at the time of stock issuance.",
+            "note": (
+                f"Aggregate gross assets must be ≤${asset_threshold:.0f}M at the time of stock issuance "
+                f"({'OBBBA post-July-2025 threshold' if post_obbba else 'pre-OBBBA threshold'})."
+            ),
         },
         {
             "name": "Original Issuance",
@@ -914,35 +1246,83 @@ def run_qsbs_analysis(inp: QSBSInput) -> QSBSOutput:
     ]
 
     is_eligible = all(c["passed"] for c in checks)
-    holding_satisfied = inp.holding_period_years >= 5.0
-    years_remaining = max(0.0, 5.0 - inp.holding_period_years) if is_eligible else None
 
-    # New cap: $15M if issued after July 4, 2025; else $10M
-    per_taxpayer_cap = 15.0 if inp.issuance_date_post_july_2025 else 10.0
-    basis_10x_cap = inp.investment_amount * 10.0
-    exclusion_cap = min(per_taxpayer_cap, basis_10x_cap)
+    # Holding-period tiering
+    h = inp.holding_period_years
+    if post_obbba:
+        if h >= 5.0:
+            exclusion_pct = 1.0
+        elif h >= 4.0:
+            exclusion_pct = 0.75
+        elif h >= 3.0:
+            exclusion_pct = 0.50
+        else:
+            exclusion_pct = 0.0
+    else:
+        exclusion_pct = 1.0 if h >= 5.0 else 0.0
 
-    # Rough gain estimate (assume 10x MOIC)
+    holding_satisfied = exclusion_pct > 0.0
+    # Years remaining to reach the FULL 100% exclusion
+    years_remaining = max(0.0, 5.0 - h) if is_eligible else None
+
+    # Per-taxpayer dollar cap: $15M post-OBBBA, $10M before.
+    # §1202(b)(1): exclusion cap = GREATER of dollar cap and 10× basis.
+    per_taxpayer_dollar_cap = 15.0 if post_obbba else 10.0
+    exclusion_cap = max(per_taxpayer_dollar_cap, inp.investment_amount * 10.0)
+
+    # Rough gain estimate (assume 10x MOIC on the position)
     estimated_gain = inp.investment_amount * 10.0
-    excluded_gain = min(exclusion_cap, estimated_gain) if is_eligible and holding_satisfied else 0.0
-    tax_saved_per_lp = excluded_gain * inp.lp_marginal_tax_rate
-    total_lp_benefit = tax_saved_per_lp * inp.lp_count  # Note: each LP gets own exclusion
+
+    # Per-LP allocation: each LP is a separate taxpayer.
+    lp_count = max(1, inp.lp_count)
+    lp_allocable_gain = estimated_gain / lp_count
+    lp_allocable_basis = inp.investment_amount / lp_count
+    lp_cap = max(per_taxpayer_dollar_cap, lp_allocable_basis * 10.0)
+    lp_excluded_gain = (
+        min(lp_cap, lp_allocable_gain) * exclusion_pct
+        if (is_eligible and holding_satisfied)
+        else 0.0
+    )
+    excluded_gain = lp_excluded_gain * lp_count  # aggregate across LPs
+    tax_saved_per_lp = lp_excluded_gain * inp.lp_marginal_tax_rate
+    total_lp_benefit = tax_saved_per_lp * lp_count
 
     notes = []
     if not is_eligible:
         notes.append("Company does not qualify for QSBS treatment based on provided criteria.")
     if not holding_satisfied:
+        min_holding = 3.0 if post_obbba else 5.0
         notes.append(
-            f"5-year holding period not yet met ({inp.holding_period_years:.1f} years held). "
-            f"{years_remaining:.1f} years remaining."
+            f"Minimum holding period not yet met ({h:.1f} years held; "
+            f"{min_holding:.0f} years required for {'partial' if post_obbba else 'any'} exclusion). "
+            f"{years_remaining:.1f} years remaining to the full 100% exclusion."
+            if years_remaining is not None else
+            f"Minimum holding period not yet met ({h:.1f} years held)."
         )
-    if inp.issuance_date_post_july_2025:
-        notes.append("New $15M exclusion cap applies (post July 4, 2025 issuance).")
+    elif exclusion_pct < 1.0:
+        notes.append(
+            f"OBBBA tiered exclusion: {exclusion_pct:.0%} of the capped gain is excludable at "
+            f"{h:.1f} years held (75% at 4 years, 100% at 5 years)."
+        )
+    if post_obbba:
+        notes.append(
+            "OBBBA (post-July 4, 2025 issuance): $15M per-taxpayer cap, $75M gross-asset "
+            "threshold, and 50/75/100% tiered exclusion at 3/4/5-year holding periods."
+        )
     else:
-        notes.append("$10M exclusion cap applies. Check if TCJA 2025 provisions apply to this investment.")
+        notes.append(
+            "Pre-OBBBA stock: $10M per-taxpayer cap (or 10× basis if greater), $50M gross-asset "
+            "threshold, and 100% exclusion only after a full 5-year holding period."
+        )
     notes.append(
-        "QSBS benefits flow through to LPs individually. Each LP can exclude up to the cap amount. "
-        "Consult tax counsel for fund-specific structuring (e.g., SMLLCs, SPVs)."
+        "Tax saved is measured against the 23.8% federal LTCG rate (20% + 3.8% NIIT) an LP would "
+        "otherwise owe on the excluded gain; the 28%+NIIT §1202 rate applies only to any "
+        "non-excluded portion. State conformity varies."
+    )
+    notes.append(
+        "QSBS benefits flow through to LPs individually. Each LP applies their own per-taxpayer "
+        "cap to their allocable share of gain and basis. Consult tax counsel for fund-specific "
+        "structuring (e.g., SMLLCs, SPVs)."
     )
 
     return QSBSOutput(
@@ -952,6 +1332,7 @@ def run_qsbs_analysis(inp: QSBSInput) -> QSBSOutput:
         holding_period_satisfied=holding_satisfied,
         years_remaining_to_qualify=years_remaining,
         exclusion_cap_per_taxpayer=exclusion_cap,
+        exclusion_pct_applicable=exclusion_pct,
         estimated_gain_excluded=excluded_gain,
         estimated_federal_tax_saved_per_lp=tax_saved_per_lp,
         estimated_total_lp_benefit=total_lp_benefit,
@@ -1010,7 +1391,7 @@ def run_anti_dilution(inp: AntiDilutionInput) -> AntiDilutionOutput:
     effective_ownership = (inp.investor_preferred_shares + additional_shares) / new_total_shares
 
     return AntiDilutionOutput(
-        company_name=inp.company_name if hasattr(inp, "company_name") else "Company",
+        company_name=inp.company_name,
         anti_dilution_type=inp.anti_dilution_type,
         original_price=inp.original_price_per_share,
         down_round_price=inp.down_round_price_per_share,
@@ -1027,41 +1408,110 @@ def run_anti_dilution(inp: AntiDilutionInput) -> AntiDilutionOutput:
 # ---------------------------------------------------------------------------
 
 def run_bridge_analysis(inp: BridgeRoundInput) -> BridgeRoundOutput:
-    """Model a bridge / extension round from investor perspective."""
-    dilution_from_bridge = (
-        inp.bridge_amount / (inp.pre_bridge_valuation + inp.bridge_amount)
-        if inp.pre_bridge_valuation > 0
-        else 0.0
+    """Model a bridge / extension round from investor perspective.
+
+    Dilution mechanics:
+    - Equity bridge: dilutes immediately at the pre-bridge valuation.
+    - SAFE / convertible bridge: dilutes at CONVERSION into the next round at
+      the discounted price. The converting amount includes accrued interest
+      for convertible notes. Dilution = conversion_amount /
+      (effective_conversion_valuation + conversion_amount).
+
+    Runway: bridge_amount / monthly_burn when the company's burn is provided;
+    None otherwise (never fabricated).
+
+    Recommendation compares the economics of participating (buying at an
+    effective discount to the expected next round, plus avoided dilution on
+    the existing stake) against the incremental check required.
+    """
+    effective_conversion_price = inp.expected_next_round_valuation * (1 - inp.discount_rate)
+    implied_discount = (
+        1.0 - (effective_conversion_price / inp.expected_next_round_valuation)
+        if inp.expected_next_round_valuation > 0 else 0.0
     )
+
+    # Accrued interest converts alongside principal for convertible notes
+    accrued_interest = 0.0
+    if inp.instrument == "convertible_note" and inp.interest_rate > 0:
+        accrued_interest = inp.bridge_amount * inp.interest_rate * (inp.maturity_months / 12.0)
+    conversion_amount = inp.bridge_amount + accrued_interest
+
+    if inp.instrument == "equity":
+        dilution_from_bridge = (
+            inp.bridge_amount / (inp.pre_bridge_valuation + inp.bridge_amount)
+            if inp.pre_bridge_valuation > 0
+            else 0.0
+        )
+    else:
+        # SAFE / convertible: converts into the next round at the discounted
+        # valuation; bridge holders take conversion_amount / effective post.
+        denom = effective_conversion_price + conversion_amount
+        dilution_from_bridge = conversion_amount / denom if denom > 0 else 0.0
 
     post_bridge_ownership = inp.current_ownership_pct * (1 - dilution_from_bridge)
 
-    effective_conversion_price = inp.expected_next_round_valuation * (1 - inp.discount_rate)
-    implied_discount = 1.0 - (effective_conversion_price / inp.expected_next_round_valuation)
-
-    additional_runway = _runway_months(inp.bridge_amount, inp.bridge_amount / 18.0)  # rough
-
-    notes = [
-        f"Bridge converts at {implied_discount:.0%} discount to Series A: ${effective_conversion_price:.0f}M valuation cap implied.",
-    ]
-    notes[0] = (
-        f"Bridge converts at {implied_discount:.0%} discount to next round: "
-        f"${effective_conversion_price:.0f}M effective valuation at conversion."
+    # Real runway from the company's actual burn — None when unknown
+    additional_runway = (
+        inp.bridge_amount / inp.monthly_burn
+        if (inp.monthly_burn is not None and inp.monthly_burn > 0)
+        else None
     )
 
-    if inp.interest_rate > 0:
-        accrued_interest = inp.bridge_amount * inp.interest_rate * (inp.maturity_months / 12.0)
+    notes = [
+        f"Bridge converts at {implied_discount:.0%} discount to next round: "
+        f"${effective_conversion_price:.0f}M effective valuation at conversion."
+    ]
+    if accrued_interest > 0:
         notes.append(
-            f"Interest accrues at {inp.interest_rate:.0%}/yr. "
-            f"At maturity ({inp.maturity_months}mo), total obligation: "
-            f"${inp.bridge_amount + accrued_interest:.2f}M."
+            f"Interest accrues at {inp.interest_rate:.0%}/yr. At maturity ({inp.maturity_months}mo), "
+            f"${conversion_amount:.2f}M (principal + ${accrued_interest:.2f}M accrued interest) "
+            "converts at the discounted price."
         )
+    if additional_runway is None:
+        notes.append("Monthly burn not provided — runway extension cannot be estimated.")
 
-    rec = "participate" if inp.fund_is_participating else "monitor"
-    if post_bridge_ownership > inp.current_ownership_pct * 0.95:
-        rec = "participate — minimal ownership dilution from bridge"
+    # Participate / pass / monitor decision
+    participation_check = (
+        inp.pro_rata_amount if inp.pro_rata_amount > 0
+        else inp.current_ownership_pct * inp.bridge_amount
+    )
+    # Buying at a discount to the expected next round → immediate mark-up
+    markup_gain = (
+        participation_check * (inp.expected_next_round_valuation / effective_conversion_price - 1.0)
+        if effective_conversion_price > 0 else 0.0
+    )
+    # Value of the ownership lost if we sit out (marked at next-round valuation)
+    dilution_cost_if_pass = (
+        inp.current_ownership_pct * dilution_from_bridge * inp.expected_next_round_valuation
+    )
+    benefit = markup_gain + dilution_cost_if_pass
+
+    if not inp.fund_is_participating:
+        rec = "monitor"
+        notes.append(
+            "Fund is not participating in the bridge — monitor the round and the company's "
+            "runway to the next milestone."
+        )
+    elif participation_check > 0 and benefit > 0.25 * participation_check:
+        rec = "participate"
+        notes.append(
+            f"Participate: discount economics (${markup_gain:.2f}M mark-up on a "
+            f"${participation_check:.2f}M check) plus avoided dilution "
+            f"(${dilution_cost_if_pass:.2f}M) exceed 25% of the incremental check."
+        )
+    elif participation_check > 0 and benefit > 0.10 * participation_check:
+        rec = "monitor"
+        notes.append(
+            f"Marginal economics (benefit ${benefit:.2f}M on a ${participation_check:.2f}M check) — "
+            "monitor: revisit once bridge terms or next-round signal firm up."
+        )
     else:
-        rec = f"participate — dilution limited to {dilution_from_bridge:.1%}; preserves relationship"
+        rec = "pass"
+        notes.append(
+            f"Pass: expected benefit (${benefit:.2f}M) is below 10% of the "
+            f"${participation_check:.2f}M incremental check; dilution from sitting out is "
+            f"limited to {dilution_from_bridge:.1%}."
+        )
 
     return BridgeRoundOutput(
         company_name=inp.company_name,
