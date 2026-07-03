@@ -327,7 +327,7 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
               Dilution Assumptions
             </h3>
             <span className="text-xs text-slate-500">
-              {showDilution ? '▲ Hide' : '▼ Edit (defaults: Carta 2024 medians)'}
+              {showDilution ? '▲ Hide' : '▼ Edit (defaults: Carta 2025 medians)'}
             </span>
           </button>
 

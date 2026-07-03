@@ -1313,8 +1313,8 @@ class TestMultipleVerticals:
             ),
         )
         output = run_startup_valuation(defense_inp)
-        # Defense tech seed P50 = $35M, higher than B2B SaaS $16M
-        assert output.benchmark_p50 >= 30.0
+        # Defense tech seed P50 = $24M (PitchBook 2025), higher than B2B SaaS $16M
+        assert output.benchmark_p50 >= 20.0
 
 
 # ---------------------------------------------------------------------------

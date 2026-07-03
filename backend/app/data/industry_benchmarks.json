@@ -1,4 +1,12 @@
 {
+  "_meta": {
+    "description": "M&A industry benchmarks. EV/EBITDA ranges are middle-market oriented (low ~ small/tuck-in deals, median ~ typical mid-market platform, high ~ large-cap/strategic premium).",
+    "updated": "2026-Q2",
+    "sources": "GF Data / ACG Q4 2025 (PE deals $10-500M TEV: FY2025 avg 7.2x; $10-25M TEV 5.9x, $100-250M TEV 10.0x), First Page Sage EBITDA Multiples 2026, Aventis Advisors SaaS & Tech Multiples 2026, FOCUS Investment Banking Healthcare 2025, Capstone Partners Construction/Leveraged Finance Q1 2026, CT Acquisitions sector guides 2025-2026, SICA Fletcher / Insurance Journal Q1 2026, PCE Food & Agriculture Q3 2025, Damodaran January 2026, PitchBook Defense Tech Vertical Snapshot 2025",
+    "monetary_unit": "USD millions",
+    "percentages": "decimals",
+    "notes": "ai_native_ev_ebitda_range reflects the persistent 2025-2026 premium for genuinely AI-native businesses (~1.4-1.8x the sector base median). Debt capacity turns reflect 2025-2026 middle-market credit conditions (total leverage 4.0-5.0x standard, 5.0-6.0x upper-MM per Capstone/Houlihan Lokey Q1 2026)."
+  },
   "Software / SaaS": {
     "typical_ebitda_margin": 0.22,
     "typical_gross_margin": 0.72,
@@ -6,10 +14,10 @@
     "typical_working_capital_pct_revenue": -0.05,
     "typical_capex_pct_revenue": 0.03,
     "typical_da_pct_revenue": 0.05,
-    "ev_ebitda_multiple_range": { "low": 12, "median": 20, "high": 35 },
+    "ev_ebitda_multiple_range": { "low": 8, "median": 19, "high": 27 },
     "ai_native_ev_ebitda_range": { "low": 20, "median": 35, "high": 60 },
     "typical_revenue_growth_rate": 0.18,
-    "typical_debt_capacity_turns_ebitda": 3.5
+    "typical_debt_capacity_turns_ebitda": 4.0
   },
   "Healthcare Services": {
     "typical_ebitda_margin": 0.14,
@@ -18,8 +26,8 @@
     "typical_working_capital_pct_revenue": 0.08,
     "typical_capex_pct_revenue": 0.04,
     "typical_da_pct_revenue": 0.04,
-    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
-    "ai_native_ev_ebitda_range": { "low": 12, "median": 18, "high": 28 },
+    "ev_ebitda_multiple_range": { "low": 6, "median": 11, "high": 16 },
+    "ai_native_ev_ebitda_range": { "low": 9, "median": 16, "high": 24 },
     "typical_revenue_growth_rate": 0.08,
     "typical_debt_capacity_turns_ebitda": 4.5
   },
@@ -30,8 +38,8 @@
     "typical_working_capital_pct_revenue": 0.15,
     "typical_capex_pct_revenue": 0.05,
     "typical_da_pct_revenue": 0.05,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
-    "ai_native_ev_ebitda_range": { "low": 7, "median": 11, "high": 16 },
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 11 },
+    "ai_native_ev_ebitda_range": { "low": 7, "median": 11, "high": 15 },
     "typical_revenue_growth_rate": 0.04,
     "typical_debt_capacity_turns_ebitda": 4.0
   },
@@ -42,8 +50,8 @@
     "typical_working_capital_pct_revenue": 0.12,
     "typical_capex_pct_revenue": 0.02,
     "typical_da_pct_revenue": 0.02,
-    "ev_ebitda_multiple_range": { "low": 7, "median": 10, "high": 15 },
-    "ai_native_ev_ebitda_range": { "low": 10, "median": 15, "high": 22 },
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
+    "ai_native_ev_ebitda_range": { "low": 7, "median": 12, "high": 17 },
     "typical_revenue_growth_rate": 0.07,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -54,8 +62,8 @@
     "typical_working_capital_pct_revenue": 0.08,
     "typical_capex_pct_revenue": 0.03,
     "typical_da_pct_revenue": 0.03,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 7, "high": 10 },
-    "ai_native_ev_ebitda_range": { "low": 6, "median": 9, "high": 13 },
+    "ev_ebitda_multiple_range": { "low": 4, "median": 7, "high": 12 },
+    "ai_native_ev_ebitda_range": { "low": 5, "median": 9, "high": 14 },
     "typical_revenue_growth_rate": 0.05,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -66,8 +74,8 @@
     "typical_working_capital_pct_revenue": 0.05,
     "typical_capex_pct_revenue": 0.04,
     "typical_da_pct_revenue": 0.04,
-    "ev_ebitda_multiple_range": { "low": 4, "median": 6, "high": 9 },
-    "ai_native_ev_ebitda_range": { "low": 5, "median": 7, "high": 10 },
+    "ev_ebitda_multiple_range": { "low": 4, "median": 6, "high": 10 },
+    "ai_native_ev_ebitda_range": { "low": 5, "median": 8, "high": 12 },
     "typical_revenue_growth_rate": 0.04,
     "typical_debt_capacity_turns_ebitda": 3.0
   },
@@ -78,8 +86,8 @@
     "typical_working_capital_pct_revenue": -0.03,
     "typical_capex_pct_revenue": 0.04,
     "typical_da_pct_revenue": 0.05,
-    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
-    "ai_native_ev_ebitda_range": { "low": 9, "median": 14, "high": 20 },
+    "ev_ebitda_multiple_range": { "low": 4, "median": 6, "high": 10 },
+    "ai_native_ev_ebitda_range": { "low": 5, "median": 8, "high": 12 },
     "typical_revenue_growth_rate": 0.04,
     "typical_debt_capacity_turns_ebitda": 4.5
   },
@@ -90,8 +98,8 @@
     "typical_working_capital_pct_revenue": 0.06,
     "typical_capex_pct_revenue": 0.03,
     "typical_da_pct_revenue": 0.03,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
-    "ai_native_ev_ebitda_range": { "low": 6, "median": 9, "high": 14 },
+    "ev_ebitda_multiple_range": { "low": 4, "median": 6, "high": 9 },
+    "ai_native_ev_ebitda_range": { "low": 5, "median": 8, "high": 12 },
     "typical_revenue_growth_rate": 0.03,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -102,8 +110,8 @@
     "typical_working_capital_pct_revenue": 0.02,
     "typical_capex_pct_revenue": 0.02,
     "typical_da_pct_revenue": 0.02,
-    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
-    "ai_native_ev_ebitda_range": { "low": 12, "median": 18, "high": 28 },
+    "ev_ebitda_multiple_range": { "low": 7, "median": 10, "high": 14 },
+    "ai_native_ev_ebitda_range": { "low": 10, "median": 15, "high": 21 },
     "typical_revenue_growth_rate": 0.07,
     "typical_debt_capacity_turns_ebitda": 3.0
   },
@@ -114,8 +122,8 @@
     "typical_working_capital_pct_revenue": 0.12,
     "typical_capex_pct_revenue": 0.08,
     "typical_da_pct_revenue": 0.10,
-    "ev_ebitda_multiple_range": { "low": 4, "median": 7, "high": 11 },
-    "ai_native_ev_ebitda_range": { "low": 6, "median": 10, "high": 15 },
+    "ev_ebitda_multiple_range": { "low": 5, "median": 7, "high": 9 },
+    "ai_native_ev_ebitda_range": { "low": 6, "median": 9, "high": 12 },
     "typical_revenue_growth_rate": 0.05,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -126,8 +134,8 @@
     "typical_working_capital_pct_revenue": 0.04,
     "typical_capex_pct_revenue": 0.06,
     "typical_da_pct_revenue": 0.07,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
-    "ai_native_ev_ebitda_range": { "low": 7, "median": 11, "high": 16 },
+    "ev_ebitda_multiple_range": { "low": 4, "median": 7, "high": 12 },
+    "ai_native_ev_ebitda_range": { "low": 6, "median": 10, "high": 15 },
     "typical_revenue_growth_rate": 0.05,
     "typical_debt_capacity_turns_ebitda": 4.0
   },
@@ -138,8 +146,8 @@
     "typical_working_capital_pct_revenue": 0.05,
     "typical_capex_pct_revenue": 0.02,
     "typical_da_pct_revenue": 0.02,
-    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 18 },
-    "ai_native_ev_ebitda_range": { "low": 9, "median": 14, "high": 20 },
+    "ev_ebitda_multiple_range": { "low": 5, "median": 9, "high": 13 },
+    "ai_native_ev_ebitda_range": { "low": 7, "median": 12, "high": 17 },
     "typical_revenue_growth_rate": 0.06,
     "typical_debt_capacity_turns_ebitda": 4.0
   },
@@ -150,8 +158,8 @@
     "typical_working_capital_pct_revenue": 0.14,
     "typical_capex_pct_revenue": 0.05,
     "typical_da_pct_revenue": 0.05,
-    "ev_ebitda_multiple_range": { "low": 7, "median": 11, "high": 17 },
-    "ai_native_ev_ebitda_range": { "low": 10, "median": 16, "high": 25 },
+    "ev_ebitda_multiple_range": { "low": 7, "median": 11, "high": 16 },
+    "ai_native_ev_ebitda_range": { "low": 10, "median": 16, "high": 24 },
     "typical_revenue_growth_rate": 0.07,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -162,8 +170,8 @@
     "typical_working_capital_pct_revenue": 0.20,
     "typical_capex_pct_revenue": 0.06,
     "typical_da_pct_revenue": 0.08,
-    "ev_ebitda_multiple_range": { "low": 10, "median": 16, "high": 25 },
-    "ai_native_ev_ebitda_range": { "low": 14, "median": 22, "high": 35 },
+    "ev_ebitda_multiple_range": { "low": 10, "median": 15, "high": 22 },
+    "ai_native_ev_ebitda_range": { "low": 13, "median": 20, "high": 30 },
     "typical_revenue_growth_rate": 0.08,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -174,8 +182,8 @@
     "typical_working_capital_pct_revenue": -0.02,
     "typical_capex_pct_revenue": 0.16,
     "typical_da_pct_revenue": 0.18,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 11 },
-    "ai_native_ev_ebitda_range": { "low": 7, "median": 11, "high": 15 },
+    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 10 },
+    "ai_native_ev_ebitda_range": { "low": 7, "median": 11, "high": 14 },
     "typical_revenue_growth_rate": 0.03,
     "typical_debt_capacity_turns_ebitda": 5.0
   },
@@ -186,8 +194,8 @@
     "typical_working_capital_pct_revenue": 0.18,
     "typical_capex_pct_revenue": 0.05,
     "typical_da_pct_revenue": 0.04,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
-    "ai_native_ev_ebitda_range": { "low": 6, "median": 9, "high": 14 },
+    "ev_ebitda_multiple_range": { "low": 6, "median": 9, "high": 12 },
+    "ai_native_ev_ebitda_range": { "low": 7, "median": 11, "high": 15 },
     "typical_revenue_growth_rate": 0.03,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -198,8 +206,8 @@
     "typical_working_capital_pct_revenue": 0.03,
     "typical_capex_pct_revenue": 0.04,
     "typical_da_pct_revenue": 0.06,
-    "ev_ebitda_multiple_range": { "low": 8, "median": 13, "high": 20 },
-    "ai_native_ev_ebitda_range": { "low": 11, "median": 18, "high": 28 },
+    "ev_ebitda_multiple_range": { "low": 5, "median": 9, "high": 14 },
+    "ai_native_ev_ebitda_range": { "low": 7, "median": 12, "high": 18 },
     "typical_revenue_growth_rate": 0.05,
     "typical_debt_capacity_turns_ebitda": 4.0
   },
@@ -210,8 +218,8 @@
     "typical_working_capital_pct_revenue": 0.05,
     "typical_capex_pct_revenue": 0.02,
     "typical_da_pct_revenue": 0.02,
-    "ev_ebitda_multiple_range": { "low": 7, "median": 11, "high": 16 },
-    "ai_native_ev_ebitda_range": { "low": 9, "median": 14, "high": 21 },
+    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 14 },
+    "ai_native_ev_ebitda_range": { "low": 10, "median": 15, "high": 20 },
     "typical_revenue_growth_rate": 0.05,
     "typical_debt_capacity_turns_ebitda": 3.0
   },
@@ -222,8 +230,8 @@
     "typical_working_capital_pct_revenue": 0.08,
     "typical_capex_pct_revenue": 0.01,
     "typical_da_pct_revenue": 0.01,
-    "ev_ebitda_multiple_range": { "low": 5, "median": 8, "high": 12 },
-    "ai_native_ev_ebitda_range": { "low": 6, "median": 9, "high": 14 },
+    "ev_ebitda_multiple_range": { "low": 4, "median": 6, "high": 10 },
+    "ai_native_ev_ebitda_range": { "low": 5, "median": 8, "high": 12 },
     "typical_revenue_growth_rate": 0.06,
     "typical_debt_capacity_turns_ebitda": 3.5
   },
@@ -234,8 +242,8 @@
     "typical_working_capital_pct_revenue": 0.02,
     "typical_capex_pct_revenue": 0.10,
     "typical_da_pct_revenue": 0.12,
-    "ev_ebitda_multiple_range": { "low": 8, "median": 12, "high": 17 },
-    "ai_native_ev_ebitda_range": { "low": 9, "median": 14, "high": 19 },
+    "ev_ebitda_multiple_range": { "low": 7, "median": 10, "high": 15 },
+    "ai_native_ev_ebitda_range": { "low": 8, "median": 12, "high": 17 },
     "typical_revenue_growth_rate": 0.04,
     "typical_debt_capacity_turns_ebitda": 5.0
   },
@@ -252,8 +260,9 @@
     "typical_revenue_growth_rate": 0.12,
     "typical_debt_capacity_turns_ebitda": 4.0,
     "defense_specific": {
-      "traditional_defense_ev_ebitda": { "low": 10, "median": 14, "high": 18 },
-      "ai_native_ev_revenue": { "low": 8, "median": 15, "high": 30 },
+      "_source": "PitchBook 2025 Defense Tech Vertical Snapshot ($49.1B record VC funding in 2025), company disclosures and market data through H1 2026",
+      "traditional_defense_ev_ebitda": { "low": 9, "median": 14, "high": 20 },
+      "ai_native_ev_revenue": { "low": 8, "median": 18, "high": 35 },
       "traditional_defense_ev_revenue": { "low": 1.5, "median": 2.5, "high": 4 },
       "backlog_to_revenue_healthy": 2.0,
       "backlog_to_revenue_strong": 4.0,
@@ -275,13 +284,13 @@
       },
       "program_of_record_premium_pct": 0.15,
       "comparable_companies": {
-        "palantir": { "ev_revenue": 18.0, "note": "Public AI-native defense platform, premium for data OS + government trust" },
-        "anduril": { "ev_revenue": 22.0, "note": "Private, last round implied ~$14B on ~$600M ARR, autonomy + hardware" },
-        "shield_ai": { "ev_revenue": 15.0, "note": "Private, autonomous systems + V-BAT" },
-        "l3harris": { "ev_revenue": 2.1, "note": "Traditional prime, ~$18B revenue" },
-        "booz_allen": { "ev_revenue": 3.5, "note": "IT services + analytics, high clearance workforce" },
-        "leidos": { "ev_revenue": 1.8, "note": "Traditional IT/engineering services" },
-        "saic": { "ev_revenue": 1.2, "note": "Government IT services" }
+        "palantir": { "ev_revenue": 55.0, "note": "Public AI-native defense platform; ~55x EV/Revenue as of May 2026 (multiples.vc) — historically elevated, treat as peak-cycle mark" },
+        "anduril": { "ev_revenue": 28.0, "note": "Private; $5B Series H at $61B (May 2026) on ~$2.2B 2025 revenue (doubled YoY); autonomy + hardware" },
+        "shield_ai": { "ev_revenue": 24.0, "note": "Private; $1.5B Series G at $12.7B post (Mar 2026) on ~$540M projected 2026 revenue" },
+        "l3harris": { "ev_revenue": 2.1, "note": "Traditional prime; EV/EBITDA screeners showed ~20x in early 2026 (vs ~13-15x historic) — verify before relying" },
+        "booz_allen": { "ev_revenue": 3.5, "note": "IT services + analytics; FY26 revenue $11.2B (-6.4% YoY), ~9x EV/EBITDA H1 2026" },
+        "leidos": { "ev_revenue": 1.8, "note": "Traditional IT/engineering services; ~9.3x EV/EBITDA June 2026" },
+        "saic": { "ev_revenue": 1.2, "note": "Government IT services; ~10-11x EV/EBITDA H1 2026" }
       },
       "recent_transactions": {
         "l3_harris_merger": { "ev_ebitda": 16.5, "year": 2019, "note": "Premium for combined portfolio breadth" },

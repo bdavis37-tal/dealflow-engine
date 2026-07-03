@@ -495,7 +495,7 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
 
       {/* Data source footer */}
       <div className="text-center text-xs text-slate-600 pt-4 border-t border-slate-800">
-        Benchmarks sourced from Carta State of Private Markets Q3 2025, PitchBook-NVCA Venture Monitor, Equidam Startup Valuation Delta H1 2025, Aventis Advisors SaaS Multiples 2025.
+        Benchmarks sourced from Carta State of Private Markets Q4 2025 / Q1 2026, Carta State of Pre-Seed Q1 2026, PitchBook-NVCA Venture Monitor FY2025, Aventis Advisors SaaS Multiples 2026, SaaS Capital Index Q1 2026.
         <br />Not financial advice — consult a qualified advisor before making fundraising decisions.
       </div>
     </div>
