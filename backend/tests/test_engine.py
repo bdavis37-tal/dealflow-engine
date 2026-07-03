@@ -51,14 +51,18 @@ class TestSimpleCashDeal:
 
     def test_goodwill_approx(self):
         """
-        Goodwill = Purchase Price - Fair Value of Net Identifiable Assets.
-        Expected goodwill ~ $41M for this fixture (verified by hand).
-        Cash deal: no new shares issued.
+        Goodwill = Equity consideration - Fair Value of Net Identifiable Assets.
+        acquisition_price is EV, so equity consideration = 50 - 0 debt + 2 cash = 52.
+        FVNA = book equity (2 + 4 - 0 = 6) + writeup 2 + intangibles 5 - DTL 1.75 = 11.25.
+        Goodwill = 52 - 11.25 = 40.75 (hand-verified; fixture expected 40.75).
+        Audit fix: this test previously loaded expected_goodwill but never compared it.
         """
         bs = self.output.balance_sheet_at_close
         expected_goodwill = self.expected["goodwill_approx"]
         assert bs.goodwill > 0, "Goodwill should be positive"
-        # Verify within reasonable range (goodwill estimate depends on net asset calc)
+        assert abs(bs.goodwill - expected_goodwill) / expected_goodwill < 0.01, (
+            f"Goodwill {bs.goodwill:.2f} not within 1% of expected {expected_goodwill}"
+        )
         assert bs.goodwill < self.deal.target.acquisition_price, "Goodwill < purchase price"
 
     def test_no_debt_means_no_interest(self):
@@ -164,10 +168,11 @@ class TestMixedFinancingWithSynergies:
         combined entity has high FCF that accelerates optional paydown.
         """
         y1 = self.output.pro_forma_income_statement[0]
-        boy_max_interest = 40_000_000 * 0.075  # $3M at BOY (upper bound)
-        assert y1.interest_expense > 0, "Must have positive interest with debt tranche"
-        assert y1.interest_expense <= boy_max_interest + 1000, (
-            f"Interest {y1.interest_expense:,.0f} should not exceed BOY-based estimate of {boy_max_interest:,.0f}"
+        boy_max_interest = 40.0 * 0.075  # $3M at BOY (upper bound), millions USD
+        assert y1.acquisition_interest > 0, "Must have positive interest with debt tranche"
+        assert y1.acquisition_interest <= boy_max_interest + 1e-6, (
+            f"Acquisition interest {y1.acquisition_interest:,.4f} should not exceed "
+            f"BOY-based estimate of {boy_max_interest:,.4f}"
         )
 
     def test_pro_forma_statements_five_years(self):
@@ -185,6 +190,7 @@ class TestMixedFinancingWithSynergies:
             components = (
                 bridge.target_earnings_contribution
                 + bridge.interest_expense_drag
+                + bridge.foregone_interest_drag
                 + bridge.da_adjustment
                 + bridge.synergy_benefit
                 + bridge.share_dilution_impact
@@ -214,9 +220,9 @@ class TestHighlyLeveragedDeal:
     def test_interest_expense_positive_year1(self):
         """With 80% debt financing, Year 1 interest should be substantial."""
         y1 = self.output.pro_forma_income_statement[0]
-        assert y1.interest_expense > 0, "Must have positive interest expense"
-        # Total debt = $400M at blended ~8.3% → ~$33M interest
-        assert y1.interest_expense > 10_000_000, "Interest expense should be > $10M"
+        assert y1.acquisition_interest > 0, "Must have positive acquisition interest"
+        # Total acquisition debt = $400M at blended ~8.3% → ~$33M interest (avg balance)
+        assert y1.acquisition_interest > 10.0, "Acquisition interest should be > $10M"
 
     def test_debt_declines_over_time(self):
         """Straight-line amortization on first lien should reduce debt balance."""
@@ -242,9 +248,15 @@ class TestHighlyLeveragedDeal:
         leverage risk threshold. However, the $500M acquisition price at 11.1×
         EBITDA on a Manufacturing target may trigger a purchase-price risk flag.
         """
-        assert len(self.output.risk_assessment) >= 0  # Risk analyzer must not crash
-        # If no risks are flagged, that is valid for this combined entity size —
-        # the large acquirer EBITDA keeps combined leverage low.
+        # Audit fix: `len(...) >= 0` was vacuously true. This fixture pays 11.1×
+        # EBITDA on a Manufacturing target (industry high = 11×) with $25M of
+        # synergies on $250M target revenue (10% ≥ 8% threshold) — at least the
+        # purchase-price and synergy-execution risks must flag.
+        assert len(self.output.risk_assessment) >= 1, "Expected at least one risk flag"
+        risk_names = [r.metric_name for r in self.output.risk_assessment]
+        assert "Entry EV/EBITDA Multiple" in risk_names, (
+            f"11.1x entry vs Manufacturing high of 11x should flag purchase-price risk; got {risk_names}"
+        )
 
     def test_multi_tranche_structure(self):
         """Three tranches should produce per-tranche interest in debt schedule."""

@@ -1,26 +1,45 @@
 # Licensed under the Business Source License 1.1 — see LICENSE file for details
 """
-IRR and MOIC return calculations for the acquirer's equity investment.
+IRR and MOIC return calculations for the acquirer's equity investment in the DEAL.
 
-We compute returns at exit years 3, 5, 7 across a range of exit EV/EBITDA multiples
-(entry multiple ± 2x in 0.5x steps).
+CONVENTION (audit fix F-1): the return is computed on the TARGET-SIDE economics —
+the exit value is (target + synergy) EBITDA × exit multiple, i.e. the stream of
+earnings the acquirer bought — NOT the whole combined company. Valuing the
+combined acquirer+target against a target-only equity check wildly overstates
+IRR/MOIC (the acquirer's own pre-existing earnings are not a return on the deal).
 
-IRR is computed using Newton-Raphson on the NPV function.
+Equity invested (audit fix F-19): cash consideration + stock consideration +
+transaction fees, with NO artificial floor. When the equity check is ~zero
+(e.g. ~100% debt-financed), IRR/MOIC are not meaningful and a note is returned
+instead of a fabricated number.
 
-Cash balance at exit is modeled as cumulative free cash flow (NI + D&A - capex - WC)
-minus mandatory and optional debt paydowns already captured in the debt schedule.
-This replaces the prior heuristic of 50% of cumulative net income.
+Exit equity:
+  Exit EV       = deal EBITDA at exit × exit multiple
+  Exit equity   = max(0, Exit EV - net acquisition debt at exit)
+  Net debt      = ending acquisition debt - cumulative deal-attributable FCF
+
+Deal-attributable FCF already subtracts ALL debt paydown (mandatory + optional,
+audit fix F-5), so debt repaid out of cash flow is not double counted: the
+paydown reduces cumulative cash by exactly the amount it reduces ending debt.
+Cumulative cash is allowed to go negative (paydowns funded beyond deal FCF
+increase effective net debt attributable to the deal).
+
+IRR is computed with Newton-Raphson and a bisection fallback (audit fix F-20);
+the solver never raises and guards against rates <= -100%.
+
+All monetary values are in millions USD.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 
 from .models import DealInput, ReturnsAnalysis, ReturnScenario
 
 
 MAX_IRR_ITERATIONS = 200
 IRR_TOLERANCE = 1e-8
+_MIN_RATE = -0.9999   # Never evaluate NPV at rate <= -1
+_MAX_RATE = 100.0     # 10,000% — beyond any sane M&A outcome
 
 
 def _npv(rate: float, cash_flows: list[float]) -> float:
@@ -31,16 +50,38 @@ def _npv(rate: float, cash_flows: list[float]) -> float:
     return sum(cf / (1 + rate) ** t for t, cf in enumerate(cash_flows))
 
 
+def _irr_bisection(cash_flows: list[float]) -> float:
+    """Robust bisection fallback for IRR on [-99.99%, +10,000%]."""
+    lo, hi = _MIN_RATE, _MAX_RATE
+    f_lo = _npv(lo, cash_flows)
+    f_hi = _npv(hi, cash_flows)
+    if f_lo * f_hi > 0:
+        # No sign change in bracket — no IRR in a meaningful range.
+        # Return the boundary closer to zero NPV.
+        return lo if abs(f_lo) < abs(f_hi) else hi
+    for _ in range(200):
+        mid = (lo + hi) / 2.0
+        f_mid = _npv(mid, cash_flows)
+        if abs(f_mid) < IRR_TOLERANCE or (hi - lo) < IRR_TOLERANCE:
+            return mid
+        if f_lo * f_mid <= 0:
+            hi, f_hi = mid, f_mid
+        else:
+            lo, f_lo = mid, f_mid
+    return (lo + hi) / 2.0
+
+
 def _irr(cash_flows: list[float]) -> float:
     """
-    Compute IRR using Newton-Raphson iteration.
+    Compute IRR using Newton-Raphson with a bisection fallback.
 
     Args:
         cash_flows: List where [0] is investment (negative) and subsequent
                     entries are cash inflows.
 
     Returns:
-        IRR as a decimal (e.g., 0.20 for 20%). Returns -1.0 if not convergent.
+        IRR as a decimal (e.g., 0.20 for 20%). Never raises; returns -1.0
+        when no IRR exists (no sign change in cash flows).
     """
     # Validate that there's a sign change (necessary for IRR to exist)
     has_negative = any(cf < 0 for cf in cash_flows)
@@ -52,65 +93,74 @@ def _irr(cash_flows: list[float]) -> float:
     rate = 0.15
 
     for _ in range(MAX_IRR_ITERATIONS):
-        npv = _npv(rate, cash_flows)
-        # Derivative of NPV with respect to rate
-        dnpv = sum(
-            -t * cf / (1 + rate) ** (t + 1)
-            for t, cf in enumerate(cash_flows)
-        )
+        try:
+            npv = _npv(rate, cash_flows)
+            # Derivative of NPV with respect to rate
+            dnpv = sum(
+                -t * cf / (1 + rate) ** (t + 1)
+                for t, cf in enumerate(cash_flows)
+            )
+        except (OverflowError, ZeroDivisionError):
+            return _irr_bisection(cash_flows)
         if dnpv == 0:
-            break
+            return _irr_bisection(cash_flows)
         new_rate = rate - npv / dnpv
+        # Guard: Newton stepped out of the valid domain — fall back to bisection
+        if new_rate <= _MIN_RATE or new_rate > _MAX_RATE or math.isnan(new_rate):
+            return _irr_bisection(cash_flows)
         if abs(new_rate - rate) < IRR_TOLERANCE:
             return new_rate
         rate = new_rate
 
-    return rate  # Best estimate even if not fully converged
+    # Did not converge — use the robust fallback
+    return _irr_bisection(cash_flows)
 
 
 def compute_returns(
     deal: DealInput,
-    ebitda_by_year: list[float],
-    net_income_by_year: list[float],
+    deal_ebitda_by_year: list[float],
     ending_debt_by_year: list[float],
-    fcf_by_year: list[float] | None = None,
+    deal_fcf_by_year: list[float],
+    transaction_costs: float = 0.0,
 ) -> ReturnsAnalysis:
     """
-    Compute IRR and MOIC across exit years and exit multiples.
-
-    Equity value at exit:
-      Exit EV = Exit EBITDA × Exit Multiple
-      Exit Equity = Exit EV - Net Debt at Exit
-      Net Debt at Exit = Ending Debt - Cumulative FCF retained as cash
-
-    Cash at exit is derived from the cumulative FCF roll-forward. FCF that was
-    used for optional debt paydown is already removed from ending_debt_by_year
-    (the solver applies optional sweeps), so we track only remaining FCF as cash.
-
-    Initial equity investment:
-      = Cash used from acquirer's balance sheet + new stock issued
-      (Debt financing is separate — equity return is on equity capital)
+    Compute IRR and MOIC across exit years and exit multiples on the
+    deal-attributable (target + synergy) earnings stream.
 
     Args:
-        deal: Full deal input.
-        ebitda_by_year: Pro forma EBITDA for years 1-N.
-        net_income_by_year: Pro forma net income for years 1-N.
-        ending_debt_by_year: Ending debt balance for years 1-N (post optional sweep).
-        fcf_by_year: Free cash flow per year (NI + DA - capex - WC change).
-            If not provided, approximated from net_income with 70% NI→FCF conversion.
+        deal: Full deal input (acquisition_price is ENTERPRISE VALUE).
+        deal_ebitda_by_year: Target + synergy EBITDA (net of integration costs)
+            for years 1-N — the stream the exit multiple is applied to.
+        ending_debt_by_year: Ending acquisition-debt balance for years 1-N
+            (post mandatory amortization and optional sweep).
+        deal_fcf_by_year: Deal-attributable free cash flow per year, AFTER all
+            debt paydown (mandatory + optional).
+        transaction_costs: One-time fees paid at close (part of the equity check).
 
     Returns:
         ReturnsAnalysis with scenarios across exit years and multiples.
     """
-    acquisition_price = deal.target.acquisition_price
+    acquisition_price = deal.target.acquisition_price  # EV by convention
     struct = deal.structure
 
-    # Equity invested = cash portion + fair value of stock issued
-    # (Debt portion is financed — not the equity check)
-    equity_invested = acquisition_price * (struct.cash_percentage + struct.stock_percentage)
-    equity_invested = max(equity_invested, acquisition_price * 0.10)  # Floor at 10%
+    # Equity invested = cash + stock consideration + transaction fees.
+    # No artificial floor (audit fix F-19) — a ~100% debt deal has ~zero equity
+    # and its IRR/MOIC are flagged as not meaningful instead.
+    equity_invested = (
+        acquisition_price * (struct.cash_percentage + struct.stock_percentage)
+        + max(0.0, transaction_costs)
+    )
 
-    # Entry multiple for reference
+    notes: list[str] = []
+    min_meaningful_equity = max(0.01 * acquisition_price, 1e-9)
+    equity_is_meaningful = equity_invested > min_meaningful_equity
+    if not equity_is_meaningful:
+        notes.append(
+            "Equity check is near zero (deal is ~100% debt financed) — "
+            "IRR and MOIC are not meaningful and are reported as 0."
+        )
+
+    # Entry multiple for reference: EV / target LTM EBITDA
     target_ebitda = deal.target.ebitda
     entry_multiple = (acquisition_price / target_ebitda) if target_ebitda > 0 else 0.0
 
@@ -121,41 +171,38 @@ def compute_returns(
         if (entry_multiple + delta) > 1.0  # Multiples must be positive
     ]
 
-    exit_years = [y for y in [3, 5, 7] if y <= len(ebitda_by_year)]
+    exit_years = [y for y in [3, 5, 7] if y <= len(deal_ebitda_by_year)]
 
-    # Build cumulative cash balance roll-forward from FCF.
-    # FCF used for optional debt paydown is already captured in ending_debt_by_year
-    # (the circularity solver sweeps excess FCF to reduce debt). The remaining FCF
-    # — beyond mandatory amortization and optional sweep — is retained as cash.
-    # If fcf_by_year is not provided, use a conservative 70% NI→FCF conversion.
-    if fcf_by_year is None:
-        fcf_by_year = [ni * 0.70 for ni in net_income_by_year]
-
-    # Cumulative cash = sum of annual FCF; negative FCF years draw down cash
+    # Cumulative deal-attributable cash. deal_fcf_by_year already subtracts
+    # all debt paydown, so this may go negative when paydowns exceed deal FCF —
+    # that shortfall correctly increases net debt attributable to the deal.
     cumulative_cash_by_year: list[float] = []
     running_cash = 0.0
-    for yr_fcf in fcf_by_year:
-        running_cash = max(0.0, running_cash + yr_fcf)
+    for yr_fcf in deal_fcf_by_year:
+        running_cash += yr_fcf
         cumulative_cash_by_year.append(running_cash)
 
     scenarios: list[ReturnScenario] = []
 
     for exit_year in exit_years:
-        exit_ebitda = ebitda_by_year[exit_year - 1] if exit_year <= len(ebitda_by_year) else ebitda_by_year[-1]
+        exit_ebitda = deal_ebitda_by_year[exit_year - 1]
         ending_debt = ending_debt_by_year[exit_year - 1] if exit_year <= len(ending_debt_by_year) else 0.0
         cash_at_exit = cumulative_cash_by_year[exit_year - 1] if exit_year <= len(cumulative_cash_by_year) else 0.0
 
-        net_debt_at_exit = max(0.0, ending_debt - cash_at_exit)
+        net_debt_at_exit = ending_debt - cash_at_exit
 
         for exit_mult in exit_multiples:
             exit_ev = exit_ebitda * exit_mult
             exit_equity = max(0.0, exit_ev - net_debt_at_exit)
 
-            # Cash flows: [Year 0: -equity_invested, Year exit: +exit_equity]
-            cash_flows = [-equity_invested] + [0.0] * (exit_year - 1) + [exit_equity]
-
-            irr = _irr(cash_flows)
-            moic = exit_equity / equity_invested if equity_invested > 0 else 0.0
+            if equity_is_meaningful:
+                # Cash flows: [Year 0: -equity_invested, Year exit: +exit_equity]
+                cash_flows = [-equity_invested] + [0.0] * (exit_year - 1) + [exit_equity]
+                irr = _irr(cash_flows)
+                moic = exit_equity / equity_invested
+            else:
+                irr = 0.0
+                moic = 0.0
 
             scenarios.append(ReturnScenario(
                 exit_year=exit_year,
@@ -169,5 +216,6 @@ def compute_returns(
         entry_multiple=entry_multiple,
         equity_invested=equity_invested,
         scenarios=scenarios,
-        annual_fcf_to_equity=fcf_by_year if fcf_by_year else [],
+        annual_fcf_to_equity=list(deal_fcf_by_year),
+        notes=notes,
     )

@@ -117,7 +117,7 @@ export default function SensitivityExplorer({
                 return (
                   <div key={cidx} className={`flex-1 ${isBase && !isPinned ? 'ring-2 ring-blue-500/60 rounded-sm' : ''}`}>
                     <HeatmapCell
-                      value={val}
+                      value={val ?? 0}
                       label={matrix.data_labels[ridx][cidx]}
                       isHighlighted={isPinned}
                       onClick={() => handleCellClick(ridx, cidx)}
@@ -163,7 +163,7 @@ export default function SensitivityExplorer({
           colLabel={matrix.col_label}
           rowValue={matrix.row_values[pinned[0]]}
           colValue={matrix.col_values[pinned[1]]}
-          accretionPct={matrix.data[pinned[0]][pinned[1]] * 100}
+          accretionPct={(matrix.data[pinned[0]][pinned[1]] ?? 0) * 100}
           aiAvailable={aiAvailable}
         />
       )}

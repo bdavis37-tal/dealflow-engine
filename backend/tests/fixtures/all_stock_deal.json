@@ -1,34 +1,34 @@
 {
-  "description": "All-stock deal. $80M target, 100% stock consideration. Tests share dilution math when no cash or debt is used.",
+  "description": "All-stock deal. $80M target, 100% stock consideration. Tests share dilution math when no cash or debt is used. All monetary values in millions USD (project convention).",
   "input": {
     "acquirer": {
       "company_name": "Alpha Holdings",
-      "revenue": 300000000,
-      "ebitda": 45000000,
-      "net_income": 20000000,
-      "total_debt": 10000000,
-      "cash_on_hand": 50000000,
-      "shares_outstanding": 20000000,
-      "share_price": 30.00,
+      "revenue": 300.0,
+      "ebitda": 45.0,
+      "net_income": 20.0,
+      "total_debt": 10.0,
+      "cash_on_hand": 50.0,
+      "shares_outstanding": 20.0,
+      "share_price": 30.0,
       "tax_rate": 0.25,
-      "depreciation": 8000000,
-      "capex": 7000000,
-      "working_capital": 25000000,
+      "depreciation": 8.0,
+      "capex": 7.0,
+      "working_capital": 25.0,
       "industry": "Software / SaaS"
     },
     "target": {
       "company_name": "Target SaaS Inc",
-      "revenue": 50000000,
-      "ebitda": 8000000,
-      "net_income": 4000000,
-      "total_debt": 0,
-      "cash_on_hand": 5000000,
+      "revenue": 50.0,
+      "ebitda": 8.0,
+      "net_income": 4.0,
+      "total_debt": 0.0,
+      "cash_on_hand": 5.0,
       "tax_rate": 0.25,
-      "depreciation": 1000000,
-      "capex": 800000,
-      "working_capital": 5000000,
+      "depreciation": 1.0,
+      "capex": 0.8,
+      "working_capital": 5.0,
       "industry": "Software / SaaS",
-      "acquisition_price": 80000000,
+      "acquisition_price": 80.0,
       "revenue_growth_rate": 0.08
     },
     "structure": {
@@ -37,21 +37,21 @@
       "debt_percentage": 0.0,
       "debt_tranches": [],
       "transaction_fees_pct": 0.02,
-      "advisory_fees": 500000
+      "advisory_fees": 0.5
     },
     "ppa": {
-      "asset_writeup": 1000000,
+      "asset_writeup": 1.0,
       "asset_writeup_useful_life": 10,
-      "identifiable_intangibles": 10000000,
+      "identifiable_intangibles": 10.0,
       "intangible_useful_life": 7
     },
     "synergies": {
       "cost_synergies": [
         {
           "category": "R&D consolidation",
-          "annual_amount": 3000000,
+          "annual_amount": 3.0,
           "phase_in_years": 2,
-          "cost_to_achieve": 1000000,
+          "cost_to_achieve": 1.0,
           "is_revenue": false
         }
       ],

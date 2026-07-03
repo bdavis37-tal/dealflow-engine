@@ -217,6 +217,14 @@ class DealStructure(BaseModel):
     debt_tranches: list[DebtTranche] = Field(default_factory=list)
     transaction_fees_pct: float = Field(default=0.02, ge=0, le=0.1)
     advisory_fees: float = Field(default=0.0, ge=0)
+    cash_yield: float = Field(
+        default=0.043, ge=0, le=0.20,
+        description=(
+            "Pre-tax yield foregone on balance-sheet cash used as consideration "
+            "(short-term rate; ~4.3% as of H1 2026). Deducted as foregone interest "
+            "income in the pro forma each year."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_percentages(self) -> "DealStructure":
@@ -282,6 +290,9 @@ class IncomeStatementYear(BaseModel):
     acquirer_standalone_eps: float
     pro_forma_eps: float
     accretion_dilution_pct: float
+    # True when acquirer standalone EPS <= 0 — the accretion % is Not Meaningful
+    # (it is computed against |standalone EPS|); judge the deal on the EPS delta.
+    accretion_is_nm: bool = False
     # Pro forma adjustment detail (Deep mode transparency)
     acquirer_revenue: float = 0.0
     target_revenue: float = 0.0
@@ -291,6 +302,9 @@ class IncomeStatementYear(BaseModel):
     synergy_cost: float = 0.0
     incremental_da: float = 0.0    # PPA-related D&A only
     acquisition_interest: float = 0.0  # Interest from new deal debt
+    existing_interest: float = 0.0  # Implied pre-existing below-EBIT items (acq + tgt)
+    foregone_cash_interest: float = 0.0  # Lost yield on cash used as consideration
+    integration_costs: float = 0.0  # Synergy cost-to-achieve expensed this year
     transaction_costs: float = 0.0  # One-time fees (Year 1 only)
 
 
@@ -306,6 +320,9 @@ class BalanceSheetAtClose(BaseModel):
     combined_total_assets: float
     combined_total_liabilities: float
     combined_equity: float
+    # Simplified opening BS uses revenue-based asset proxies; the plug forces
+    # Assets == Liabilities + Equity and is disclosed in computation_notes.
+    balancing_plug: float = 0.0
 
 
 class AccretionDilutionBridge(BaseModel):
@@ -315,6 +332,7 @@ class AccretionDilutionBridge(BaseModel):
     da_adjustment: float           # Incremental D&A from PPA
     synergy_benefit: float
     share_dilution_impact: float   # Change in EPS from new shares issued
+    foregone_interest_drag: float = 0.0  # Lost yield on cash consideration (after-tax, per share)
     tax_impact: float
     total_accretion_dilution: float
     total_accretion_dilution_pct: float
@@ -326,14 +344,17 @@ class SensitivityMatrix(BaseModel):
     col_label: str
     row_values: list[float]
     col_values: list[float]
-    data: list[list[float]]         # [row][col] = accretion/dilution %
-    data_labels: list[list[str]]    # formatted strings
+    # [row][col] = accretion/dilution as decimal; None = cell failed to compute
+    data: list[list[Optional[float]]]
+    data_labels: list[list[str]]    # formatted strings ("n/a" for failed cells)
     # Base case indices for highlighting
     base_row_idx: int = -1          # Row index of base case (-1 = none)
     base_col_idx: int = -1          # Col index of base case (-1 = none)
     # Display labels with absolute values (e.g. "$50M (Base)")
     row_display_labels: list[str] = Field(default_factory=list)
     col_display_labels: list[str] = Field(default_factory=list)
+    # Assumption / data-quality note (e.g. synthetic synergy axis, failed cells)
+    note: Optional[str] = None
 
 
 class ReturnScenario(BaseModel):
@@ -346,9 +367,10 @@ class ReturnScenario(BaseModel):
 
 class ReturnsAnalysis(BaseModel):
     entry_multiple: float
-    equity_invested: float = 0.0           # Cash equity check at close
+    equity_invested: float = 0.0           # Cash + stock consideration + fees at close
     scenarios: list[ReturnScenario]
-    annual_fcf_to_equity: list[float] = Field(default_factory=list)  # Annual FCF after debt service
+    annual_fcf_to_equity: list[float] = Field(default_factory=list)  # Deal-attributable FCF after debt service
+    notes: list[str] = Field(default_factory=list)  # e.g. near-zero equity check warning
 
 
 class RiskItem(BaseModel):

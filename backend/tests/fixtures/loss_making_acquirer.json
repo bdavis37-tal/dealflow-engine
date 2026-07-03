@@ -1,0 +1,71 @@
+{
+  "description": "Loss-making acquirer buying a profitable target all-cash. Exercises the F-4 NM (Not Meaningful) accretion convention: standalone EPS is negative, pro forma EPS improves, so the deal must report POSITIVE accretion with accretion_is_nm=true and must not get a red verdict. All monetary values in millions USD (project convention).",
+  "input": {
+    "acquirer": {
+      "company_name": "Turnaround Corp",
+      "revenue": 100.0,
+      "ebitda": 2.0,
+      "net_income": -10.0,
+      "total_debt": 40.0,
+      "cash_on_hand": 60.0,
+      "shares_outstanding": 10.0,
+      "share_price": 5.0,
+      "tax_rate": 0.25,
+      "depreciation": 8.0,
+      "capex": 3.0,
+      "working_capital": 10.0,
+      "industry": "Manufacturing"
+    },
+    "target": {
+      "company_name": "Cash Cow LLC",
+      "revenue": 30.0,
+      "ebitda": 7.5,
+      "net_income": 4.5,
+      "total_debt": 0.0,
+      "cash_on_hand": 1.0,
+      "tax_rate": 0.25,
+      "depreciation": 0.5,
+      "capex": 0.4,
+      "working_capital": 3.0,
+      "industry": "Manufacturing",
+      "acquisition_price": 40.0,
+      "revenue_growth_rate": 0.05
+    },
+    "structure": {
+      "cash_percentage": 1.0,
+      "stock_percentage": 0.0,
+      "debt_percentage": 0.0,
+      "debt_tranches": [],
+      "transaction_fees_pct": 0.02,
+      "advisory_fees": 0.0
+    },
+    "ppa": {
+      "asset_writeup": 0.0,
+      "asset_writeup_useful_life": 10,
+      "identifiable_intangibles": 0.0,
+      "intangible_useful_life": 10
+    },
+    "synergies": {
+      "cost_synergies": [],
+      "revenue_synergies": []
+    },
+    "mode": "quick",
+    "projection_years": 5
+  },
+  "expected": {
+    "_workpaper": [
+      "Standalone: acq EPS0 = -10/10 = -1.00; Year 1 standalone EPS = -1.00 x 1.03 = -1.03.",
+      "Anchored EBT (F-2): acq EBT0 = -10/0.75 = -13.3333 grows 3%; tgt EBT0 = 4.5/0.75 = 6.0 grows 5%.",
+      "Deal adjustments: PPA D&A = 0; foregone cash interest (F-3) = 40 x 0.043 = 1.72/yr; fees Y1 = 2% x 40 = 0.80.",
+      "Y1 EBT = -13.3333x1.03 + 6.0x1.05 - 1.72 - 0.80 = -9.9533; EBT < 0 so taxes = 0, NI = -9.9533.",
+      "Y1 pro forma EPS = -9.9533/10 = -0.99533 vs standalone -1.03: EPS improves by +$0.0347.",
+      "Accretion (F-4) = (+0.034667)/abs(-1.03) x 100 = +3.366% with accretion_is_nm = true.",
+      "Old buggy behavior divided by SIGNED -1.03 and reported -3.4% (sign flipped) -> red verdict."
+    ],
+    "year1_pro_forma_eps_approx": -0.99533,
+    "year1_standalone_eps_approx": -1.03,
+    "year1_accretion_pct_approx": 3.366,
+    "accretion_is_nm": true,
+    "verdict_not_red": true
+  }
+}

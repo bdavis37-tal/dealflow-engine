@@ -26,7 +26,7 @@ def load_deal(filename: str) -> DealInput:
 def _within_tolerance(actual: float, expected: float, tolerance: float = GOLDEN_TOLERANCE) -> bool:
     """Check if actual is within tolerance of expected (relative or absolute for near-zero)."""
     if expected == 0:
-        return abs(actual) < 1.0  # Within $1 of zero
+        return abs(actual) < 1e-6  # Within $1 (millions units) of zero
     return abs(actual - expected) / abs(expected) < tolerance
 
 
@@ -96,11 +96,11 @@ class TestExtremeLeverageDeal:
         assert len(self.output.pro_forma_income_statement) == 7  # 7-year projection
 
     def test_significant_interest_expense(self):
-        """With $270M total debt at 7.5-14%, interest should be substantial."""
+        """With $270M acquisition debt at 7.5-14%, interest should be substantial."""
         y1 = self.output.pro_forma_income_statement[0]
-        # Minimum expected: $270M × 7.5% = $20.25M
-        assert y1.interest_expense > 15_000_000, (
-            f"Interest expense {y1.interest_expense:,.0f} too low for $270M debt"
+        # Minimum expected (avg-balance, post sweep): well above $15M for $270M debt
+        assert y1.acquisition_interest > 15.0, (
+            f"Acquisition interest {y1.acquisition_interest:,.2f}M too low for $270M debt"
         )
 
     def test_three_tranches_in_deal(self):
@@ -209,3 +209,16 @@ class TestGoldenFile:
 
     def test_scorecard_count(self):
         assert len(self.output.deal_scorecard) == self.golden["scorecard_count"]
+
+    def test_year1_not_nm(self):
+        """Profitable acquirer — accretion % is meaningful (F-4 flag)."""
+        y1 = self.output.pro_forma_income_statement[0]
+        assert y1.accretion_is_nm == self.golden["year1"]["accretion_is_nm"]
+
+    def test_sources_and_uses_golden(self):
+        """S&U must balance and match pinned totals (F-9)."""
+        snu = self.output.sources_and_uses
+        assert snu is not None
+        assert snu.balanced == self.golden["sources_and_uses"]["balanced"]
+        assert _within_tolerance(snu.total_sources, self.golden["sources_and_uses"]["total_sources"])
+        assert _within_tolerance(snu.total_uses, self.golden["sources_and_uses"]["total_uses"])

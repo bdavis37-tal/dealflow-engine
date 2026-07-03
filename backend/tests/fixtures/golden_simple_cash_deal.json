@@ -1,28 +1,52 @@
 {
-  "_comment": "Golden file: hand-verified expected output for simple_cash_deal.json. If this test fails, a core financial computation changed.",
-  "entry_multiple": 8.3333,
-  "goodwill": 38750000.0,
+  "_comment": [
+    "Golden file: hand-verified expected output for simple_cash_deal.json (all values in MILLIONS USD).",
+    "Regenerated after the valuation-metrics audit fixes (F-1..F-23). If this test fails, a core financial computation changed.",
+    "",
+    "HAND WORKPAPER (fixture: acq rev 200 / EBITDA 30 / NI 15 / D&A 5 / shares 10 / tax 25%;",
+    "tgt rev 40 / EBITDA 6 / NI 3 / D&A 0.8 / growth 4% / cash 2 / debt 0; EV = 50, all-cash, fees 2.5%):",
+    "  Fees = 2.5% x 50 = 1.25.  PPA D&A = 2/10 + 5/8 = 0.825.  DTL = (2+5) x 25% = 1.75.",
+    "  Equity consideration = EV 50 - debt 0 + cash 2 = 52 (acquisition_price is EV per F-10).",
+    "  FVNA = book equity (2 + 4 - 0) + writeup 2 + intangibles 5 - DTL 1.75 = 11.25.",
+    "  Goodwill = 52 - 11.25 = 40.75.",
+    "  Foregone cash interest (F-3) = cash used 50 x 4.3% = 2.15/yr.",
+    "  NI anchor (F-2): acq EBT0 = 15/0.75 = 20 grows 3%/yr; tgt EBT0 = 3/0.75 = 4 grows 4%/yr.",
+    "  Y1 EBT = 20x1.03 + 4x1.04 - PPA 0.825 - foregone 2.15 - fees 1.25 = 20.535 -> NI = 15.40125.",
+    "  Y1 EPS = 15.40125/10 = 1.540125 vs standalone 1.5x1.03 = 1.545 -> accretion = -0.3155% (~flat, was phantom +41.18%).",
+    "  Y5 EBT = 20x1.03^5 + 4x1.04^5 - 0.825 - 2.15 = 25.0771 -> NI 18.80783, EPS 1.880782 -> +8.1586%.",
+    "  Y1 revenue = 200x1.03 + 40x1.04 = 247.6; Y1 EBITDA = 206x0.15 + 41.6x0.15 = 37.14.",
+    "  Verdict: -0.32% is within [-2%, +2%] -> yellow. Risks: entry 8.33x < Manufacturing high 11x,",
+    "  leverage 20/36 = 0.56x < 4x, no synergies -> 0 risks. Scorecard: 8 standard metrics."
+  ],
+  "entry_multiple": 8.333333,
+  "goodwill": 40.75,
   "year1": {
-    "revenue": 247600000.0,
-    "ebitda": 37140000.0,
-    "net_income": 21812250.0,
-    "pro_forma_eps": 2.181225,
+    "revenue": 247.6,
+    "ebitda": 37.14,
+    "net_income": 15.40125,
+    "pro_forma_eps": 1.540125,
     "standalone_eps": 1.545,
-    "accretion_dilution_pct": 41.1796
+    "accretion_dilution_pct": -0.3155,
+    "accretion_is_nm": false
   },
   "year5": {
-    "revenue": 280520930.96,
-    "ebitda": 42078139.64,
-    "net_income": 25862585.21,
-    "pro_forma_eps": 2.586259,
-    "accretion_dilution_pct": 48.7286
+    "revenue": 280.520931,
+    "ebitda": 42.07814,
+    "net_income": 18.80782,
+    "pro_forma_eps": 1.880782,
+    "accretion_dilution_pct": 8.1586
   },
   "balance_sheet": {
     "new_acquisition_debt": 0.0,
     "shares_issued": 0.0,
-    "cash_used": 50000000.0
+    "cash_used": 50.0
   },
-  "verdict": "green",
+  "sources_and_uses": {
+    "total_sources": 53.25,
+    "total_uses": 53.25,
+    "balanced": true
+  },
+  "verdict": "yellow",
   "convergence_warning": false,
   "risk_count": 0,
   "scorecard_count": 8

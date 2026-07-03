@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +142,15 @@ class LiquidationPreference(BaseModel):
                                                description="For capped participating: cap as multiple of invested")
     anti_dilution: AntiDilutionType = AntiDilutionType.NONE
     seniority: int = Field(default=1, ge=1, description="1 = most senior (highest seniority number = junior)")
+    ownership_pct: Optional[float] = Field(
+        default=None, ge=0, le=1.0,
+        description=(
+            "As-converted fully diluted ownership of this class (0.15 = 15%). "
+            "Used for conversion value in the waterfall. If omitted, the engine "
+            "falls back to a dollar-proportional estimate from invested amounts "
+            "(flagged in the output notes)."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,16 +164,16 @@ class DilutionAssumptions(BaseModel):
     round closes.  E.g. ``pre_seed_to_seed`` is the dilution the pre-seed
     investor takes at the seed round, ``seed_to_a`` is dilution at Series A, etc.
     """
-    pre_seed_to_seed: float = Field(default=0.205, ge=0, le=0.50,
-                                     description="Dilution at Seed round (Carta median: 20.5%)")
-    seed_to_a: float = Field(default=0.20, ge=0, le=0.50,
-                              description="Dilution at Series A (Carta median: 20%)")
-    a_to_b: float = Field(default=0.18, ge=0, le=0.50,
-                           description="Dilution at Series B (typical 18-22%)")
-    b_to_c: float = Field(default=0.15, ge=0, le=0.50,
-                           description="Dilution at Series C (Carta median: 15%)")
+    pre_seed_to_seed: float = Field(default=0.195, ge=0, le=0.50,
+                                     description="Dilution at Seed round (Carta FY2025 median: 19.5%)")
+    seed_to_a: float = Field(default=0.185, ge=0, le=0.50,
+                              description="Dilution at Series A (Carta FY2025 median: 18.5%)")
+    a_to_b: float = Field(default=0.13, ge=0, le=0.50,
+                           description="Dilution at Series B (Carta FY2025 median: 13%)")
+    b_to_c: float = Field(default=0.11, ge=0, le=0.50,
+                           description="Dilution at Series C (Carta FY2025 median: 11%)")
     c_to_ipo: float = Field(default=0.12, ge=0, le=0.40,
-                             description="Dilution from C to IPO (typical 10-15%)")
+                             description="Dilution from C to IPO (lockup/pool median: 12%)")
     option_pool_expansion: float = Field(default=0.05, ge=0, le=0.20,
                                           description="Option pool refresh per round (typical 5-8%)")
 
@@ -273,15 +282,23 @@ class OwnershipMath(BaseModel):
     dilution_stack: list[dict]             # Per-round breakdown
     total_dilution_pct: float              # 1 - exit/entry
 
-    # Fund returner thresholds (at various exit values, what would this return?)
-    fund_returner_1x_exit: float           # Exit needed to return 1x fund
-    fund_returner_3x_exit: float           # Exit needed to return 3x fund
-    fund_returner_5x_exit: float           # Exit needed to return 5x fund
+    # Fund returner thresholds — GROSS: exit EV at which this position's gross
+    # proceeds (before fees and carry) equal the target multiple of fund size.
+    fund_returner_1x_exit: float           # Exit needed to return 1x fund (gross)
+    fund_returner_3x_exit: float           # Exit needed to return 3x fund (gross)
+    fund_returner_5x_exit: float           # Exit needed to return 5x fund (gross)
+
+    # NET variants: exit EV at which LPs receive the target multiple AFTER
+    # carry (gross proceeds grossed up by 1/(1−carry) on gains; management
+    # fees are implicitly covered since targets are stated on committed capital).
+    fund_returner_1x_exit_net: float
+    fund_returner_3x_exit_net: float
+    fund_returner_5x_exit_net: float
 
     # Contribution at various exits
     exit_values_tested: list[float]        # Exit EVs tested
     gross_proceeds_at_exits: list[float]   # Gross proceeds at each exit
-    fund_contribution_at_exits: list[float]  # Xof fund at each exit
+    fund_contribution_at_exits: list[float]  # x of fund at each exit
 
     # Key multiples
     required_arr_multiple_for_1x_fund: Optional[float]  # ARR multiple needed to return 1x fund
@@ -322,12 +339,16 @@ class QuickScreenResult(BaseModel):
 class WaterfallDistribution(BaseModel):
     """Distribution of exit proceeds through cap table."""
     exit_ev: float
-    share_classes: list[dict]            # Per class: name, preference_amount, conversion_value, gets
+    # Per class: share_class, type, invested_amount, preference_amount
+    # (= invested × preference multiple), preference_multiple,
+    # liquidation_payout, conversion_value, gets, converted
+    share_classes: list[dict]
     common_gets: float
-    total_distributed: float
+    total_distributed: float             # Sum actually distributed (≤ exit_ev)
     investor_total: float                # What THIS investor gets
     investor_moic: float
     conversion_was_optimal: bool         # True if converting was better than liquidating
+    notes: list[str] = Field(default_factory=list)
 
 
 class ProRataAnalysis(BaseModel):
@@ -374,19 +395,22 @@ class PortfolioConstructionStats(BaseModel):
     company_count: int
     stage_breakdown: dict[str, float]    # Stage → total invested
     vertical_breakdown: dict[str, float] # Vertical → total invested
-    largest_position_pct: float          # Biggest position as % of fund
+    largest_position_pct: float          # Biggest position as % of invested cost basis
 
     # Marks
     total_cost_basis: float
-    total_fair_value: float
-    unrealized_tvpi: float               # Total FMV / total cost basis
+    total_fair_value: float              # Residual FMV of held positions only
+    unrealized_tvpi: float               # GROSS: residual FMV / total cost basis
     realized_proceeds: float
-    dpi: float                           # Distributed / paid-in
-    rvpi: float                          # Residual / paid-in
+    # NET-style multiples: denominator is called capital INCLUDING the
+    # management-fee load (deployed + total fees), consistent with
+    # run_fund_irr_analysis.
+    dpi: float                           # Distributed / paid-in (fee-inclusive)
+    rvpi: float                          # Residual / paid-in (fee-inclusive)
     tvpi: float                          # Total (DPI + RVPI)
 
     # Projections
-    reserve_adequacy: str                # "adequate" | "tight" | "over-reserved"
+    reserve_adequacy: str                # "adequate" | "tight" | "over-committed"
     average_follow_on_multiple: float    # Average reserves / initial check across portfolio
 
 
@@ -421,7 +445,7 @@ class ICMemoFinancials(BaseModel):
 
     # Fund context
     fund_returner_threshold: float
-    fund_contribution_base: float        # Xof fund in base case
+    fund_contribution_base: float        # x of fund in base case
 
     # Benchmarks
     arr_multiple_at_entry: Optional[float]
@@ -458,7 +482,9 @@ class VCDealOutput(BaseModel):
     bull_scenario: VCScenario
     expected_value: float                # Probability-weighted gross proceeds
     expected_moic: float
-    expected_irr: float
+    expected_irr: float                  # IRR of the expected proceeds (single blended
+                                         # cashflow) — NOT the probability-weighted
+                                         # average of per-scenario IRRs
 
     # Quick screen summary
     quick_screen: QuickScreenResult
@@ -510,19 +536,34 @@ class QSBSInput(BaseModel):
     incorporated_in_c_corp: bool = Field(description="Incorporated as C-Corp (not LLC, S-Corp, partnership)")
     domestic_us_corp: bool = Field(description="US domestic corporation")
     active_business: bool = Field(description="Active business (not holding company, investment company, or professional services)")
-    assets_at_issuance_under_50m: bool = Field(description="Aggregate gross assets < $50M at time of issuance")
+    assets_at_issuance_under_50m: bool = Field(
+        description=(
+            "Aggregate gross assets under the §1202 threshold at time of issuance: "
+            "$50M for pre-July-2025 stock, $75M for stock issued after July 4, 2025 (OBBBA)"
+        ))
     original_issuance: bool = Field(description="Shares acquired at original issuance (not secondary)")
     holding_period_years: float = Field(ge=0, description="Years held to date")
     investment_amount: float = Field(gt=0, description="Amount invested, USD millions")
 
-    # New cap context (TCJA 2025)
-    issuance_date_post_july_2025: bool = Field(default=False,
-                                               description="Issued after July 4, 2025 (new $15M cap applies)")
+    # OBBBA (One Big Beautiful Bill Act, July 4 2025) context
+    issuance_date_post_july_2025: bool = Field(
+        default=False,
+        description=(
+            "Issued after July 4, 2025: $15M per-taxpayer cap, $75M gross-asset test, "
+            "and tiered 50/75/100% exclusion at 3/4/5-year holding periods"
+        ))
 
     # LP context
     fund_size: float = Field(gt=0, description="Fund size for LP-level benefit calculation, USD millions")
     lp_count: int = Field(default=50, ge=1, description="Number of LPs for per-LP benefit estimation")
-    lp_marginal_tax_rate: float = Field(default=0.37, ge=0, le=0.60)
+    lp_marginal_tax_rate: float = Field(
+        default=0.238, ge=0, le=0.60,
+        description=(
+            "Tax rate avoided on gain excluded under §1202. Default 23.8% = federal LTCG 20% "
+            "+ 3.8% NIIT — the rate an LP would otherwise pay on the excluded gain. "
+            "(The 28%+NIIT §1202 rate applies only to the NON-excluded portion; the 37% "
+            "ordinary rate is not the relevant comparison.)"
+        ))
 
 
 class QSBSOutput(BaseModel):
@@ -535,8 +576,9 @@ class QSBSOutput(BaseModel):
     holding_period_satisfied: bool       # >= 5 years
     years_remaining_to_qualify: Optional[float]
 
-    exclusion_cap_per_taxpayer: float    # $10M or 10x basis, or $15M if new rules
-    estimated_gain_excluded: float       # Min(cap, estimated gain)
+    exclusion_cap_per_taxpayer: float    # GREATER of dollar cap ($10M/$15M) and 10x basis (§1202(b)(1))
+    exclusion_pct_applicable: float = 1.0  # 1.0, or 0.5/0.75 under OBBBA tiered holding periods
+    estimated_gain_excluded: float       # Aggregate excluded gain across LPs (per-LP caps applied)
     estimated_federal_tax_saved_per_lp: float
     estimated_total_lp_benefit: float
 
@@ -591,6 +633,12 @@ class BridgeRoundInput(BaseModel):
     current_ownership_pct: float = Field(gt=0, le=1.0)
     fund_is_participating: bool = Field(default=True)
     pro_rata_amount: float = Field(default=0.0, ge=0)
+    monthly_burn: Optional[float] = Field(
+        default=None, ge=0,
+        description=(
+            "Company's monthly cash burn, USD millions. Used to compute the real "
+            "runway extension from the bridge; runway is reported as None when absent."
+        ))
 
 
 class BridgeRoundOutput(BaseModel):
@@ -720,7 +768,7 @@ class GPCarryOutput(BaseModel):
     gp_return_of_commit: float                   # GP gets back their commitment
     gp_carry_per_gp: float                       # Per-GP carry (total / num_gps)
     gp_total_comp_per_gp: float                  # carry + return of commit + salary
-    carry_as_multiple_of_salary: float           # How carry compares to salary
+    carry_as_multiple_of_salary: Optional[float]  # How carry compares to salary (None if no salary)
 
     # Management fee economics
     total_management_fees: float

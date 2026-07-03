@@ -1,13 +1,14 @@
 {
+  "_comment_frozen_on": "frozen_on verticals are AI-native by definition — their benchmark percentiles already price AI (incl. defense_tech, whose PitchBook 2025 comps describe AI-native defense). No additional premium may be stacked.",
   "_comment_frozen_off": "frozen_off contains M&A industry identifiers (not startup verticals) where AI-native premium does not apply",
-  "frozen_on": ["ai_ml_infrastructure", "ai_enabled_saas"],
+  "frozen_on": ["ai_ml_infrastructure", "ai_enabled_saas", "defense_tech"],
   "frozen_off": ["construction", "restaurants", "retail", "real_estate", "agriculture", "waste_management", "staffing"],
-  "default_on": ["defense_tech", "healthtech", "biotech_pharma", "developer_tools"],
+  "default_on": ["healthtech", "biotech_pharma", "developer_tools"],
   "default_off": ["b2b_saas", "fintech", "deep_tech_hardware", "consumer", "climate_energy", "marketplace", "vertical_saas"],
   "vertical_premiums": {
     "ai_ml_infrastructure": 0.0,
     "ai_enabled_saas": 0.0,
-    "defense_tech": 1.5,
+    "defense_tech": 0.0,
     "healthtech": 1.0,
     "biotech_pharma": 0.8,
     "b2b_saas": 0.8,
