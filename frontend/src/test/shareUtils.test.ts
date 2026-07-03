@@ -188,8 +188,13 @@ describe('decodeState resilience', () => {
 
 describe('encodeState size guard', () => {
   it('throws when encoded output exceeds 8000 chars', () => {
-    // Build a state with a very large string field to force oversized output
-    const bigString = 'x'.repeat(50_000)
+    // Build a state with a large incompressible string field to force
+    // oversized output — a repeated character compresses to almost nothing
+    // under LZ-string, so use varied content instead.
+    let bigString = ''
+    for (let i = 0; bigString.length < 50_000; i++) {
+      bigString += (Math.imul(i, 2654435761) >>> 0).toString(36)
+    }
     const oversized: MAInputState = {
       ...maState,
       acquirer: { ...maState.acquirer, company_name: bigString },
