@@ -121,6 +121,11 @@ export function useStartupState() {
     setState(s => ({ ...s, step }))
   }, [])
 
+  // Go back to a specific step from results — preserves all input data, clears output
+  const goToStep = useCallback((step: StartupFlowStep) => {
+    setState(s => ({ ...s, step, output: null, error: null }))
+  }, [])
+
   const setCompanyName = useCallback((name: string) => {
     setState(s => ({ ...s, company_name: name }))
   }, [])
@@ -218,6 +223,7 @@ export function useStartupState() {
   return {
     state,
     setStep,
+    goToStep,
     setCompanyName,
     updateTeam,
     updateTraction,

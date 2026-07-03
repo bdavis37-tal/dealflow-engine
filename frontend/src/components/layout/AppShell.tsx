@@ -73,6 +73,8 @@ interface AppShellProps {
   step?: number
   /** Whether we're showing results (hides step nav, shows completed state) */
   isResults?: boolean
+  /** Called when user clicks a step tab from the results bar to go back and edit */
+  onStepClick?: (step: number) => void
   /** M&A model depth toggle */
   modelMode?: ModelMode
   onModelModeChange?: (mode: ModelMode) => void
@@ -88,6 +90,7 @@ export default function AppShell({
   onHome,
   step,
   isResults,
+  onStepClick,
   modelMode,
   onModelModeChange,
 }: AppShellProps) {
@@ -167,10 +170,21 @@ export default function AppShell({
             <div className="flex items-center gap-2 text-xs">
               {steps.map((s, i) => (
                 <React.Fragment key={i}>
-                  <span className={`${modeColor.accentText} flex items-center gap-1`}>
-                    <span className="opacity-60">&#10003;</span>
-                    <span className="hidden sm:inline text-slate-500">{s.short}</span>
-                  </span>
+                  {onStepClick ? (
+                    <button
+                      onClick={() => onStepClick(i + 1)}
+                      className={`${modeColor.accentText} flex items-center gap-1 hover:opacity-100 opacity-70 hover:underline transition-opacity focus:outline-none focus-visible:ring-1 focus-visible:ring-purple-400 rounded`}
+                      title={`Edit ${s.label}`}
+                    >
+                      <span className="opacity-60">&#10003;</span>
+                      <span className="hidden sm:inline text-slate-400 hover:text-slate-200">{s.short}</span>
+                    </button>
+                  ) : (
+                    <span className={`${modeColor.accentText} flex items-center gap-1`}>
+                      <span className="opacity-60">&#10003;</span>
+                      <span className="hidden sm:inline text-slate-500">{s.short}</span>
+                    </span>
+                  )}
                   {i < totalSteps - 1 && <span className={`w-4 h-px ${modeColor.accentText.replace('text-', 'bg-')} opacity-30`} />}
                 </React.Fragment>
               ))}

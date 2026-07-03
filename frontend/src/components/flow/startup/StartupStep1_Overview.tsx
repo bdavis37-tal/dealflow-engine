@@ -36,30 +36,45 @@ const INSTRUMENTS = Object.entries(INSTRUMENT_LABELS) as [InstrumentType, string
 function RaiseAmountInput({ value, onChange, hasError }: { value: number; onChange: (v: number) => void; hasError: boolean }) {
   const [focused, setFocused] = useState(false)
   const [raw, setRaw] = useState('')
+  const [unitWarning, setUnitWarning] = useState<string | null>(null)
 
   return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={focused ? raw : (value || '')}
-      onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
-      onBlur={() => {
-        setFocused(false)
-        const parsed = parseFloat(raw)
-        if (!isNaN(parsed)) onChange(parsed)
-      }}
-      onChange={e => {
-        setRaw(e.target.value)
-        const parsed = parseFloat(e.target.value)
-        if (!isNaN(parsed)) onChange(parsed)
-      }}
-      placeholder="1.5"
-      className={`
-        w-full bg-slate-900 border rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500
-        focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors
-        ${hasError ? 'border-red-500' : 'border-slate-600'}
-      `}
-    />
+    <>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={focused ? raw : (value || '')}
+        onFocus={() => { setFocused(true); setRaw(value ? String(value) : ''); setUnitWarning(null) }}
+        onBlur={() => {
+          setFocused(false)
+          const parsed = parseFloat(raw)
+          if (isNaN(parsed)) return
+          let finalVal = parsed
+          if (finalVal >= 1_000_000) {
+            finalVal = finalVal / 1_000_000
+            setUnitWarning(`Auto-converted to ${finalVal.toFixed(2)}M (was entered as raw dollars)`)
+          } else if (finalVal >= 1_000) {
+            finalVal = finalVal / 1_000_000
+            setUnitWarning(`Auto-converted to ${finalVal.toFixed(3)}M (was entered in thousands)`)
+          } else {
+            setUnitWarning(null)
+          }
+          onChange(finalVal)
+        }}
+        onChange={e => {
+          setRaw(e.target.value)
+          const parsed = parseFloat(e.target.value)
+          if (!isNaN(parsed)) onChange(parsed)
+        }}
+        placeholder="1.5"
+        className={`
+          w-full bg-slate-900 border rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500
+          focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors
+          ${hasError ? 'border-red-500' : 'border-slate-600'}
+        `}
+      />
+      {unitWarning && <p className="text-amber-400 text-xs mt-1">⚠ {unitWarning}</p>}
+    </>
   )
 }
 
@@ -258,11 +273,6 @@ export default function StartupStep1_Overview({
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">M</span>
             </div>
             {errors.raise && <p className="text-red-400 text-xs mt-1">{errors.raise}</p>}
-            {!errors.raise && (fundraise.raise_amount ?? 0) >= 1000 && (
-              <p className="text-amber-400 text-xs mt-1">
-                ⚠ This looks like a raw dollar amount. Enter in millions — e.g. type <strong>5</strong> for $5M.
-              </p>
-            )}
           </div>
 
           <div>

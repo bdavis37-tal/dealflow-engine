@@ -45,6 +45,7 @@ function NumberInput({
   suffix,
   help,
   step: _step = 0.01,
+  isMoney = false,
 }: {
   label: string
   value: number
@@ -54,9 +55,30 @@ function NumberInput({
   suffix?: string
   help?: string
   step?: number
+  isMoney?: boolean
 }) {
   const [focused, setFocused] = useState(false)
   const [raw, setRaw] = useState('')
+  const [unitWarning, setUnitWarning] = useState<string | null>(null)
+
+  const handleBlur = () => {
+    setFocused(false)
+    const parsed = parseFloat(raw)
+    if (isNaN(parsed)) return
+    let finalVal = Math.max(parsed, 0)
+
+    // Auto-convert raw dollar/thousand entries to millions for monetary fields
+    if (isMoney && finalVal >= 1_000_000) {
+      finalVal = finalVal / 1_000_000
+      setUnitWarning(`Auto-converted to ${finalVal.toFixed(3)}M (was entered as raw dollars)`)
+    } else if (isMoney && finalVal >= 1_000) {
+      finalVal = finalVal / 1_000_000
+      setUnitWarning(`Auto-converted to ${finalVal.toFixed(3)}M (was entered in thousands)`)
+    } else {
+      setUnitWarning(null)
+    }
+    onChange(finalVal)
+  }
 
   return (
     <div>
@@ -70,12 +92,8 @@ function NumberInput({
           type="text"
           inputMode="decimal"
           value={focused ? raw : (value || '')}
-          onFocus={() => { setFocused(true); setRaw(value ? String(value) : '') }}
-          onBlur={() => {
-            setFocused(false)
-            const parsed = parseFloat(raw)
-            if (!isNaN(parsed)) onChange(Math.max(parsed, 0))
-          }}
+          onFocus={() => { setFocused(true); setRaw(value ? String(value) : ''); setUnitWarning(null) }}
+          onBlur={handleBlur}
           onChange={e => {
             setRaw(e.target.value)
             const parsed = parseFloat(e.target.value)
@@ -90,6 +108,9 @@ function NumberInput({
         />
         {suffix && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">{suffix}</span>}
       </div>
+      {unitWarning && (
+        <p className="text-amber-400 text-xs mt-1">⚠ {unitWarning}</p>
+      )}
     </div>
   )
 }
@@ -165,6 +186,7 @@ export default function StartupStep3_Traction({
                   suffix="M"
                   placeholder="0.05"
                   help="Monthly Recurring Revenue in USD millions. $0.05 = $50K MRR."
+                  isMoney
                 />
                 <NumberInput
                   label="ARR (auto-fills)"
@@ -174,6 +196,7 @@ export default function StartupStep3_Traction({
                   suffix="M"
                   placeholder="0.6"
                   help="Annual Recurring Revenue. Auto-filled from MRR × 12. Override if your ARR differs."
+                  isMoney
                 />
               </div>
 
@@ -241,6 +264,7 @@ export default function StartupStep3_Traction({
               suffix="M"
               placeholder="0.1"
               help="Net cash burned per month in USD millions. $0.1 = $100K/month burn."
+              isMoney
             />
             <NumberInput
               label="Cash on hand"
@@ -250,6 +274,7 @@ export default function StartupStep3_Traction({
               suffix="M"
               placeholder="0.5"
               help="Total cash and cash equivalents today in USD millions."
+              isMoney
             />
           </div>
           {(traction.monthly_burn_rate ?? 0) > 0 && (traction.cash_on_hand ?? 0) > 0 && (
