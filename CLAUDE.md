@@ -214,7 +214,7 @@ StartupInput {
 
 Output: blended pre-money valuation, method breakdown, dilution path (pre-seed → seed → Series A), SAFE conversion mechanics, investor scorecard flags, market percentile, and verdict (strong / fair / stretched / at_risk).
 
-**Benchmark data:** 12 verticals (AI/ML Infrastructure, AI-Enabled SaaS, B2B SaaS, Fintech, Healthtech, Biotech/Pharma, Deep Tech/Hardware, Consumer, Climate/Energy, Marketplace, Vertical SaaS, Developer Tools) × 3 stages (pre-seed, seed, Series A). Sourced from Carta 2024, PitchBook-NVCA, Equidam, Aventis Advisors.
+**Benchmark data:** 13 verticals (AI/ML Infrastructure, AI-Enabled SaaS, B2B SaaS, Fintech, Healthtech, Biotech/Pharma, Deep Tech/Hardware, Consumer, Climate/Energy, Marketplace, Vertical SaaS, Developer Tools, Defense Tech) × 3 stages (pre-seed, seed, Series A). Sourced from Carta State of Private Markets FY2025/Q1 2026, PitchBook-NVCA Venture Monitor FY2025, Aventis Advisors 2026, SaaS Capital 2026 (see `_meta` in the JSON for the full source list and vintage).
 
 ### Module 3: VC Fund-Seat Analysis
 
@@ -248,7 +248,7 @@ VCDealInput {
 
 Output includes: ownership math, 3-scenario return model, quick screen recommendation (pass / look deeper / strong interest), waterfall distribution, IC memo financials with auto-generated text, and power law context.
 
-**Benchmark data:** 12 verticals × 6 stages (pre-seed through growth), stage transition probabilities, fund construction templates, exit multiple distributions, dilution-per-round medians. Sourced from Cambridge Associates, Carta 2024, AngelList, PitchBook, First Round Capital.
+**Benchmark data:** 13 verticals × 6 stages (pre-seed through growth), stage transition probabilities, fund construction templates, fund performance quartiles, exit multiple distributions, dilution-per-round medians. Sourced from Carta FY2025/Q1 2026 (incl. VC Fund Performance Q4 2025), Cambridge Associates, AngelList, PitchBook, First Round Capital (see `_meta` in the JSON).
 
 ---
 
@@ -268,7 +268,7 @@ Output includes: ownership math, 3-scenario return model, quick screen recommend
 
 ### Startup Models (`engine/startup_models.py`)
 - **Source of truth for all startup valuation data shapes.**
-- Enums: `StartupStage` (pre_seed, seed, series_a), `StartupVertical` (12 verticals), `InstrumentType` (SAFE, convertible note, priced equity), `Geography` (9 regions), `ProductStage` (idea → scaling)
+- Enums: `StartupStage` (pre_seed, seed, series_a), `StartupVertical` (13 verticals), `InstrumentType` (SAFE, convertible note, priced equity), `Geography` (9 regions), `ProductStage` (idea → scaling)
 - `StartupInput` aggregates `TeamProfile`, `TractionMetrics`, `ProductProfile`, `MarketProfile`, `FundraisingProfile`
 - `StartupValuationOutput` includes `method_results[]`, `dilution_scenarios[]`, `investor_scorecard[]`, and a `ValuationVerdict`
 
@@ -287,7 +287,7 @@ Output includes: ownership math, 3-scenario return model, quick screen recommend
 - Solves the circular dependency: debt balance → interest expense → net income → cash flow → debt paydown
 - Convergence: `abs_diff <= 1.0` (dollar) **OR** `rel_diff <= 0.0001` (0.01%)
 - Max 100 iterations; sets `convergence_warning=True` if not converged
-- Interest computed on **beginning-of-year** balances (standard banking convention)
+- Interest computed on **average balances** ((BOY + EOY) / 2), with damping to prevent oscillation
 - Amortization types: `straight_line`, `interest_only`, `bullet`
 
 ### Sensitivity Matrices (`sensitivity.py`)
@@ -324,8 +324,8 @@ Output includes: ownership math, 3-scenario return model, quick screen recommend
 ### API Routes
 - M&A routes: `GET /api/v1/health`, `GET /api/v1/industries`, `GET /api/v1/defaults`, `POST /api/v1/analyze`
 - AI routes prefix: `/api/ai/` — `GET /status`, `POST /parse-deal`, `POST /generate-narrative`, `POST /explain-field`, `POST /chat` (SSE), `POST /scenario-narrative` (SSE)
-- Startup routes prefix: `/api/startup/` — `POST /value`, `GET /benchmarks`, `GET /verticals`, `GET /stages`
-- VC routes prefix: `/api/vc/` — `POST /evaluate`, `POST /portfolio`, `POST /waterfall`, `POST /pro-rata`, `POST /qsbs`, `POST /anti-dilution`, `POST /bridge`, `GET /fund/defaults`, `GET /benchmarks`, `GET /verticals`, `GET /stages`, `GET /health`
+- Startup routes prefix: `/api/startup/` — `POST /value`, `POST /sensitivity`, `GET /benchmarks`, `GET /verticals`, `GET /stages`
+- VC routes prefix: `/api/vc/` — `POST /evaluate`, `POST /portfolio`, `POST /waterfall`, `POST /pro-rata`, `POST /qsbs`, `POST /anti-dilution`, `POST /bridge`, `POST /gp-carry`, `POST /fund-irr`, `POST /safe-conversion`, `POST /compare`, `GET /fund/defaults`, `GET /benchmarks`, `GET /verticals`, `GET /stages`, `GET /health`
 - Streaming responses use `StreamingResponse(content=..., media_type="text/event-stream")`
 - SSE format: `data: {json_chunk}\n\n`, terminates with `data: [DONE]\n\n`
 
@@ -446,8 +446,8 @@ Adding a new M&A industry: add an entry to `industry_benchmarks.json` AND add th
 
 ### Startup Valuation Benchmarks (`data/startup_valuation_benchmarks.json`)
 
-12 verticals × 3 stages (pre-seed, seed, Series A). Each entry includes:
-- `valuation_p25/p50/p75/p95` — Pre-money valuation percentiles
+13 verticals × 3 stages (pre-seed, seed, Series A). Each entry includes:
+- `valuation_p25/p50/p75/p95` — Pre-money valuation percentiles (p95 present at all stages incl. Series A)
 - `round_size_median` — Typical raise amount
 - `typical_dilution` — Median dilution for the stage
 - `arr_multiple_p25/p50/p75` — ARR multiples (seed and Series A)
@@ -463,7 +463,7 @@ Comprehensive VC data sourced from Carta, Cambridge Associates, AngelList, Pitch
 - `time_to_next_round` — Median/P25/P75 days between rounds
 - `stage_transition_probabilities` — e.g., seed → Series A = 26%
 - `dilution_per_round` — Median dilution at each stage
-- `verticals` — 12 verticals × 6 stages with post-money valuations, raise amounts, ARR multiples, exit multiples
+- `verticals` — 13 verticals × 6 stages with post-money valuations, raise amounts, ARR multiples, exit multiples
 - `fund_construction` — Templates for typical seed and Series A funds (portfolio count, reserve ratio, ownership targets)
 - `power_law_returns` — Distribution of fund returns
 - `burn_multiple_benchmarks` — Efficiency bands by stage
@@ -480,7 +480,7 @@ Comprehensive VC data sourced from Carta, Cambridge Associates, AngelList, Pitch
 
 **Conservative circularity tolerance.** `$1 OR 0.01%` — tighter than most commercial models. Convergence warnings are surfaced to users as "Solver estimate" in the UI.
 
-**Beginning-of-year interest convention.** Standard banking practice; debt amortizes at year-end so interest is computed on the opening balance. Document any changes to this convention in `circularity_solver.py`.
+**Average-balance interest convention.** Interest is computed on ((BOY + EOY) / 2) balances so FCF-driven paydown affects interest within the year; the solver handles the resulting circularity with damping. Document any changes to this convention in `circularity_solver.py`.
 
 **Percentages as decimals everywhere.** `0.25` = 25%. This is consistent across all backend models and frontend types in all three modules. Never mix — bugs here will silently produce wrong financial outputs (off by 100x).
 

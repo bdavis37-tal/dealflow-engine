@@ -1,9 +1,10 @@
 {
   "_meta": {
-    "description": "Startup valuation benchmarks by vertical and stage. Sources: Carta State of Pre-Seed Q3 2025, PitchBook-NVCA Venture Monitor, Equidam Startup Valuation Delta H1 2025, Aventis Advisors SaaS Multiples 2025.",
-    "updated": "2025-Q3",
+    "description": "Startup valuation benchmarks by vertical and stage. Sources: Carta State of Private Markets Q4 2025 / Q1 2026 and 2025 Year in Review, Carta State of Pre-Seed Q1 2026, PitchBook-NVCA Venture Monitor FY2025, PitchBook 2025 Defense Tech Vertical Snapshot, Aventis Advisors SaaS Multiples 2026, SaaS Capital Index Q1 2026, Benchmarkit 2025.",
+    "updated": "2026-Q2",
     "monetary_unit": "USD millions",
-    "percentages": "decimals"
+    "percentages": "decimals",
+    "refresh_notes": "2026-Q2 refresh: market-wide medians moved to Carta FY2025/Q1-2026 vintage (seed post-money $24M record, Series A pre-money $49.3M record, down rounds ~12%, seed-to-A 2yr graduation ~15% for recent cohorts vs ~30% for 2018 cohort, seed-to-A median 616 days). Per-vertical percentiles retained where no newer per-vertical data exists; defense_tech re-anchored to PitchBook 2025 (seed valuations steady ~$17M median despite record $49.1B sector funding; early-stage median $103M post). AI premium at Series A: +38% vs non-AI (Carta 2025); AI verticals already carry this in their percentiles \u2014 do not stack additional AI premia on top."
   },
   "verticals": {
     "ai_ml_infrastructure": {
@@ -17,7 +18,10 @@
         "safe_cap_median": 12.0,
         "round_size_median": 0.75,
         "typical_dilution": 0.12,
-        "check_size_range": [0.1, 2.0],
+        "check_size_range": [
+          0.1,
+          2.0
+        ],
         "traction_bar": "Working prototype or novel research; team with AI/ML PhD or big-tech pedigree",
         "revenue_required": false
       },
@@ -28,17 +32,21 @@
         "valuation_p95": 120.0,
         "round_size_median": 5.0,
         "typical_dilution": 0.17,
-        "check_size_range": [2.0, 10.0],
+        "check_size_range": [
+          2.0,
+          10.0
+        ],
         "arr_multiple_p25": 20.0,
         "arr_multiple_p50": 35.0,
         "arr_multiple_p75": 60.0,
-        "traction_bar": "$500K–$2M ARR or strong named pilots with large enterprises",
+        "traction_bar": "$500K\u2013$2M ARR or strong named pilots with large enterprises",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 50.0,
         "valuation_p50": 90.0,
         "valuation_p75": 180.0,
+        "valuation_p95": 400.0,
         "round_size_median": 15.0,
         "typical_dilution": 0.18,
         "arr_multiple_p25": 25.0,
@@ -60,7 +68,10 @@
         "safe_cap_median": 10.0,
         "round_size_median": 0.65,
         "typical_dilution": 0.12,
-        "check_size_range": [0.1, 1.5],
+        "check_size_range": [
+          0.1,
+          1.5
+        ],
         "traction_bar": "MVP with early beta users; AI capability must be demonstrably differentiated",
         "revenue_required": false
       },
@@ -71,17 +82,21 @@
         "valuation_p95": 80.0,
         "round_size_median": 3.5,
         "typical_dilution": 0.18,
-        "check_size_range": [1.5, 6.0],
+        "check_size_range": [
+          1.5,
+          6.0
+        ],
         "arr_multiple_p25": 10.0,
         "arr_multiple_p50": 18.0,
         "arr_multiple_p75": 28.0,
-        "traction_bar": "$200K–$1M ARR with strong retention; AI must reduce churn or expand revenue",
+        "traction_bar": "$200K\u2013$1M ARR with strong retention; AI must reduce churn or expand revenue",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 35.0,
         "valuation_p50": 60.0,
         "valuation_p75": 110.0,
+        "valuation_p95": 250.0,
         "round_size_median": 12.0,
         "typical_dilution": 0.18,
         "arr_multiple_p25": 10.0,
@@ -103,8 +118,11 @@
         "safe_cap_median": 8.0,
         "round_size_median": 0.6,
         "typical_dilution": 0.12,
-        "check_size_range": [0.1, 1.0],
-        "traction_bar": "Working MVP with 2–5 paying customers or LOIs; $5K–$20K MRR justifies top quartile",
+        "check_size_range": [
+          0.1,
+          1.0
+        ],
+        "traction_bar": "Working MVP with 2\u20135 paying customers or LOIs; $5K\u2013$20K MRR justifies top quartile",
         "revenue_required": false
       },
       "seed": {
@@ -113,20 +131,24 @@
         "valuation_p75": 28.0,
         "valuation_p95": 55.0,
         "round_size_median": 3.0,
-        "typical_dilution": 0.20,
-        "check_size_range": [1.0, 4.0],
+        "typical_dilution": 0.2,
+        "check_size_range": [
+          1.0,
+          4.0
+        ],
         "arr_multiple_p25": 5.0,
         "arr_multiple_p50": 9.0,
         "arr_multiple_p75": 15.0,
-        "traction_bar": "$20K–$150K MRR ($240K–$1.8M ARR); 80%+ gross margin; NRR > 100%",
+        "traction_bar": "$20K\u2013$150K MRR ($240K\u2013$1.8M ARR); 80%+ gross margin; NRR > 100%",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 25.0,
         "valuation_p50": 45.0,
         "valuation_p75": 80.0,
+        "valuation_p95": 180.0,
         "round_size_median": 10.0,
-        "typical_dilution": 0.20,
+        "typical_dilution": 0.2,
         "arr_multiple_p25": 3.0,
         "arr_multiple_p50": 6.0,
         "arr_multiple_p75": 12.0,
@@ -146,7 +168,10 @@
         "safe_cap_median": 8.0,
         "round_size_median": 0.65,
         "typical_dilution": 0.14,
-        "check_size_range": [0.1, 1.25],
+        "check_size_range": [
+          0.1,
+          1.25
+        ],
         "traction_bar": "Regulatory clarity is critical; working demo or beta with compliance framework outlined",
         "revenue_required": false
       },
@@ -157,17 +182,21 @@
         "valuation_p95": 50.0,
         "round_size_median": 3.5,
         "typical_dilution": 0.18,
-        "check_size_range": [1.5, 5.0],
+        "check_size_range": [
+          1.5,
+          5.0
+        ],
         "arr_multiple_p25": 4.0,
         "arr_multiple_p50": 7.0,
         "arr_multiple_p75": 12.0,
-        "traction_bar": "$1M–$5M GMV or $200K+ ARR; compliance licenses where required; strong NRR",
+        "traction_bar": "$1M\u2013$5M GMV or $200K+ ARR; compliance licenses where required; strong NRR",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 25.0,
         "valuation_p50": 45.0,
         "valuation_p75": 80.0,
+        "valuation_p95": 190.0,
         "round_size_median": 12.0,
         "typical_dilution": 0.18,
         "arr_multiple_p25": 4.0,
@@ -189,7 +218,10 @@
         "safe_cap_median": 10.0,
         "round_size_median": 0.75,
         "typical_dilution": 0.17,
-        "check_size_range": [0.1, 1.5],
+        "check_size_range": [
+          0.1,
+          1.5
+        ],
         "traction_bar": "Clinical validation path outlined; at least 1 health system pilot or advisory engagement",
         "revenue_required": false
       },
@@ -200,17 +232,21 @@
         "valuation_p95": 70.0,
         "round_size_median": 5.0,
         "typical_dilution": 0.19,
-        "check_size_range": [2.0, 7.0],
+        "check_size_range": [
+          2.0,
+          7.0
+        ],
         "arr_multiple_p25": 5.0,
         "arr_multiple_p50": 9.0,
         "arr_multiple_p75": 14.0,
-        "traction_bar": "$250K–$1M ARR; HIPAA compliance; 2+ health system customers",
+        "traction_bar": "$250K\u2013$1M ARR; HIPAA compliance; 2+ health system customers",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 30.0,
         "valuation_p50": 55.0,
         "valuation_p75": 100.0,
+        "valuation_p95": 220.0,
         "round_size_median": 14.0,
         "typical_dilution": 0.19,
         "arr_multiple_p25": 5.0,
@@ -232,7 +268,10 @@
         "safe_cap_median": 12.0,
         "round_size_median": 1.0,
         "typical_dilution": 0.19,
-        "check_size_range": [0.25, 2.0],
+        "check_size_range": [
+          0.25,
+          2.0
+        ],
         "traction_bar": "Preclinical data or in-silico validation; platform IP filed or provisional; academic co-founders common",
         "revenue_required": false
       },
@@ -242,8 +281,11 @@
         "valuation_p75": 45.0,
         "valuation_p95": 90.0,
         "round_size_median": 6.0,
-        "typical_dilution": 0.20,
-        "check_size_range": [3.0, 10.0],
+        "typical_dilution": 0.2,
+        "check_size_range": [
+          3.0,
+          10.0
+        ],
         "arr_multiple_p25": null,
         "arr_multiple_p50": null,
         "arr_multiple_p75": null,
@@ -254,8 +296,9 @@
         "valuation_p25": 35.0,
         "valuation_p50": 70.0,
         "valuation_p75": 150.0,
+        "valuation_p95": 320.0,
         "round_size_median": 20.0,
-        "typical_dilution": 0.20,
+        "typical_dilution": 0.2,
         "arr_multiple_p25": null,
         "arr_multiple_p50": null,
         "arr_multiple_p75": null,
@@ -275,7 +318,10 @@
         "safe_cap_median": 10.0,
         "round_size_median": 0.9,
         "typical_dilution": 0.18,
-        "check_size_range": [0.25, 2.0],
+        "check_size_range": [
+          0.25,
+          2.0
+        ],
         "traction_bar": "Working prototype; core IP filed; technical team with relevant PhDs or patents",
         "revenue_required": false
       },
@@ -285,8 +331,11 @@
         "valuation_p75": 35.0,
         "valuation_p95": 75.0,
         "round_size_median": 5.0,
-        "typical_dilution": 0.20,
-        "check_size_range": [2.0, 7.0],
+        "typical_dilution": 0.2,
+        "check_size_range": [
+          2.0,
+          7.0
+        ],
         "arr_multiple_p25": 8.0,
         "arr_multiple_p50": 15.0,
         "arr_multiple_p75": 25.0,
@@ -297,8 +346,9 @@
         "valuation_p25": 30.0,
         "valuation_p50": 55.0,
         "valuation_p75": 100.0,
+        "valuation_p95": 220.0,
         "round_size_median": 15.0,
-        "typical_dilution": 0.20,
+        "typical_dilution": 0.2,
         "arr_multiple_p25": 8.0,
         "arr_multiple_p50": 14.0,
         "arr_multiple_p75": 22.0,
@@ -318,7 +368,10 @@
         "safe_cap_median": 6.0,
         "round_size_median": 0.5,
         "typical_dilution": 0.14,
-        "check_size_range": [0.05, 0.75],
+        "check_size_range": [
+          0.05,
+          0.75
+        ],
         "traction_bar": "D30 retention > 40%; viral coefficient > 1.0; or strong waitlist with email engagement",
         "revenue_required": false
       },
@@ -329,7 +382,10 @@
         "valuation_p95": 45.0,
         "round_size_median": 2.0,
         "typical_dilution": 0.22,
-        "check_size_range": [0.5, 3.0],
+        "check_size_range": [
+          0.5,
+          3.0
+        ],
         "arr_multiple_p25": 2.0,
         "arr_multiple_p50": 5.0,
         "arr_multiple_p75": 9.0,
@@ -340,6 +396,7 @@
         "valuation_p25": 18.0,
         "valuation_p50": 35.0,
         "valuation_p75": 65.0,
+        "valuation_p95": 150.0,
         "round_size_median": 8.0,
         "typical_dilution": 0.22,
         "arr_multiple_p25": 2.0,
@@ -361,7 +418,10 @@
         "safe_cap_median": 9.0,
         "round_size_median": 0.8,
         "typical_dilution": 0.16,
-        "check_size_range": [0.15, 1.5],
+        "check_size_range": [
+          0.15,
+          1.5
+        ],
         "traction_bar": "Pilot site or offtake LOI; technical co-founder with energy domain expertise",
         "revenue_required": false
       },
@@ -372,7 +432,10 @@
         "valuation_p95": 60.0,
         "round_size_median": 4.0,
         "typical_dilution": 0.19,
-        "check_size_range": [1.5, 6.0],
+        "check_size_range": [
+          1.5,
+          6.0
+        ],
         "arr_multiple_p25": 5.0,
         "arr_multiple_p50": 9.0,
         "arr_multiple_p75": 15.0,
@@ -383,6 +446,7 @@
         "valuation_p25": 28.0,
         "valuation_p50": 50.0,
         "valuation_p75": 90.0,
+        "valuation_p95": 200.0,
         "round_size_median": 15.0,
         "typical_dilution": 0.19,
         "arr_multiple_p25": 5.0,
@@ -404,7 +468,10 @@
         "safe_cap_median": 7.0,
         "round_size_median": 0.6,
         "typical_dilution": 0.14,
-        "check_size_range": [0.1, 1.0],
+        "check_size_range": [
+          0.1,
+          1.0
+        ],
         "traction_bar": "$50K+ GMV/month; both sides showing organic growth; clear take rate model",
         "revenue_required": false
       },
@@ -414,8 +481,11 @@
         "valuation_p75": 24.0,
         "valuation_p95": 50.0,
         "round_size_median": 3.0,
-        "typical_dilution": 0.20,
-        "check_size_range": [1.0, 4.0],
+        "typical_dilution": 0.2,
+        "check_size_range": [
+          1.0,
+          4.0
+        ],
         "arr_multiple_p25": 3.0,
         "arr_multiple_p50": 6.0,
         "arr_multiple_p75": 12.0,
@@ -426,8 +496,9 @@
         "valuation_p25": 20.0,
         "valuation_p50": 38.0,
         "valuation_p75": 70.0,
+        "valuation_p95": 160.0,
         "round_size_median": 10.0,
-        "typical_dilution": 0.20,
+        "typical_dilution": 0.2,
         "arr_multiple_p25": 3.0,
         "arr_multiple_p50": 6.0,
         "arr_multiple_p75": 12.0,
@@ -447,8 +518,11 @@
         "safe_cap_median": 8.5,
         "round_size_median": 0.65,
         "typical_dilution": 0.13,
-        "check_size_range": [0.1, 1.25],
-        "traction_bar": "Domain expert founder; 3–5 paying design partners; clear workflow displacement",
+        "check_size_range": [
+          0.1,
+          1.25
+        ],
+        "traction_bar": "Domain expert founder; 3\u20135 paying design partners; clear workflow displacement",
         "revenue_required": false
       },
       "seed": {
@@ -458,17 +532,21 @@
         "valuation_p95": 60.0,
         "round_size_median": 3.5,
         "typical_dilution": 0.19,
-        "check_size_range": [1.5, 5.0],
+        "check_size_range": [
+          1.5,
+          5.0
+        ],
         "arr_multiple_p25": 5.0,
         "arr_multiple_p50": 9.0,
         "arr_multiple_p75": 14.0,
-        "traction_bar": "$250K–$1M ARR; high NRR driven by deep workflow integration; proprietary data moat",
+        "traction_bar": "$250K\u2013$1M ARR; high NRR driven by deep workflow integration; proprietary data moat",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 25.0,
         "valuation_p50": 48.0,
         "valuation_p75": 85.0,
+        "valuation_p95": 190.0,
         "round_size_median": 12.0,
         "typical_dilution": 0.19,
         "arr_multiple_p25": 6.0,
@@ -490,7 +568,10 @@
         "safe_cap_median": 11.0,
         "round_size_median": 0.7,
         "typical_dilution": 0.12,
-        "check_size_range": [0.1, 1.5],
+        "check_size_range": [
+          0.1,
+          1.5
+        ],
         "traction_bar": "Open-source traction (1K+ GitHub stars) or 50+ active API users; strong technical team",
         "revenue_required": false
       },
@@ -501,17 +582,21 @@
         "valuation_p95": 85.0,
         "round_size_median": 4.0,
         "typical_dilution": 0.17,
-        "check_size_range": [2.0, 7.0],
+        "check_size_range": [
+          2.0,
+          7.0
+        ],
         "arr_multiple_p25": 7.0,
         "arr_multiple_p50": 14.0,
         "arr_multiple_p75": 22.0,
-        "traction_bar": "$500K–$2M ARR; PLG (product-led growth) with clear land-and-expand motion; high NRR",
+        "traction_bar": "$500K\u2013$2M ARR; PLG (product-led growth) with clear land-and-expand motion; high NRR",
         "revenue_required": false
       },
       "series_a": {
         "valuation_p25": 35.0,
         "valuation_p50": 65.0,
         "valuation_p75": 120.0,
+        "valuation_p95": 260.0,
         "round_size_median": 15.0,
         "typical_dilution": 0.18,
         "arr_multiple_p25": 8.0,
@@ -533,28 +618,35 @@
         "safe_cap_median": 14.0,
         "round_size_median": 1.0,
         "typical_dilution": 0.14,
-        "check_size_range": [0.25, 2.5],
+        "check_size_range": [
+          0.25,
+          2.5
+        ],
         "traction_bar": "Founder with clearance or DoD background; SBIR Phase I or OTA pilot; working prototype for a specific mission need",
         "revenue_required": false
       },
       "seed": {
-        "valuation_p25": 18.0,
-        "valuation_p50": 35.0,
-        "valuation_p75": 70.0,
+        "valuation_p25": 14.0,
+        "valuation_p50": 24.0,
+        "valuation_p75": 60.0,
         "valuation_p95": 150.0,
         "round_size_median": 6.0,
         "typical_dilution": 0.17,
-        "check_size_range": [2.0, 12.0],
+        "check_size_range": [
+          2.0,
+          12.0
+        ],
         "arr_multiple_p25": 15.0,
         "arr_multiple_p50": 25.0,
         "arr_multiple_p75": 45.0,
-        "traction_bar": "$500K–$3M ARR from government contracts; SBIR Phase II or OTA; at least Secret clearance facility; 1+ program of record",
+        "traction_bar": "$500K\u2013$3M ARR from government contracts; SBIR Phase II or OTA; at least Secret clearance facility; 1+ program of record",
         "revenue_required": false
       },
       "series_a": {
-        "valuation_p25": 60.0,
-        "valuation_p50": 120.0,
-        "valuation_p75": 250.0,
+        "valuation_p25": 45.0,
+        "valuation_p50": 85.0,
+        "valuation_p75": 220.0,
+        "valuation_p95": 550.0,
         "round_size_median": 25.0,
         "typical_dilution": 0.18,
         "arr_multiple_p25": 15.0,
@@ -568,26 +660,33 @@
   },
   "market_wide_medians": {
     "pre_seed": {
-      "valuation_median": 7.7,
-      "safe_cap_median": 15.0,
+      "valuation_median": 8.5,
+      "safe_cap_median": 10.0,
+      "safe_cap_by_round_size": {
+        "under_250k": 7.5,
+        "250k_to_1m": 10.0,
+        "1m_to_2.5m": 15.0,
+        "_source": "Carta State of Pre-Seed, FY2025-Q1 2026"
+      },
       "round_size_median": 0.7,
-      "typical_dilution": 0.13,
-      "safe_pct_of_rounds": 0.92,
+      "typical_dilution": 0.125,
+      "safe_pct_of_rounds": 0.93,
       "post_money_safe_pct": 0.87
     },
     "seed": {
       "valuation_pre_money_median": 16.0,
-      "valuation_post_money_median": 20.0,
+      "valuation_post_money_median": 24.0,
       "round_size_median": 3.0,
-      "typical_dilution": 0.20,
-      "down_round_pct": 0.18
+      "typical_dilution": 0.195,
+      "down_round_pct": 0.12
     },
     "series_a": {
       "valuation_pre_money_median": 49.3,
+      "valuation_post_money_median": 78.7,
       "round_size_median": 10.0,
       "typical_dilution": 0.19,
-      "seed_to_series_a_conversion_rate": 0.20,
-      "avg_months_seed_to_series_a": 24
+      "seed_to_series_a_conversion_rate": 0.15,
+      "avg_months_seed_to_series_a": 20
     }
   },
   "berkus_regional_premiums": {
@@ -597,17 +696,17 @@
     "boston": 1.15,
     "seattle": 1.15,
     "austin": 1.05,
-    "los_angeles": 1.10,
+    "los_angeles": 1.1,
     "chicago": 1.0,
-    "other_us": 0.90,
+    "other_us": 0.9,
     "international": 0.85
   },
   "scorecard_weights": {
-    "management_team": 0.30,
+    "management_team": 0.3,
     "market_size": 0.25,
     "product_technology": 0.15,
-    "competitive_environment": 0.10,
-    "marketing_sales_channels": 0.10,
+    "competitive_environment": 0.1,
+    "marketing_sales_channels": 0.1,
     "additional_financing_needed": 0.05,
     "other_factors": 0.05
   },
@@ -630,24 +729,75 @@
     ]
   },
   "nrr_multiple_lookup": {
-    "below_80": {"min": 1.5, "max": 3.0, "label": "< 80% NRR — churn risk, significant discount"},
-    "80_to_99": {"min": 3.0, "max": 5.0, "label": "80–99% NRR — below par; erosion without expansion"},
-    "100_to_109": {"min": 5.0, "max": 8.0, "label": "100–109% NRR — solid; meeting SaaS baseline"},
-    "110_to_119": {"min": 8.0, "max": 12.0, "label": "110–119% NRR — strong expansion; top quartile"},
-    "120_to_139": {"min": 12.0, "max": 20.0, "label": "120–139% NRR — excellent; premium multiple"},
-    "140_plus": {"min": 20.0, "max": 40.0, "label": "140%+ NRR — elite; can double multiple vs. 100% NRR"}
+    "below_80": {
+      "min": 1.5,
+      "max": 3.0,
+      "label": "< 80% NRR \u2014 churn risk, significant discount"
+    },
+    "80_to_99": {
+      "min": 3.0,
+      "max": 5.0,
+      "label": "80\u201399% NRR \u2014 below par; erosion without expansion"
+    },
+    "100_to_109": {
+      "min": 5.0,
+      "max": 8.0,
+      "label": "100\u2013109% NRR \u2014 solid; meeting SaaS baseline"
+    },
+    "110_to_119": {
+      "min": 8.0,
+      "max": 12.0,
+      "label": "110\u2013119% NRR \u2014 strong expansion; top quartile"
+    },
+    "120_to_139": {
+      "min": 12.0,
+      "max": 20.0,
+      "label": "120\u2013139% NRR \u2014 excellent; premium multiple"
+    },
+    "140_plus": {
+      "min": 20.0,
+      "max": 40.0,
+      "label": "140%+ NRR \u2014 elite; can double multiple vs. 100% NRR"
+    }
   },
   "burn_multiple_bands": {
-    "exceptional": {"max": 1.0, "label": "< 1.0x — top 10%; strong valuation premium"},
-    "great": {"max": 1.5, "label": "1.0–1.5x — above average; slight premium"},
-    "average": {"max": 2.5, "label": "1.5–2.5x — typical; median multiple"},
-    "red_flag": {"min": 2.5, "label": "> 2.5x — investor red flag; significant discount"}
+    "exceptional": {
+      "max": 1.0,
+      "label": "< 1.0x \u2014 top 10%; strong valuation premium"
+    },
+    "great": {
+      "max": 1.5,
+      "label": "1.0\u20131.5x \u2014 above average; slight premium"
+    },
+    "average": {
+      "max": 2.5,
+      "label": "1.5\u20132.5x \u2014 typical; median multiple"
+    },
+    "red_flag": {
+      "min": 2.5,
+      "label": "> 2.5x \u2014 investor red flag; significant discount"
+    }
   },
   "rule_of_40_bands": {
-    "elite": {"min": 60, "label": "60%+ — elite; top 5% of SaaS; highest ARR multiples"},
-    "excellent": {"min": 50, "label": "50–60% — excellent; top 10%; double-digit ARR multiple"},
-    "strong": {"min": 40, "label": "40–50% — strong; passes Series A bar; premium multiple"},
-    "average": {"min": 20, "label": "20–40% — acceptable for early stage; median multiple"},
-    "below_bar": {"min": 0, "label": "< 20% — challenging; requires exceptional team or market story"}
+    "elite": {
+      "min": 60,
+      "label": "60%+ \u2014 elite; top 5% of SaaS; highest ARR multiples"
+    },
+    "excellent": {
+      "min": 50,
+      "label": "50\u201360% \u2014 excellent; top 10%; double-digit ARR multiple"
+    },
+    "strong": {
+      "min": 40,
+      "label": "40\u201350% \u2014 strong; passes Series A bar; premium multiple"
+    },
+    "average": {
+      "min": 20,
+      "label": "20\u201340% \u2014 acceptable for early stage; median multiple"
+    },
+    "below_bar": {
+      "min": 0,
+      "label": "< 20% \u2014 challenging; requires exceptional team or market story"
+    }
   }
 }
