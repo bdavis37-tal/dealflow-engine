@@ -22,9 +22,13 @@ interface Props {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmt(v: number | null | undefined, decimals = 1): string {
+function fmt(v: number | null | undefined): string {
   if (v == null) return '—'
-  return `$${v.toFixed(decimals)}M`
+  // Values are in USD millions — format with commas, no decimal places
+  return `$${new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.round(v))}M`
 }
 
 function fmtPct(v: number): string {
@@ -106,10 +110,10 @@ function AIModifierBanner({ output }: { output: StartupValuationOutput }) {
       )}
       <div className="flex items-center gap-2 text-sm">
         <span className="text-slate-500">Base Valuation:</span>
-        <span className="text-slate-300 font-medium">${fmt(output.blended_before_ai)}</span>
+        <span className="text-slate-300 font-medium">{fmt(output.blended_before_ai)}</span>
         <span className="text-slate-600">→</span>
         <span className="text-slate-500">AI-Adjusted:</span>
-        <span className="text-purple-300 font-semibold">${fmt(output.blended_valuation)}</span>
+        <span className="text-purple-300 font-semibold">{fmt(output.blended_valuation)}</span>
       </div>
     </div>
   )
@@ -141,7 +145,7 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         <p className="text-slate-500 text-xs mb-1">Blended Pre-Money Valuation</p>
         <p className="text-5xl font-bold text-slate-100">{fmt(blended_valuation)}</p>
         {output.ai_modifier_applied && output.blended_before_ai != null && (
-          <p className="text-slate-500 text-xs mt-1">Before AI premium: ${fmt(output.blended_before_ai)}</p>
+          <p className="text-slate-500 text-xs mt-1">Before AI premium: {fmt(output.blended_before_ai)}</p>
         )}
         <p className="text-slate-400 text-sm mt-1">Range: {fmt(valuation_range_low)} – {fmt(valuation_range_high)}</p>
         <p className="text-purple-400 text-xs mt-2 font-medium">{percentile_in_market}</p>
@@ -174,9 +178,9 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         </div>
       </div>
       <div className="flex justify-between text-xs text-slate-500 mb-5">
-        <span>P25 {fmt(benchmark_p25, 0)}</span>
-        <span>P50 {fmt(benchmark_p50, 0)}</span>
-        <span>P75 {fmt(benchmark_p75, 0)}</span>
+        <span>P25 {fmt(benchmark_p25)}</span>
+        <span>P50 {fmt(benchmark_p50)}</span>
+        <span>P75 {fmt(benchmark_p75)}</span>
       </div>
 
       {/* Key metrics */}
