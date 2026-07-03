@@ -1,79 +1,79 @@
 {
-  "description": "Extreme leverage deal. $300M target with 90% debt, 3 tranches, tight coverage. Tests solver under stress and risk flagging.",
+  "description": "Extreme leverage deal. $300M target with 90% debt, 3 tranches, tight coverage. Tests solver under stress and risk flagging. All monetary values in millions USD (project convention).",
   "input": {
     "acquirer": {
       "company_name": "Leverage Partners",
-      "revenue": 150000000,
-      "ebitda": 25000000,
-      "net_income": 10000000,
-      "total_debt": 30000000,
-      "cash_on_hand": 40000000,
-      "shares_outstanding": 15000000,
-      "share_price": 20.00,
+      "revenue": 150.0,
+      "ebitda": 25.0,
+      "net_income": 10.0,
+      "total_debt": 30.0,
+      "cash_on_hand": 40.0,
+      "shares_outstanding": 15.0,
+      "share_price": 20.0,
       "tax_rate": 0.25,
-      "depreciation": 4000000,
-      "capex": 3000000,
-      "working_capital": 12000000,
+      "depreciation": 4.0,
+      "capex": 3.0,
+      "working_capital": 12.0,
       "industry": "Professional Services / Consulting"
     },
     "target": {
       "company_name": "ServiceCo",
-      "revenue": 80000000,
-      "ebitda": 12000000,
-      "net_income": 5000000,
-      "total_debt": 5000000,
-      "cash_on_hand": 3000000,
+      "revenue": 80.0,
+      "ebitda": 12.0,
+      "net_income": 5.0,
+      "total_debt": 5.0,
+      "cash_on_hand": 3.0,
       "tax_rate": 0.25,
-      "depreciation": 2000000,
-      "capex": 1500000,
-      "working_capital": 6000000,
+      "depreciation": 2.0,
+      "capex": 1.5,
+      "working_capital": 6.0,
       "industry": "Professional Services / Consulting",
-      "acquisition_price": 300000000,
+      "acquisition_price": 300.0,
       "revenue_growth_rate": 0.03
     },
     "structure": {
       "cash_percentage": 0.05,
       "stock_percentage": 0.05,
-      "debt_percentage": 0.90,
+      "debt_percentage": 0.9,
       "debt_tranches": [
         {
           "name": "First Lien",
-          "amount": 135000000,
+          "amount": 135.0,
           "interest_rate": 0.075,
           "term_years": 7,
           "amortization_type": "straight_line"
         },
         {
           "name": "Second Lien",
-          "amount": 90000000,
-          "interest_rate": 0.10,
+          "amount": 90.0,
+          "interest_rate": 0.1,
           "term_years": 7,
           "amortization_type": "interest_only"
         },
         {
           "name": "Mezzanine",
-          "amount": 45000000,
+          "amount": 45.0,
           "interest_rate": 0.14,
           "term_years": 5,
           "amortization_type": "bullet"
         }
       ],
       "transaction_fees_pct": 0.025,
-      "advisory_fees": 2000000
+      "advisory_fees": 2.0
     },
     "ppa": {
-      "asset_writeup": 3000000,
+      "asset_writeup": 3.0,
       "asset_writeup_useful_life": 15,
-      "identifiable_intangibles": 20000000,
+      "identifiable_intangibles": 20.0,
       "intangible_useful_life": 10
     },
     "synergies": {
       "cost_synergies": [
         {
           "category": "Back office",
-          "annual_amount": 5000000,
+          "annual_amount": 5.0,
           "phase_in_years": 3,
-          "cost_to_achieve": 2000000,
+          "cost_to_achieve": 2.0,
           "is_revenue": false
         }
       ],

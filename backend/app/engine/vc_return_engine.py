@@ -1572,10 +1572,30 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
     # 4. Quick screen
     quick = compute_quick_screen(deal, fund, ownership, bear, base, bull, benchmarks)
 
+    computation_notes: list[str] = [
+        # M8: expected_irr semantics
+        "expected_irr is the IRR of the probability-weighted expected proceeds "
+        "(a single blended cashflow), NOT the probability-weighted average of "
+        "per-scenario IRRs.",
+    ]
+
     # 5. Waterfall (optional)
     waterfall = None
     if deal.liquidation_stack:
         waterfall = compute_waterfall(deal, base.exit_enterprise_value)
+        # Reconcile waterfall vs scenario proceeds at the base exit EV:
+        # the scenario engine applies the diluted exit ownership % to the whole
+        # EV, while the waterfall distributes through preference mechanics.
+        reconciliation = (
+            f"At the base exit (${base.exit_enterprise_value:.0f}M), the scenario model projects "
+            f"${base.gross_proceeds_to_fund:.1f}M to the fund via {ownership.exit_ownership_pct:.1%} "
+            f"diluted exit ownership, while the cap-table waterfall pays the senior preferred "
+            f"${waterfall.investor_total:.1f}M. They differ because the waterfall reflects "
+            "liquidation preferences and as-converted ownership of today's cap table, not the "
+            "projected diluted stake at exit."
+        )
+        computation_notes.append(reconciliation)
+        waterfall.notes.append(reconciliation)
 
     # 6. IC Memo
     ic = build_ic_memo(deal, fund, ownership, bear, base, bull, ev, benchmarks)
@@ -1654,6 +1674,18 @@ def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
     Deal-by-deal (American) waterfall:
       Same structure but applied per realized investment. More GP-friendly
       (carry paid earlier) but creates clawback exposure.
+
+    Called-capital timing: the preferred return is NOT compounded on the full
+    commitment from day 0. We approximate real call timing by assuming capital
+    is called evenly over the deployment period, each annual tranche (called
+    mid-year) compounding at the hurdle rate until the end of the fund life.
+
+    Catch-up mechanics: after LPs receive capital + preferred, the GP receives
+    catch_up_pct of each subsequent dollar until the GP holds catch_up_target
+    of the profits distributed so far (preferred + catch-up pool). For a 100%
+    catch-up at a 20% target this equals carry/(1−carry) × preferred. Once
+    fully caught up, total GP take equals carry% × total profits; with a zero
+    hurdle there is no preferred and hence no catch-up.
     """
     fund = inp.fund_profile
     total_dist = inp.total_distributions
@@ -1662,30 +1694,45 @@ def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
     return_of_capital = min(total_dist, fund.fund_size)
     remaining = max(0.0, total_dist - return_of_capital)
 
-    # Step 2: Preferred return (hurdle compounded annually over fund life)
-    # Hurdle is computed on committed capital, compounded over the fund life
-    hurdle_compounded = fund.fund_size * ((1 + fund.hurdle_rate) ** inp.fund_life_years - 1)
+    # Step 2: Preferred return on called capital (timing-approximated).
+    # Capital is assumed called in equal annual tranches over the deployment
+    # period, each tranche mid-year, compounding at the hurdle to end of life.
+    deploy_years = max(1, fund.deployment_period_years)
+    tranche = fund.fund_size / deploy_years
+    hurdle_compounded = sum(
+        tranche * ((1 + fund.hurdle_rate) ** max(0.0, inp.fund_life_years - (y + 0.5)) - 1)
+        for y in range(deploy_years)
+    )
     preferred_return = min(remaining, hurdle_compounded)
     remaining -= preferred_return
 
-    # Step 3: GP catch-up
-    # GP receives catch_up_pct of distributions until GP has received
-    # catch_up_target of total profits (profits = total_dist - fund_size)
     total_profit = max(0.0, total_dist - fund.fund_size)
-    gp_target_share_of_profit = total_profit * inp.catch_up_target
 
-    # Catch-up = GP gets catch_up_pct of each dollar until GP reaches target
-    if inp.catch_up_pct > 0 and remaining > 0:
-        # GP needs to "catch up" to their target share. They've received 0 so far.
-        # Each dollar in catch-up gives GP catch_up_pct.
-        # GP needs: gp_target_share_of_profit from catch-up alone (approx)
-        # Max catch-up = target_share / catch_up_pct (dollars that flow through catch-up)
-        catch_up_needed = gp_target_share_of_profit / inp.catch_up_pct if inp.catch_up_pct > 0 else 0.0
-        catch_up_pool = min(remaining, catch_up_needed)
+    # Step 3: GP catch-up.
+    # Full catch-up is reached when GP has catch_up_target of the profit
+    # distributed so far: catch_up_pct × pool = catch_up_target × (preferred + pool)
+    #   → pool = catch_up_target × preferred / (catch_up_pct − catch_up_target)
+    if (
+        inp.catch_up_pct > 0
+        and preferred_return > 0
+        and fund.hurdle_rate > 0
+    ):
+        if inp.catch_up_pct > inp.catch_up_target:
+            full_catch_up_pool = (
+                inp.catch_up_target * preferred_return
+                / (inp.catch_up_pct - inp.catch_up_target)
+            )
+        else:
+            # Catch-up rate at or below the target share: GP can never fully
+            # catch up — the catch-up tier absorbs all remaining profit.
+            full_catch_up_pool = float("inf")
+        catch_up_pool = min(remaining, full_catch_up_pool)
         catch_up_to_gp = catch_up_pool * inp.catch_up_pct
-        remaining -= catch_up_pool
     else:
+        # No hurdle → no preferred → nothing to catch up on.
+        catch_up_pool = 0.0
         catch_up_to_gp = 0.0
+    remaining -= catch_up_pool
 
     # Step 4: Remaining split at carry rate
     gp_carry_from_remaining = remaining * fund.carry_pct
@@ -1717,9 +1764,8 @@ def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
     # Max clawback = total carry paid (in deal-by-deal, GP may have been overpaid)
     clawback_exposure = total_gp_carry if inp.carry_structure == CarryStructure.DEAL_BY_DEAL else 0.0
 
-    # LP economics
-    lp_total = return_of_capital + preferred_return + (remaining - gp_carry_from_remaining) + \
-               (catch_up_pool - catch_up_to_gp if inp.catch_up_pct > 0 and total_dist > fund.fund_size else 0.0)
+    # LP economics: everything the GP doesn't take goes to LPs
+    lp_total = total_dist - total_gp_carry
     lp_paid_in = fund.fund_size * (1 - inp.gp_commit_pct)
     lp_net_mult = lp_total / lp_paid_in if lp_paid_in > 0 else 0.0
     lp_net_irr_val = _irr(lp_paid_in, lp_total, inp.fund_life_years) if lp_paid_in > 0 else None
@@ -1738,6 +1784,13 @@ def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
             "Whole-fund (European) waterfall: carry is only paid after all capital is "
             "returned to LPs plus the hurdle rate. More LP-friendly; no clawback risk."
         )
+
+    notes.append(
+        f"Preferred return approximates call timing: capital called evenly over "
+        f"{max(1, fund.deployment_period_years)} deployment years (mid-year tranches), each "
+        f"compounding at the {fund.hurdle_rate:.0%} hurdle to the end of the "
+        f"{inp.fund_life_years}-year fund life (${hurdle_compounded:.1f}M preferred at full run)."
+    )
 
     if gross_mult < 1.0:
         notes.append(f"Fund is returning {gross_mult:.2f}x — below cost basis. No carry is earned.")
@@ -1849,10 +1902,14 @@ def run_fund_irr_analysis(inp: FundIRRInput) -> FundIRROutput:
     rvpi = nav / total_called if total_called > 0 else 0.0
     gross_tvpi = dpi + rvpi
 
-    # Net TVPI (after carry on gains)
+    # Net TVPI (after carry on total gains — realized distributions AND
+    # unrealized NAV, not just NAV). Carry is only earned when total value
+    # clears the hurdle-compounded called capital (European-style, 100%
+    # catch-up assumed, so above the hurdle carry applies to the full gain).
     total_value = total_distributed + nav
     gain = max(0.0, total_value - total_called)
-    carry_on_gain = gain * fund.carry_pct
+    hurdle_basis = total_called * ((1 + fund.hurdle_rate) ** inp.fund_age_years)
+    carry_on_gain = gain * fund.carry_pct if total_value >= hurdle_basis else 0.0
     net_tvpi = (total_value - carry_on_gain) / total_called if total_called > 0 else 0.0
 
     # IRR via Newton's method on cashflows + terminal NAV
@@ -1883,7 +1940,22 @@ def run_fund_irr_analysis(inp: FundIRRInput) -> FundIRROutput:
         return r
 
     gross_irr = _compute_irr_from_cfs(cfs, nav, inp.fund_age_years) if cfs else None
-    net_irr = _compute_irr_from_cfs(cfs, nav - carry_on_gain, inp.fund_age_years) if cfs else None
+
+    # Net IRR: haircut BOTH realized distributions and terminal NAV by the
+    # carry load (scaled pro-rata across all value), not just the NAV.
+    if cfs:
+        net_scale = (total_value - carry_on_gain) / total_value if total_value > 0 else 1.0
+        net_cfs = [
+            FundCashflow(
+                year=c.year,
+                amount=c.amount * net_scale if c.amount > 0 else c.amount,
+                description=c.description,
+            )
+            for c in cfs
+        ]
+        net_irr = _compute_irr_from_cfs(net_cfs, nav * net_scale, inp.fund_age_years)
+    else:
+        net_irr = None
 
     # J-curve construction
     j_points = []
@@ -1977,98 +2049,125 @@ def run_safe_conversion(inp: SAFEConversionInput) -> SAFEConversionOutput:
     - Option pool shuffle
 
     The conversion logic follows YC post-money SAFE conventions:
-    - Post-money SAFE: cap includes the SAFE itself in the post-money
+    - Post-money SAFE: the cap is measured on the post-SAFE capitalization,
+      i.e. the SAFE holder owns safe_amount / valuation_cap of the company
+      capitalization INCLUDING all SAFE conversion shares. Because every
+      post-money SAFE's share count depends on the total SAFE shares, we solve
+      the stack to a fixed point.
     - Pre-money SAFE: cap is on pre-money valuation (more founder-friendly)
+
+    MFN: a SAFE with an MFN clause inherits the best cap/discount among SAFEs
+    issued AFTER it. Issuance order is taken to be the order of safe_stack.
+
+    Option pool: option_pool_pct is a percentage of the POST-money fully
+    diluted capitalization (per the field's documentation); the pool size is
+    solved jointly with the SAFE conversion (outer fixed-point iteration).
     """
-    safes = inp.safe_stack[:]
+    # Work on copies — never mutate caller's SAFE terms (MFN adjustments below)
+    safes = [s.model_copy() for s in inp.safe_stack]
     pre_money = inp.priced_round_pre_money
     new_money = inp.priced_round_amount
     post_money = pre_money + new_money
 
-    # Step 0: Handle MFN — any SAFE with MFN gets the best cap/discount from the stack
-    best_cap = None
-    best_discount = 0.0
-    for s in safes:
-        if s.valuation_cap is not None:
-            if best_cap is None or s.valuation_cap < best_cap:
-                best_cap = s.valuation_cap
-        if s.discount_rate > best_discount:
-            best_discount = s.discount_rate
+    # Step 0: MFN — each MFN SAFE inherits the best cap/discount among SAFEs
+    # issued AFTER it (stack order = issuance order).
+    mfn_applied: list[bool] = [False] * len(safes)
+    for idx, s in enumerate(safes):
+        if not s.has_mfn:
+            continue
+        later = safes[idx + 1:]
+        later_caps = [t.valuation_cap for t in later if t.valuation_cap is not None]
+        best_cap = min(later_caps) if later_caps else None
+        best_discount = max((t.discount_rate for t in later), default=0.0)
+        if best_cap is not None and (s.valuation_cap is None or best_cap < s.valuation_cap):
+            s.valuation_cap = best_cap
+            mfn_applied[idx] = True
+        if best_discount > s.discount_rate:
+            s.discount_rate = best_discount
+            mfn_applied[idx] = True
 
-    for s in safes:
-        if s.has_mfn:
-            if best_cap is not None and (s.valuation_cap is None or best_cap < s.valuation_cap):
-                s.valuation_cap = best_cap
-            if best_discount > s.discount_rate:
-                s.discount_rate = best_discount
+    founder_shares = inp.pre_safe_shares_outstanding
 
-    # Step 1: Compute price per share for the priced round
-    # Option pool is carved from pre-money
-    option_pool_shares = inp.pre_safe_shares_outstanding * inp.option_pool_pct / (1 - inp.option_pool_pct)
-
-    # Pre-round capitalization (before SAFEs convert)
-    pre_round_shares = inp.pre_safe_shares_outstanding + option_pool_shares
-
-    # Price per share at the priced round (before SAFE conversion)
-    priced_round_pps = pre_money / pre_round_shares if pre_round_shares > 0 else 0.0
-
-    # Step 2: Convert each SAFE
-    conversions: list[SAFEConversionResult] = []
+    # Jointly solve option pool (as % of post-money) and SAFE conversion.
+    # Outer loop: pool sizing; inner loop: post-money SAFE fixed point.
+    pool_pct = min(inp.option_pool_pct, 0.99)
+    option_pool_shares = founder_shares * pool_pct / (1 - pool_pct)  # initial guess
     total_safe_shares = 0.0
+    pre_round_shares = founder_shares + option_pool_shares
+    priced_round_pps = pre_money / pre_round_shares if pre_round_shares > 0 else 0.0
+    new_investor_shares = new_money / priced_round_pps if priced_round_pps > 0 else 0.0
+    per_safe: list[tuple[float, float, str]] = []  # (pps, shares, discount_applied)
 
-    for safe in safes:
-        # Price from cap
-        if safe.valuation_cap is not None:
-            if safe.is_post_money:
-                # Post-money SAFE: cap IS the post-money including this SAFE
-                cap_pps = safe.valuation_cap / (pre_round_shares + safe.safe_amount / (safe.valuation_cap / pre_round_shares))
-                # Simplified: shares = safe_amount / (cap / fully_diluted_at_cap)
-                cap_pps = safe.valuation_cap / pre_round_shares
-            else:
-                cap_pps = safe.valuation_cap / pre_round_shares
-        else:
-            cap_pps = float("inf")
+    for _outer in range(100):
+        pre_round_shares = founder_shares + option_pool_shares
+        priced_round_pps = pre_money / pre_round_shares if pre_round_shares > 0 else 0.0
 
-        # Price from discount
-        if safe.discount_rate > 0:
-            discount_pps = priced_round_pps * (1 - safe.discount_rate)
-        else:
-            discount_pps = float("inf")
+        # Inner fixed point: post-money SAFE caps are measured on the
+        # post-SAFE capitalization (pre-round shares + ALL SAFE shares).
+        for _inner in range(100):
+            post_safe_cap_shares = pre_round_shares + total_safe_shares
+            new_per_safe = []
+            new_total = 0.0
+            for safe in safes:
+                if safe.valuation_cap is not None and pre_round_shares > 0:
+                    if safe.is_post_money:
+                        cap_pps = safe.valuation_cap / post_safe_cap_shares
+                    else:
+                        cap_pps = safe.valuation_cap / pre_round_shares
+                else:
+                    cap_pps = float("inf")
 
-        # SAFE converts at the lower price (more shares = better for investor)
-        if cap_pps <= discount_pps:
-            conversion_pps = cap_pps
-            discount_applied = "cap" if discount_pps == float("inf") else "cap (lower)"
-        elif discount_pps < float("inf"):
-            conversion_pps = discount_pps
-            discount_applied = "discount" if cap_pps == float("inf") else "discount (lower)"
-        else:
-            # Neither cap nor discount — converts at priced round price
-            conversion_pps = priced_round_pps
-            discount_applied = "none (at round price)"
+                if safe.discount_rate > 0:
+                    discount_pps = priced_round_pps * (1 - safe.discount_rate)
+                else:
+                    discount_pps = float("inf")
 
-        # Shares issued
-        shares = safe.safe_amount / conversion_pps if conversion_pps > 0 else 0.0
-        effective_val = conversion_pps * pre_round_shares
+                if cap_pps <= discount_pps and cap_pps < float("inf"):
+                    conversion_pps = cap_pps
+                    discount_applied = "cap" if discount_pps == float("inf") else "cap (lower)"
+                elif discount_pps < float("inf"):
+                    conversion_pps = discount_pps
+                    discount_applied = "discount" if cap_pps == float("inf") else "discount (lower)"
+                else:
+                    conversion_pps = priced_round_pps
+                    discount_applied = "none (at round price)"
 
+                shares = safe.safe_amount / conversion_pps if conversion_pps > 0 else 0.0
+                new_per_safe.append((conversion_pps, shares, discount_applied))
+                new_total += shares
+            converged = abs(new_total - total_safe_shares) <= max(1e-9, 1e-9 * new_total)
+            total_safe_shares = new_total
+            per_safe = new_per_safe
+            if converged:
+                break
+
+        new_investor_shares = new_money / priced_round_pps if priced_round_pps > 0 else 0.0
+
+        # Pool sized off post-money fully diluted shares: pool = pct × total
+        total_ex_pool = founder_shares + total_safe_shares + new_investor_shares
+        pool_target = total_ex_pool * pool_pct / (1 - pool_pct) if pool_pct < 1.0 else 0.0
+        if abs(pool_target - option_pool_shares) <= max(1e-9, 1e-9 * max(pool_target, 1.0)):
+            option_pool_shares = pool_target
+            break
+        option_pool_shares = pool_target
+
+    # Build per-SAFE conversion results
+    conversions: list[SAFEConversionResult] = []
+    for (safe, (conversion_pps, shares, discount_applied), was_mfn) in zip(safes, per_safe, mfn_applied):
         conversions.append(SAFEConversionResult(
             investor_name=safe.investor_name,
             safe_amount=safe.safe_amount,
             conversion_price=conversion_pps,
             shares_issued=shares,
             ownership_pct=0.0,  # filled after total computed
-            effective_valuation=effective_val,
+            effective_valuation=conversion_pps * pre_round_shares,
             discount_applied=discount_applied,
-            mfn_adjusted=safe.has_mfn,
+            mfn_adjusted=was_mfn,
         ))
-        total_safe_shares += shares
 
-    # Step 3: New investor shares
-    new_investor_shares = new_money / priced_round_pps if priced_round_pps > 0 else 0.0
-
-    # Step 4: Total cap table
+    # Step 4: Total cap table (recompute with the converged pool)
+    pre_round_shares = founder_shares + option_pool_shares
     total_shares = pre_round_shares + total_safe_shares + new_investor_shares
-    founder_shares = inp.pre_safe_shares_outstanding
 
     # Compute ownership percentages
     for conv in conversions:
@@ -2093,8 +2192,11 @@ def run_safe_conversion(inp: SAFEConversionInput) -> SAFEConversionOutput:
 
     effective_pre_to_founders = founder_pct * post_money
 
-    notes = []
-    if total_safe_shares > 0:
+    notes = [
+        f"Option pool sized to {inp.option_pool_pct:.0%} of the post-money fully diluted "
+        "capitalization (solved jointly with SAFE conversion).",
+    ]
+    if total_safe_shares > 0 and priced_round_pps > 0:
         avg_safe_pps = sum(s.safe_amount for s in safes) / total_safe_shares
         notes.append(
             f"SAFEs convert at an average price of ${avg_safe_pps:.4f}/share "
@@ -2108,11 +2210,10 @@ def run_safe_conversion(inp: SAFEConversionInput) -> SAFEConversionOutput:
             f"beyond the priced round. Consider the cumulative impact on founder incentives."
         )
 
-    any_mfn = any(s.has_mfn for s in safes)
-    if any_mfn:
+    if any(mfn_applied):
         notes.append(
-            "MFN clause triggered: SAFE holders with MFN received the best terms "
-            "from the entire SAFE stack."
+            "MFN clause triggered: SAFE holders with MFN inherited the best terms among "
+            "SAFEs issued after them (stack order = issuance order)."
         )
 
     return SAFEConversionOutput(
