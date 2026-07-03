@@ -137,6 +137,8 @@ export interface DealStructure {
   debt_tranches: DebtTranche[]
   transaction_fees_pct: number
   advisory_fees: number
+  /** Pre-tax yield foregone on cash used as consideration (decimal, default 0.043) */
+  cash_yield?: number
 }
 
 export interface PurchasePriceAllocation {
@@ -190,6 +192,8 @@ export interface IncomeStatementYear {
   acquirer_standalone_eps: number
   pro_forma_eps: number
   accretion_dilution_pct: number
+  /** True when standalone EPS <= 0 — accretion % is Not Meaningful; use the EPS delta */
+  accretion_is_nm: boolean
   // Pro forma adjustment detail
   acquirer_revenue: number
   target_revenue: number
@@ -199,6 +203,12 @@ export interface IncomeStatementYear {
   synergy_cost: number
   incremental_da: number
   acquisition_interest: number
+  /** Implied pre-existing below-EBIT items (acquirer + target existing interest) */
+  existing_interest: number
+  /** Lost yield on cash used as consideration */
+  foregone_cash_interest: number
+  /** Synergy cost-to-achieve expensed this year */
+  integration_costs: number
   transaction_costs: number
 }
 
@@ -213,6 +223,8 @@ export interface BalanceSheetAtClose {
   combined_total_assets: number
   combined_total_liabilities: number
   combined_equity: number
+  /** Disclosed plug forcing Assets == Liabilities + Equity on the simplified opening BS */
+  balancing_plug: number
 }
 
 export interface AccretionDilutionBridge {
@@ -222,6 +234,8 @@ export interface AccretionDilutionBridge {
   da_adjustment: number
   synergy_benefit: number
   share_dilution_impact: number
+  /** Lost yield on cash consideration (after-tax, per share) */
+  foregone_interest_drag: number
   tax_impact: number
   total_accretion_dilution: number
   total_accretion_dilution_pct: number
@@ -233,12 +247,15 @@ export interface SensitivityMatrix {
   col_label: string
   row_values: number[]
   col_values: number[]
-  data: number[][]
+  /** [row][col] accretion decimal; null = cell failed to compute (rendered "n/a") */
+  data: (number | null)[][]
   data_labels: string[][]
   base_row_idx: number
   base_col_idx: number
   row_display_labels: string[]
   col_display_labels: string[]
+  /** Assumption / data-quality note (e.g. hypothetical synergy axis, failed cells) */
+  note: string | null
 }
 
 export interface ReturnScenario {
@@ -253,7 +270,10 @@ export interface ReturnsAnalysis {
   entry_multiple: number
   equity_invested: number
   scenarios: ReturnScenario[]
+  /** Deal-attributable FCF after all debt service */
   annual_fcf_to_equity: number[]
+  /** e.g. near-zero equity check warning (IRR/MOIC not meaningful) */
+  notes: string[]
 }
 
 export interface RiskItem {

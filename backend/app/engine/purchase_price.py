@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import DealInput, PurchasePriceAllocation as PPAInput
+from .models import DealInput
 
 
 @dataclass

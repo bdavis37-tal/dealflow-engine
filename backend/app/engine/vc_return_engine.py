@@ -36,7 +36,6 @@ from .vc_fund_models import (
     FundProfile,
     GPCarryInput, GPCarryOutput,
     ICMemoFinancials,
-    LPReportInput, LPReportOutput,
     OwnershipMath,
     PortfolioConstructionStats, PortfolioInput, PortfolioOutput, PortfolioPosition,
     PreferenceType,
@@ -618,7 +617,6 @@ def compute_quick_screen(
             "Pass or revisit at better terms."
         )
 
-    arr_multiple_entry = (deal.post_money_valuation / deal.arr) if deal.arr > 0 else None
     fr_arr = ownership.required_arr_multiple_for_1x_fund
 
     return QuickScreenResult(
@@ -967,10 +965,6 @@ def compute_portfolio_stats(
     positions: list[PortfolioPosition],
 ) -> PortfolioConstructionStats:
     """Compute fund-level portfolio construction metrics."""
-    active = [p for p in positions if p.status == "active"]
-    exited = [p for p in positions if p.status == "exited"]
-    written_off = [p for p in positions if p.status == "written_off"]
-
     total_initial = sum(p.check_size for p in positions)
     total_reserve = sum(p.reserve_deployed for p in positions)
     total_deployed = total_initial + total_reserve
@@ -1604,7 +1598,9 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
     adequacy = _ownership_adequacy(ownership.entry_ownership_pct, fund.target_ownership_pct)
 
     # 8. Power law context
-    # At 40% bear probability, a fund needs ~3 fund-returners out of 25 deals to 3x the fund
+    # With the stage-derived failure mass in the bear branch, the base case is
+    # the median *surviving* outcome — the note frames how many of those a
+    # fund needs to return 3x gross.
     base_x_fund = base.fund_contribution_x
     fund_returners_needed = (
         3.0 / base_x_fund if base_x_fund > 0 else float("inf")
@@ -1652,7 +1648,7 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
         vertical_benchmarks_used=benchmarks.get("verticals", {}).get(deal.vertical.value, {}),
         flags=flags,
         warnings=warnings,
-        computation_notes=[],
+        computation_notes=computation_notes,
     )
 
 
@@ -1749,7 +1745,8 @@ def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
     salary_per_gp = total_salary / inp.num_gps if inp.num_gps > 0 else total_salary
     total_comp_per_gp = carry_per_gp + gp_return_of_commit / max(inp.num_gps, 1) + salary_per_gp
 
-    carry_vs_salary = (carry_per_gp / salary_per_gp) if salary_per_gp > 0 else float("inf")
+    # None (not inf) when there is no salary — inf is not JSON-serializable
+    carry_vs_salary = (carry_per_gp / salary_per_gp) if salary_per_gp > 0 else None
 
     # Management fees
     total_mgmt_fees = fund.total_management_fees

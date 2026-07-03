@@ -17,7 +17,6 @@ import json
 import math
 import os
 from datetime import date
-from typing import Callable
 
 from .models import (
     AccretionDilutionBridge,
@@ -43,7 +42,6 @@ from .purchase_price import compute_ppa, get_transaction_costs
 from .returns import compute_returns
 from .risk_analyzer import analyze_risks
 from .sensitivity import generate_all_sensitivity_matrices
-from .defaults import get_defaults
 
 
 # ---------------------------------------------------------------------------

@@ -55,7 +55,7 @@
   "expected": {
     "entry_multiple_approx": 8.33,
     "year1_pf_eps_direction": "changes_from_standalone",
-    "goodwill_approx": 41000000,
+    "goodwill_approx": 40.75,
     "no_convergence_warning": true,
     "year1_net_income_positive": true
   }

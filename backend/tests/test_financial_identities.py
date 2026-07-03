@@ -23,7 +23,7 @@ from app.engine.models import DebtTranche, AmortizationType
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 EPS_TOLERANCE = 0.005   # $0.005 EPS (~half a penny) for bridge reconciliation
-DOLLAR_TOLERANCE = 1.0  # $1 for debt schedule identities
+DOLLAR_TOLERANCE = 1e-6  # $1 in millions-USD units for debt schedule identities
 PCT_TOLERANCE = 0.001   # 0.1% for income statement arithmetic
 
 
@@ -71,6 +71,7 @@ class TestEPSBridgeReconciliation:
             bridge_components_sum = (
                 bridge.target_earnings_contribution
                 + bridge.interest_expense_drag
+                + bridge.foregone_interest_drag
                 + bridge.da_adjustment
                 + bridge.synergy_benefit
                 + bridge.share_dilution_impact
@@ -150,14 +151,19 @@ class TestIncomeStatementArithmetic:
             )
 
     def test_ebt_identity(self, deal_output):
-        """ebt == ebit - interest_expense (Year 1 also has transaction costs)"""
+        """ebt == ebit - interest_expense - transaction_costs (fees are Year-1 only).
+
+        Audit fix: the previous version had `... or yr.year == 1`, which made the
+        assertion vacuously true for Year 1. Transaction costs are an explicit IS
+        field, so the identity holds tightly for every year.
+        """
         _, output = deal_output
         for yr in output.pro_forma_income_statement:
-            expected = yr.ebit - yr.interest_expense
-            # Year 1 has transaction costs baked into ebt already; allow larger tolerance
-            tolerance = max(abs(yr.ebt) * 0.10, 1_000) if yr.year == 1 else max(abs(yr.ebt) * PCT_TOLERANCE, DOLLAR_TOLERANCE)
-            assert abs(yr.ebt - expected) < tolerance or yr.year == 1, (
-                f"Year {yr.year}: ebt {yr.ebt:,.0f} ≠ ebit - interest = {expected:,.0f}"
+            expected = yr.ebit - yr.interest_expense - yr.transaction_costs
+            tolerance = max(abs(yr.ebt) * PCT_TOLERANCE, 1e-6)
+            assert abs(yr.ebt - expected) < tolerance, (
+                f"Year {yr.year}: ebt {yr.ebt:,.4f} ≠ "
+                f"ebit - interest - fees = {expected:,.4f}"
             )
 
     def test_net_income_identity(self, deal_output):
@@ -200,7 +206,7 @@ class TestDebtScheduleIntegrity:
         """
         tranche = DebtTranche(
             name="Term Loan",
-            amount=100_000_000,
+            amount=100.0,
             interest_rate=0.08,
             term_years=7,
             amortization_type=AmortizationType.STRAIGHT_LINE,
@@ -208,9 +214,9 @@ class TestDebtScheduleIntegrity:
         results, _ = build_debt_schedule(
             tranches=[tranche],
             projection_years=7,
-            ebitda_by_year=[20_000_000] * 7,
-            da_by_year=[3_000_000] * 7,
-            capex_by_year=[2_000_000] * 7,
+            ebitda_by_year=[20.0] * 7,
+            da_by_year=[3.0] * 7,
+            capex_by_year=[2.0] * 7,
             tax_rate=0.25,
         )
         for yr_idx, result in enumerate(results):
@@ -229,7 +235,7 @@ class TestDebtScheduleIntegrity:
         """Each year's BOY balance equals the prior year's EOY balance."""
         tranche = DebtTranche(
             name="Term Loan",
-            amount=100_000_000,
+            amount=100.0,
             interest_rate=0.08,
             term_years=7,
             amortization_type=AmortizationType.STRAIGHT_LINE,
@@ -237,9 +243,9 @@ class TestDebtScheduleIntegrity:
         results, _ = build_debt_schedule(
             tranches=[tranche],
             projection_years=7,
-            ebitda_by_year=[20_000_000] * 7,
-            da_by_year=[3_000_000] * 7,
-            capex_by_year=[2_000_000] * 7,
+            ebitda_by_year=[20.0] * 7,
+            da_by_year=[3.0] * 7,
+            capex_by_year=[2.0] * 7,
             tax_rate=0.25,
         )
         for yr_idx in range(1, len(results)):
@@ -265,19 +271,19 @@ class TestDebtScheduleIntegrity:
         """
         tranche = DebtTranche(
             name="Term Loan",
-            amount=100_000_000,
+            amount=100.0,
             interest_rate=0.08,
             term_years=7,
             amortization_type=AmortizationType.STRAIGHT_LINE,
         )
-        balances = {"Term Loan": 100_000_000}
-        mandatory_principal = 100_000_000 / 7  # ~$14.3M
+        balances = {"Term Loan": 100.0}
+        mandatory_principal = 100.0 / 7  # ~$14.3M
 
         # Generate high EBITDA so FCF >> mandatory principal
         result = solve_year(
-            ebitda=50_000_000,  # High EBITDA → high FCF
-            da=3_000_000,
-            capex=1_000_000,
+            ebitda=50.0,  # High EBITDA → high FCF
+            da=3.0,
+            capex=1.0,
             working_capital_change=0,
             tax_rate=0.25,
             tranche_balances=balances,
@@ -297,16 +303,16 @@ class TestDebtScheduleIntegrity:
         """When FCF < 0, no optional sweep should occur."""
         tranche = DebtTranche(
             name="Term Loan",
-            amount=100_000_000,
+            amount=100.0,
             interest_rate=0.08,
             term_years=7,
             amortization_type=AmortizationType.STRAIGHT_LINE,
         )
-        balances = {"Term Loan": 100_000_000}
+        balances = {"Term Loan": 100.0}
         result = solve_year(
-            ebitda=2_000_000,   # Very low EBITDA → negative FCF after interest
-            da=1_000_000,
-            capex=5_000_000,    # High capex ensures FCF < 0
+            ebitda=2.0,   # Very low EBITDA → negative FCF after interest
+            da=1.0,
+            capex=5.0,    # High capex ensures FCF < 0
             working_capital_change=0,
             tax_rate=0.25,
             tranche_balances=balances,
@@ -439,14 +445,14 @@ class TestPPAIdentities:
         # Inject nonzero writeup
         deal_with_writeup = deal.model_copy(deep=True)
         deal_with_writeup.ppa = PPAInput(
-            asset_writeup=10_000_000,
+            asset_writeup=10.0,
             asset_writeup_useful_life=15,
-            identifiable_intangibles=5_000_000,
+            identifiable_intangibles=5.0,
             intangible_useful_life=10,
         )
         result = compute_ppa(deal_with_writeup)
-        expected_dtl = (10_000_000 + 5_000_000) * deal.acquirer.tax_rate
-        assert abs(result.deferred_tax_liability - expected_dtl) < 1, (
+        expected_dtl = (10.0 + 5.0) * deal.acquirer.tax_rate
+        assert abs(result.deferred_tax_liability - expected_dtl) < 1e-6, (
             f"DTL {result.deferred_tax_liability:,.0f} ≠ expected {expected_dtl:,.0f}"
         )
 

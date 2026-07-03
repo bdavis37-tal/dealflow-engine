@@ -54,8 +54,8 @@ class TestDefenseAIAcquisition:
 
     def test_defense_positioning_backlog(self):
         dp = self.output.defense_positioning
-        assert dp.combined_backlog == 500_000_000
-        # backlog / revenue = 500M / 120M ≈ 4.17
+        assert dp.combined_backlog == 500.0  # $500M in millions-USD units
+        # backlog / revenue = 500 / 120 ≈ 4.17
         assert abs(dp.backlog_coverage_ratio - 4.17) < 0.1
 
     def test_defense_positioning_revenue_visibility(self):

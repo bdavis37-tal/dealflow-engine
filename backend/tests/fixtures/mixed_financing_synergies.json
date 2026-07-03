@@ -84,7 +84,7 @@
   },
   "expected": {
     "entry_multiple_approx": 14.3,
-    "total_annual_synergies": 15000000,
+    "total_annual_synergies": 15.0,
     "year3_synergies_fully_phased_in": true,
     "year1_net_income_positive": true,
     "new_shares_issued_positive": true

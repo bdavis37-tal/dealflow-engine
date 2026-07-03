@@ -81,6 +81,9 @@ export interface LiquidationPreference {
   participation_cap?: number
   anti_dilution: AntiDilutionType
   seniority: number
+  /** As-converted fully diluted ownership of this class (0.15 = 15%).
+   *  Optional — when omitted the engine estimates it dollar-proportionally. */
+  ownership_pct?: number
 }
 
 export interface VCDealInput {
@@ -144,9 +147,14 @@ export interface OwnershipMath {
   exit_ownership_pct: number
   dilution_stack: DilutionStackRow[]
   total_dilution_pct: number
+  // GROSS thresholds: exit EV where gross proceeds = target × fund size
   fund_returner_1x_exit: number
   fund_returner_3x_exit: number
   fund_returner_5x_exit: number
+  // NET thresholds: exit EV where LPs receive target × fund size after carry
+  fund_returner_1x_exit_net: number
+  fund_returner_3x_exit_net: number
+  fund_returner_5x_exit_net: number
   exit_values_tested: number[]
   gross_proceeds_at_exits: number[]
   fund_contribution_at_exits: number[]
@@ -188,6 +196,9 @@ export interface QuickScreenResult {
 export interface WaterfallShareClass {
   share_class: string
   type: PreferenceType
+  /** Dollars invested by this class (optional on synthetic rows) */
+  invested_amount?: number
+  /** ACTUAL liquidation preference: invested × preference multiple */
   preference_amount: number
   preference_multiple: number
   liquidation_payout: number
@@ -204,6 +215,7 @@ export interface WaterfallDistribution {
   investor_total: number
   investor_moic: number
   conversion_was_optimal: boolean
+  notes: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -305,15 +317,19 @@ export interface PortfolioConstructionStats {
   company_count: number
   stage_breakdown: Record<string, number>
   vertical_breakdown: Record<string, number>
+  /** Biggest position as % of invested cost basis */
   largest_position_pct: number
   total_cost_basis: number
+  /** Residual FMV of held (active / partially exited) positions only */
   total_fair_value: number
+  /** GROSS: residual FMV / total cost basis */
   unrealized_tvpi: number
   realized_proceeds: number
+  // NET-style multiples on called capital including the management-fee load
   dpi: number
   rvpi: number
   tvpi: number
-  reserve_adequacy: 'adequate' | 'tight' | 'over-reserved'
+  reserve_adequacy: 'adequate' | 'tight' | 'over-committed'
   average_follow_on_multiple: number
 }
 
@@ -365,7 +381,10 @@ export interface QSBSOutput {
   eligibility_checks: QSBSEligibilityCheck[]
   holding_period_satisfied: boolean
   years_remaining_to_qualify?: number
+  /** GREATER of dollar cap ($10M/$15M) and 10x basis (IRC §1202(b)(1)) */
   exclusion_cap_per_taxpayer: number
+  /** 1.0, or 0.5 / 0.75 under OBBBA tiered holding periods */
+  exclusion_pct_applicable: number
   estimated_gain_excluded: number
   estimated_federal_tax_saved_per_lp: number
   estimated_total_lp_benefit: number
@@ -392,6 +411,22 @@ export interface AntiDilutionOutput {
 // ---------------------------------------------------------------------------
 // Bridge Round
 // ---------------------------------------------------------------------------
+
+export interface BridgeRoundInput {
+  company_name: string
+  bridge_amount: number
+  instrument: string                     // 'safe' | 'convertible_note' | 'equity'
+  discount_rate: number
+  interest_rate: number
+  maturity_months: number
+  pre_bridge_valuation: number
+  expected_next_round_valuation: number
+  current_ownership_pct: number
+  fund_is_participating: boolean
+  pro_rata_amount: number
+  /** Company monthly burn (USD millions) — enables real runway computation */
+  monthly_burn?: number | null
+}
 
 export interface BridgeRoundOutput {
   company_name: string
@@ -454,11 +489,14 @@ export const VC_STAGE_LABELS: Record<VCStage, string> = {
   growth: 'Growth',
 }
 
+// Carta FY2025 medians (dilution AT each round): seed 19.5%, Series A 18.5%,
+// Series B 13%, Series C 11%, IPO 12% — keep in sync with
+// backend/app/engine/vc_fund_models.py DilutionAssumptions defaults.
 export const DEFAULT_DILUTION_ASSUMPTIONS: DilutionAssumptions = {
-  pre_seed_to_seed: 0.205,
-  seed_to_a: 0.20,
-  a_to_b: 0.18,
-  b_to_c: 0.15,
+  pre_seed_to_seed: 0.195,
+  seed_to_a: 0.185,
+  a_to_b: 0.13,
+  b_to_c: 0.11,
   c_to_ipo: 0.12,
   option_pool_expansion: 0.05,
 }
@@ -516,7 +554,7 @@ export interface GPCarryOutput {
   gp_return_of_commit: number
   gp_carry_per_gp: number
   gp_total_comp_per_gp: number
-  carry_as_multiple_of_salary: number
+  carry_as_multiple_of_salary: number | null
 
   // Management fees
   total_management_fees: number
