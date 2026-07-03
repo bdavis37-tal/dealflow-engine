@@ -33,7 +33,11 @@ function fmt(v: number | null | undefined): string {
 }
 
 function fmtPct(v: number): string {
-  return `${(v * 100).toFixed(1)}%`
+  const pct = v * 100
+  // Use more decimal places for very small values to avoid showing "0.0%"
+  if (pct < 0.1 && pct > 0) return `${pct.toFixed(3)}%`
+  if (pct < 1.0) return `${pct.toFixed(2)}%`
+  return `${pct.toFixed(1)}%`
 }
 
 function SignalBadge({ signal }: { signal: ValuationSignal }) {

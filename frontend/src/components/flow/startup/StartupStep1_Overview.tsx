@@ -258,6 +258,11 @@ export default function StartupStep1_Overview({
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">M</span>
             </div>
             {errors.raise && <p className="text-red-400 text-xs mt-1">{errors.raise}</p>}
+            {!errors.raise && (fundraise.raise_amount ?? 0) >= 1000 && (
+              <p className="text-amber-400 text-xs mt-1">
+                ⚠ This looks like a raw dollar amount. Enter in millions — e.g. type <strong>5</strong> for $5M.
+              </p>
+            )}
           </div>
 
           <div>
