@@ -5,6 +5,8 @@
 **Scope:** All three computation engines (M&A, Startup Valuation, VC Fund-Seat), all three benchmark data files, API routes, tests, and frontend type parity.
 **Prior audits:** 2026-02-24 (finance review), 2026-03-13 (43 findings, all remediated). This audit does not re-report items fixed in those passes; a sample of prior fixes was re-verified as landed.
 
+**Status:** Complete. Backend suite **596 passing** (was 436 at baseline — ~160 new regression/invariant tests, including a new `test_audit_fixes.py` and per-finding regression classes). Frontend typecheck clean, Vitest 22 passing. Three bug-enshrining tests corrected. `pip install -e ".[dev]"` packaging fixed (was broken).
+
 ---
 
 ## 1. Methodology
@@ -106,13 +108,21 @@ Headline defects fixed:
 - **S-6 Berkus recalibrated** — per-dimension cap was up to $13.5M total (vs the accepted ~$3–3.5M ceiling), making it a fourth copy of the benchmark median instead of an independent sanity check.
 - **S-8 Rule of 40 proxy** — MoM growth was linearized (12% MoM → 144% instead of 289% YoY) and EBITDA margin fabricated from gross margin; both corrected.
 
+**Confirmed landed impact (fixture deals):**
+
+| Fixture | Y1 accretion before → after | 5yr base IRR / MOIC after |
+|---|---|---|
+| simple_cash_deal | +41.18% → −0.32% | n/a (all cash) |
+| leveraged_deal | (IRR 103% / MOIC 34.6x) → −13.55% Y1 | 39.9% / 5.37x |
+| loss_making_acquirer (new fixture) | +3.37% (NM-flagged) → green | n/a |
+
 ### 3.3 VC fund-seat engine (5 critical, 5 high, 11 medium)
 
 - **C-1 QSBS §1202** — exclusion cap used `min(10M, 10× basis)` where the statute says **greater of** (a $20M investment showed a $10M cap instead of $200M); per-LP benefit multiplied fund-level gain by LP count (~25x overstatement); OBBBA July-2025 changes half-implemented (missing $75M asset test and 3/4/5-year tiered exclusion). All corrected.
 - **C-2 GP carry** — `/api/vc/gp-carry` crashed with `UnboundLocalError` for any fund between 1.0x and ~2.16x gross (i.e., most real funds mid-life); catch-up mechanics double-counted carry (GP took 36% of profits on a 20% carry fund). Rebuilt to standard LPA mechanics.
 - **C-3 Waterfall** — capped participating preferred never received the conversion option (a $1B exit paid $30M where as-converted value was ~$700M — and a test enshrined it); conversion decisions now iterate senior→junior to a fixed point; optional `ownership_pct` on the liquidation stack enables share-based conversion values.
 - **C-4 RVPI falsiness bug** — written-off companies (`fair_value=0.0`) counted at full cost in residual value via Python `or`.
-- **C-5 Scenario realism** — bear case had no loss mass (bear MOIC 1.2x at 40% probability, vs the module's own data showing ~60% of seed checks fail); growth compounded uncapped-in-practice (base case = top-decile outcome). Scenarios now carry stage-conditional failure probability from the transition benchmarks and growth decay.
+- **C-5 Scenario realism** — bear case had no loss mass (bear MOIC 1.2x at 40% probability, vs the module's own data showing ~60% of seed checks fail); growth compounded uncapped-in-practice (base case = top-decile outcome). Scenarios now carry stage-conditional failure probability from the transition benchmarks and growth decay. A plain seed deal that previously showed an inflated ~5.2x expected MOIC with no downside now shows 62% write-off probability and a realistic 2.16x probability-weighted expected MOIC.
 - **H-2 fund defaults** — three contradictory fee bases in one API response (one line assumed 10%/yr management fees — half the fund).
 - Dilution assumption defaults (backend + frontend) synced to the refreshed Carta FY2025 medians.
 
