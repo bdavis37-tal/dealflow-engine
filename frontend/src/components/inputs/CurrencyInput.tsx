@@ -17,7 +17,7 @@ interface CurrencyInputProps {
 }
 
 function parseNumericInput(raw: string): number {
-  const cleaned = raw.replace(/[^0-9.\-]/g, '')
+  const cleaned = raw.replace(/[^0-9.-]/g, '')
   // Reject multiple decimal points
   if ((cleaned.match(/\./g) || []).length > 1) return NaN
   const parsed = parseFloat(cleaned)

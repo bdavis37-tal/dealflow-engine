@@ -16,6 +16,7 @@ import ContributionAnalysisTable from './ContributionAnalysisTable'
 import CreditProfile from './CreditProfile'
 import ImpliedValuationCard from './ImpliedValuationCard'
 import ReturnsDetail from './ReturnsDetail'
+import EPSBridge from './EPSBridge'
 import { checkAIStatus } from '../../lib/ai-api'
 import { formatEPS, formatPercentage } from '../../lib/formatters'
 import {
@@ -202,6 +203,14 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
           )}
         </div>
       </div>
+
+      {/* EPS Bridge — what drives the accretion/dilution */}
+      {output.accretion_dilution_bridge.length > 0 && (
+        <EPSBridge
+          bridge={output.accretion_dilution_bridge}
+          isNm={year1?.accretion_is_nm}
+        />
+      )}
 
       {/* Contribution Analysis */}
       {output.contribution_analysis && (
