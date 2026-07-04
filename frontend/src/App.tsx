@@ -59,6 +59,7 @@ export default function App() {
   const {
     state: startupState,
     setStep: setStartupStep,
+    goToStep: goToStartupStep,
     setCompanyName,
     updateTeam,
     updateTraction,
@@ -167,7 +168,13 @@ export default function App() {
   if (appView === 'startup') {
     if (startupState.output && !startupState.isLoading) {
       return (
-        <AppShell appMode="startup" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
+        <AppShell
+          appMode="startup"
+          onAppModeChange={(m: AppMode) => setAppView(m)}
+          onHome={() => setAppView('landing')}
+          isResults
+          onStepClick={(s) => goToStartupStep(s as StartupFlowStep)}
+        >
           <StartupDashboard
             output={startupState.output}
             startupInput={{

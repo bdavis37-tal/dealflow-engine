@@ -19,13 +19,14 @@
     "@radix-ui/react-slider": "^1.2.0",
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.2",
+    "@react-pdf/renderer": "^4.5.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.395.0",
+    "lz-string": "^1.5.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
-    "lz-string": "^1.5.0",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
