@@ -276,7 +276,13 @@ class StartupValuationOutput(BaseModel):
     valuation_range_low: float           # P25 of applicable methods
     valuation_range_high: float          # P75 of applicable methods
     recommended_safe_cap: Optional[float]  # Suggested cap if raising on SAFE
-    implied_dilution: float              # Raise amount / post-money
+    implied_dilution: float              # Raise amount / post-money at the deal-mechanics basis
+
+    # Deal-mechanics basis: the actual deal (dilution, SAFE conversion, projected
+    # rounds) prices off the preparer's ask when one is provided — the model
+    # midpoint is only the fallback. The blend/range above never depends on the ask.
+    dilution_basis: str = Field(default="model_midpoint", description="'preparer_ask' | 'model_midpoint'")
+    dilution_basis_pre_money: float = Field(default=0.0, description="Pre-money the deal mechanics are priced at, USD millions")
 
     # Method breakdown
     method_results: list[ValuationMethodResult]

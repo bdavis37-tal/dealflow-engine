@@ -961,11 +961,23 @@ def _projected_round(
 
 def _build_dilution_scenarios(
     inp: StartupInput,
-    blended_pre_money: float,
+    basis_pre_money: float,
+    model_pre_money: float,
 ) -> list[DilutionScenario]:
     """
     Project dilution across the current round and the next typical rounds,
     using the vertical's per-stage round sizes and valuation medians.
+
+    The CURRENT round is priced at `basis_pre_money` — the preparer's ask when
+    one was provided, otherwise the model midpoint. Dilution describes the
+    actual deal on the table, so it flows off the price actually being asked,
+    not the model's blend.
+
+    Projected FUTURE rounds stay anchored to `model_pre_money` (the model
+    midpoint): they are market projections, and the model does not assume the
+    market validates the preparer's ask. When the ask is above market, a
+    projected round can therefore price below the current post-money — that is
+    the down-round risk, surfaced as a warning by the orchestrator.
 
     Existing SAFEs convert at the next PRICED round: if the current round is
     priced equity they convert now; otherwise conversion is deferred to the
@@ -980,9 +992,9 @@ def _build_dilution_scenarios(
     existing_safe_pct = 0.0
     pending_safe_stack = 0.0
     if inp.fundraise.existing_safe_stack > 0:
-        if inp.fundraise.instrument == InstrumentType.PRICED_EQUITY and blended_pre_money > 0:
+        if inp.fundraise.instrument == InstrumentType.PRICED_EQUITY and basis_pre_money > 0:
             # Current round is priced — SAFEs convert into it now.
-            existing_safe_pct = min(0.30, inp.fundraise.existing_safe_stack / blended_pre_money)
+            existing_safe_pct = min(0.30, inp.fundraise.existing_safe_stack / basis_pre_money)
         else:
             # Current round is a SAFE/note — conversion deferred to the
             # projected next priced round below.
@@ -991,13 +1003,13 @@ def _build_dilution_scenarios(
     founder_pct = 1.0 - existing_safe_pct
 
     # Current round
-    post_money = blended_pre_money + raise_amount
+    post_money = basis_pre_money + raise_amount
     inv_pct = raise_amount / post_money
     new_founder_pct = founder_pct * (1 - inv_pct)
 
     scenarios.append(DilutionScenario(
         round_label=f"Current ({stage.value.replace('_', ' ').title()})",
-        pre_money=round(blended_pre_money, 2),
+        pre_money=round(basis_pre_money, 2),
         raise_amount=round(raise_amount, 2),
         post_money=round(post_money, 2),
         investor_ownership_pct=round(inv_pct, 4),
@@ -1008,11 +1020,14 @@ def _build_dilution_scenarios(
 
     founder_pct = new_founder_pct
 
-    # Next round projections from the vertical's per-stage benchmark blocks
+    # Next round projections from the vertical's per-stage benchmark blocks.
+    # Step-up floors anchor to the MODEL-midpoint post-money, not the ask —
+    # future rounds are market projections (see docstring).
+    model_post = model_pre_money + raise_amount
     next_rounds: list[tuple[str, float, float, float]] = []  # (label, pre_money, raise, option_pool)
     if stage == StartupStage.PRE_SEED:
-        # Projected Seed pre-money must exceed current post-money (step-up floor: 1.5x post-money)
-        seed_pre, seed_raise = _projected_round(vertical, StartupStage.SEED, post_money * 1.5)
+        # Projected Seed pre-money must exceed model post-money (step-up floor: 1.5x post-money)
+        seed_pre, seed_raise = _projected_round(vertical, StartupStage.SEED, model_post * 1.5)
         seed_post = seed_pre + seed_raise
         # Projected Series A pre-money must exceed projected Seed post-money (floor: 2x seed post)
         series_a_pre, series_a_raise = _projected_round(vertical, StartupStage.SERIES_A, seed_post * 2.0)
@@ -1021,8 +1036,8 @@ def _build_dilution_scenarios(
             ("Series A (projected)", series_a_pre, series_a_raise, 0.10),
         ]
     elif stage == StartupStage.SEED:
-        # Projected Series A pre-money must exceed current post-money (floor: 2x post-money)
-        series_a_pre, series_a_raise = _projected_round(vertical, StartupStage.SERIES_A, post_money * 2.0)
+        # Projected Series A pre-money must exceed model post-money (floor: 2x post-money)
+        series_a_pre, series_a_raise = _projected_round(vertical, StartupStage.SERIES_A, model_post * 2.0)
         next_rounds = [
             ("Series A (projected)", series_a_pre, series_a_raise, 0.10),
         ]
@@ -1058,10 +1073,17 @@ def _build_dilution_scenarios(
 
 def _build_safe_conversion(
     inp: StartupInput,
-    blended_pre_money: float,
+    basis_pre_money: float,
+    model_pre_money: float,
 ) -> Optional[SAFEConversionSummary]:
     """
     Model how the current SAFE converts at the projected next priced round.
+
+    `basis_pre_money` (preparer's ask when provided, else the model midpoint)
+    anchors the capless-SAFE proxy cap. The projected next priced round stays
+    anchored to `model_pre_money` — it is a market projection, so an
+    above-market cap can convert at the discount instead of the cap. This is
+    the same projection convention as the dilution model.
 
     Mechanics depend on safe_type:
       - post_money (YC 2018+ standard, ~87% of market): ownership at cap = raise / cap
@@ -1077,7 +1099,7 @@ def _build_safe_conversion(
 
     f = inp.fundraise
     capless = f.pre_money_valuation_ask is None
-    cap = f.pre_money_valuation_ask or blended_pre_money
+    cap = f.pre_money_valuation_ask or basis_pre_money
     discount = f.safe_discount
     raise_amount = f.raise_amount
     safe_type = f.safe_type
@@ -1088,8 +1110,9 @@ def _build_safe_conversion(
     else:
         implied_ownership = raise_amount / (cap + raise_amount) if (cap + raise_amount) > 0 else 0.0
 
-    # Projected next priced round (same projection as the dilution model)
-    current_post = blended_pre_money + raise_amount
+    # Projected next priced round (same market-anchored projection as the
+    # dilution model — floors off the model midpoint, not the ask)
+    current_post = model_pre_money + raise_amount
     next_round_pre: Optional[float] = None
     next_round_label = ""
     if f.stage == StartupStage.PRE_SEED:
@@ -1549,8 +1572,25 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
                 "(standard market premium; no vertical cap median available)."
             )
 
+    # Deal-mechanics basis: the deal happens at the preparer's ask when one is
+    # provided — the model midpoint is only a fallback anchor. The blended
+    # valuation and calibrated range are never affected by the ask.
+    ask = inp.fundraise.pre_money_valuation_ask
+    basis_is_ask = ask is not None and ask > 0
+    basis_pre_money = float(ask) if basis_is_ask else blended
+    if basis_is_ask:
+        notes.append(
+            f"Deal mechanics (implied dilution, current-round dilution, SAFE cap fallback) are priced at "
+            f"the preparer's ask of ${basis_pre_money:.1f}M pre-money, not the model midpoint (${blended:.1f}M). "
+            "Projected future rounds remain anchored to market benchmarks."
+        )
+    else:
+        notes.append(
+            f"No preparer ask provided — deal mechanics are priced at the model midpoint (${blended:.1f}M pre-money)."
+        )
+
     # Implied dilution
-    post_money = blended + inp.fundraise.raise_amount
+    post_money = basis_pre_money + inp.fundraise.raise_amount
     implied_dilution = inp.fundraise.raise_amount / post_money if post_money > 0 else 0
 
     # Warnings
@@ -1579,9 +1619,22 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
             "an aggressive cap today raises the next-round bar significantly."
         )
 
-    # Dilution modeling
-    dilution_scenarios = _build_dilution_scenarios(inp, blended)
-    safe_conversion = _build_safe_conversion(inp, blended)
+    # Dilution modeling — current round priced at the deal-mechanics basis
+    # (ask when provided); projected rounds anchored to the model midpoint.
+    dilution_scenarios = _build_dilution_scenarios(inp, basis_pre_money, blended)
+    safe_conversion = _build_safe_conversion(inp, basis_pre_money, blended)
+
+    # An ask above the market-projected next round means the projection is a
+    # down round relative to this deal price — flag it plainly.
+    if basis_is_ask and len(dilution_scenarios) > 1:
+        current, next_round = dilution_scenarios[0], dilution_scenarios[1]
+        if next_round.pre_money < current.post_money:
+            warnings.append(
+                f"The market-projected {next_round.round_label.replace(' (projected)', '')} pre-money "
+                f"(${next_round.pre_money:.1f}M) is below the current post-money at your ask "
+                f"(${current.post_money:.1f}M) — the next round would be a down round unless "
+                "performance outruns the benchmarks."
+            )
 
     # Investor scorecard
     investor_scorecard = _build_scorecard(inp, blended, vdata)
@@ -1614,6 +1667,8 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         valuation_range_high=round(range_high, 2),
         recommended_safe_cap=safe_cap,
         implied_dilution=round(implied_dilution, 4),
+        dilution_basis="preparer_ask" if basis_is_ask else "model_midpoint",
+        dilution_basis_pre_money=round(basis_pre_money, 2),
         method_results=method_results,
         benchmark_p25=vdata.get("valuation_p25", 0),
         benchmark_p50=vdata.get("valuation_p50", 0),
