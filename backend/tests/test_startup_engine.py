@@ -1649,7 +1649,8 @@ class TestS2SAFEConversion:
 
 
 class TestS3AIPremium:
-    """S-3: defense_tech frozen, premium capped at +50%, range brackets blended."""
+    """S-3 (emergent model): defense_tech frozen; premium emerges from
+    parameter-level calibration; range brackets blended."""
 
     def test_defense_tech_gets_no_ai_premium(self):
         inp = _make_input(**{
@@ -1663,17 +1664,28 @@ class TestS3AIPremium:
         assert out.ai_premium_multiplier is None
         assert out.blended_before_ai is None
 
-    def test_ai_premium_capped_at_50_pct(self):
-        """Healthtech carries a 1.0 base premium — must be capped to 0.5."""
-        inp = _make_input(**{
+    def test_healthtech_emergent_premium(self):
+        """Healthtech (1.0 vertical premium) at score 1.0 with meaningful ARR:
+        the premium is EMERGENT from parameter calibration, not a post-blend
+        scalar — bounded by the AI-enabled SaaS multiple cap."""
+        overrides = {
             "fundraise.vertical": "healthtech",
+            "traction.has_revenue": True,
+            "traction.annual_recurring_revenue": 1.0,
+            "traction.mom_growth_rate": 0.10,
+        }
+        out = run_startup_valuation(_make_input(**{
+            **overrides,
             "fundraise.is_ai_native": True,
             "fundraise.ai_native_score": 1.0,
-        })
-        out = run_startup_valuation(inp)
+        }))
+        baseline = run_startup_valuation(_make_input(**overrides))
         assert out.ai_modifier_applied is True
-        assert out.ai_premium_multiplier == pytest.approx(0.50)
-        assert out.blended_valuation == pytest.approx(out.blended_before_ai * 1.5, rel=1e-3)
+        assert out.blended_before_ai == pytest.approx(baseline.blended_valuation, rel=1e-6)
+        assert 0.0 < out.ai_premium_multiplier <= 0.60
+        assert out.blended_valuation == pytest.approx(
+            out.blended_before_ai * (1 + out.ai_premium_multiplier), rel=1e-3
+        )
 
     def test_blended_within_range_with_ai_premium(self):
         """Range must be scaled with the premium so blended stays inside it."""

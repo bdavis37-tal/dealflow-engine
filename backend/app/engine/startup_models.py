@@ -308,11 +308,14 @@ class StartupValuationOutput(BaseModel):
     # Raw benchmark data (pass-through for UI)
     vertical_benchmarks: dict
 
-    # AI modifier outputs (all None/False when modifier not applied)
+    # AI calibration outputs (all None/False when calibration not applied).
+    # The premium is EMERGENT: it arises from parameter-level calibration of
+    # the individual methods (scorecard weights, Berkus caps, RFS steps, ARR
+    # multiple uplift) applied BEFORE blending — never a post-blend scalar.
     ai_modifier_applied: bool = Field(default=False)
-    ai_premium_multiplier: Optional[float] = Field(default=None, description="Effective premium factor applied")
-    ai_premium_context: Optional[str] = Field(default=None, description="Human-readable premium explanation")
-    blended_before_ai: Optional[float] = Field(default=None, description="Pre-modifier blended value, USD millions")
+    ai_premium_multiplier: Optional[float] = Field(default=None, description="Emergent premium: blended / standard-parameter blend − 1")
+    ai_premium_context: Optional[str] = Field(default=None, description="Human-readable calibration explanation")
+    blended_before_ai: Optional[float] = Field(default=None, description="Counterfactual blend under standard (non-AI) parameters, USD millions")
     ai_native_score: Optional[float] = Field(default=None, description="Score from 4-question assessment [0.0–1.0]")
 
     # Round timing signal

@@ -22,6 +22,10 @@ function pct(n: number) {
   return `${(n * 100).toFixed(1)}%`
 }
 
+function fmtExit(ev: number) {
+  return ev >= 1000 ? `$${(ev / 1000).toFixed(1)}B` : `$${ev.toFixed(0)}M`
+}
+
 export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney: _, arr }: Props) {
   const {
     entry_ownership_pct,
@@ -31,6 +35,9 @@ export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney
     fund_returner_1x_exit,
     fund_returner_3x_exit,
     fund_returner_5x_exit,
+    fund_returner_1x_exit_net,
+    fund_returner_3x_exit_net,
+    fund_returner_5x_exit_net,
     exit_values_tested,
     gross_proceeds_at_exits,
     fund_contribution_at_exits,
@@ -128,15 +135,15 @@ export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney
           Fund Returner Thresholds
         </h3>
         <p className="text-xs text-slate-500 mb-4">
-          Exit enterprise value needed to return 1x / 3x / 5x the ${fmt(fund.fund_size)}M fund
-          from this single position.
+          Exit enterprise value needed for this single position to return 1x / 3x / 5x the ${fmt(fund.fund_size)}M fund.
+          Gross = position proceeds before fees and carry; net = exit needed for LPs to receive the multiple after carry.
         </p>
         <div className="space-y-3">
           {[
-            { label: '1x Fund', value: fund_returner_1x_exit, arrMult: required_arr_multiple_for_1x_fund, color: 'emerald' },
-            { label: '3x Fund', value: fund_returner_3x_exit, arrMult: required_arr_multiple_for_3x_fund, color: 'amber' },
-            { label: '5x Fund', value: fund_returner_5x_exit, arrMult: null, color: 'red' },
-          ].map(({ label, value, arrMult, color }) => (
+            { label: '1x Fund', value: fund_returner_1x_exit, netValue: fund_returner_1x_exit_net, arrMult: required_arr_multiple_for_1x_fund, color: 'emerald' },
+            { label: '3x Fund', value: fund_returner_3x_exit, netValue: fund_returner_3x_exit_net, arrMult: required_arr_multiple_for_3x_fund, color: 'amber' },
+            { label: '5x Fund', value: fund_returner_5x_exit, netValue: fund_returner_5x_exit_net, arrMult: null, color: 'red' },
+          ].map(({ label, value, netValue, arrMult, color }) => (
             <div key={label} className={`flex items-center justify-between py-2 px-3 rounded-lg
               ${color === 'emerald' ? 'bg-emerald-950/30 border border-emerald-800/20'
               : color === 'amber' ? 'bg-amber-950/30 border border-amber-800/20'
@@ -150,7 +157,10 @@ export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney
               </span>
               <div className="text-right">
                 <div className="text-slate-200 font-semibold text-sm">
-                  ${value >= 1000 ? `${(value / 1000).toFixed(1)}B` : `${value.toFixed(0)}M`} exit
+                  {fmtExit(value)} exit <span className="text-slate-500 font-normal text-xs">(gross)</span>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Net to LPs: {fmtExit(netValue)} exit
                 </div>
                 {arrMult && arr > 0 && (
                   <div className="text-xs text-slate-500">

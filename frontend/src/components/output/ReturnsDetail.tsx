@@ -44,6 +44,15 @@ export default function ReturnsDetail({ returns, dealInput, fiscalYearStart }: R
 
       {open && (
         <div className="mt-4 animate-fade-in space-y-6">
+          {/* Returns computation notes (e.g. near-zero equity — IRR/MOIC not meaningful) */}
+          {returns.notes.length > 0 && (
+            <div className="rounded-lg border border-amber-800/30 bg-amber-950/10 px-4 py-2.5 space-y-1">
+              {returns.notes.map((note, i) => (
+                <p key={i} className="text-2xs text-amber-300/80 leading-relaxed">{note}</p>
+              ))}
+            </div>
+          )}
+
           {/* Entry Equity Check */}
           <div>
             <h3 className="text-sm font-semibold text-slate-300 mb-3">Equity Investment at Close</h3>

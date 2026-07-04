@@ -1,5 +1,5 @@
 interface HeatmapCellProps {
-  value: number   // accretion/dilution as decimal (e.g. 0.05 = 5%)
+  value: number | null   // accretion/dilution as decimal (e.g. 0.05 = 5%); null = failed to compute
   label: string
   isHighlighted?: boolean
   onClick?: () => void
@@ -7,7 +7,9 @@ interface HeatmapCellProps {
   onMouseLeave?: () => void
 }
 
-function getColorClass(value: number): string {
+function getColorClass(value: number | null): string {
+  // null: cell failed to compute — muted, no accretion color
+  if (value === null) return 'bg-slate-800/40 text-slate-500'
   // Color: green for accretive (positive), red for dilutive (negative)
   if (value > 0.10) return 'bg-green-600 text-white'
   if (value > 0.05) return 'bg-green-700/80 text-green-100'
@@ -37,9 +39,9 @@ export default function HeatmapCell({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      title={label}
+      title={value === null ? 'Scenario did not compute' : label}
     >
-      {label}
+      {value === null ? 'n/a' : label}
     </div>
   )
 }

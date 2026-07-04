@@ -55,8 +55,9 @@ export default function StartupStep1b_AICharacteristics({
         AI Characteristics Assessment
       </p>
       <p className="text-xs text-slate-500 mb-5">
-        Answer four questions to calibrate the AI-native premium. More "yes" answers
-        mean a higher premium multiplier.
+        Answer four questions to calibrate the valuation parameters for an AI-native
+        company. More "yes" answers shift the method inputs (scorecard weights, Berkus
+        caps, ARR multiple) further toward AI-native calibration.
       </p>
 
       <div className="space-y-3">

@@ -93,31 +93,40 @@ function VerdictBanner({ verdict, headline, subtext }: { verdict: ValuationVerdi
 }
 
 // ---------------------------------------------------------------------------
-// AI Modifier Banner (shown only when ai_modifier_applied=true)
+// AI Calibration Banner (shown only when ai_modifier_applied=true).
+// The premium is EMERGENT: the AI-native toggle calibrates the inputs of the
+// individual valuation methods (scorecard weights, Berkus caps, ARR multiple)
+// before blending — it is never a multiplier applied to the blended value.
 // ---------------------------------------------------------------------------
 
 function AIModifierBanner({ output }: { output: StartupValuationOutput }) {
   if (!output.ai_modifier_applied || output.blended_before_ai == null) return null
 
   const premiumPct = ((output.blended_valuation / output.blended_before_ai) - 1) * 100
+  const sign = premiumPct >= 0 ? '+' : ''
 
   return (
     <div className="rounded-xl border border-purple-600/50 bg-purple-900/20 p-5">
       <div className="flex items-center gap-2 mb-3">
         <TrendingUp size={16} className="text-purple-400" />
-        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI-Native Premium Applied</span>
+        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI-Native Calibration</span>
       </div>
       <p className="text-2xl font-bold text-purple-300 mb-2">
-        +{premiumPct.toFixed(0)}% AI-Native Premium
+        {sign}{premiumPct.toFixed(0)}% Emergent AI-Native Premium
+      </p>
+      <p className="text-sm text-slate-400 leading-relaxed mb-1">
+        This premium emerges from parameter-level calibration of the valuation methods
+        (ARR multiple uplift, scorecard weight shift toward product/IP, Berkus cap
+        re-apportionment) — it is not a multiplier applied to the blended value.
       </p>
       {output.ai_premium_context && (
-        <p className="text-sm text-slate-400 leading-relaxed mb-3">{output.ai_premium_context}</p>
+        <p className="text-sm text-slate-500 leading-relaxed mb-3">{output.ai_premium_context}</p>
       )}
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-slate-500">Base Valuation:</span>
+        <span className="text-slate-500">Standard Parameters:</span>
         <span className="text-slate-300 font-medium">{fmt(output.blended_before_ai)}</span>
         <span className="text-slate-600">→</span>
-        <span className="text-slate-500">AI-Adjusted:</span>
+        <span className="text-slate-500">AI-Calibrated:</span>
         <span className="text-purple-300 font-semibold">{fmt(output.blended_valuation)}</span>
       </div>
     </div>
@@ -150,7 +159,7 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         <p className="text-slate-500 text-xs mb-1">Blended Pre-Money Valuation</p>
         <p className="text-5xl font-bold text-slate-100">{fmt(blended_valuation)}</p>
         {output.ai_modifier_applied && output.blended_before_ai != null && (
-          <p className="text-slate-500 text-xs mt-1">Before AI premium: {fmt(output.blended_before_ai)}</p>
+          <p className="text-slate-500 text-xs mt-1">With standard (non-AI) parameters: {fmt(output.blended_before_ai)}</p>
         )}
         <p className="text-slate-400 text-sm mt-1">Range: {fmt(valuation_range_low)} – {fmt(valuation_range_high)}</p>
         <p className="text-purple-400 text-xs mt-2 font-medium">{percentile_in_market}</p>

@@ -1,6 +1,6 @@
 import { ArrowLeft, Loader2, TrendingUp } from 'lucide-react'
 import type { DealState } from '../../types/deal'
-import { formatCurrencyCompact, formatPercentage } from '../../lib/formatters'
+import { formatCurrencyCompact, formatMultiple, formatPercentage } from '../../lib/formatters'
 
 interface Step6Props {
   state: DealState
@@ -27,7 +27,7 @@ export default function Step6_Review({ state, onBack, onRun }: Step6Props) {
 
   const dealSize = target.acquisition_price ?? 0
   const entryMultipleEst = target.ebitda && target.ebitda > 0
-    ? (dealSize / target.ebitda).toFixed(1) + '\u00d7'
+    ? formatMultiple(dealSize / target.ebitda)
     : '\u2014'
 
   if (isLoading) {

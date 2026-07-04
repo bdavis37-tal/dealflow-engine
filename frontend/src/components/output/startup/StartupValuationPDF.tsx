@@ -428,7 +428,7 @@ export default function PDFExportButton({ output, input }: PDFExportButtonProps)
       document={<ValuationDocument output={output} input={input} />}
       fileName={filename}
     >
-      {({ loading }) => (
+      {({ loading }: { loading: boolean }) => (
         <button
           disabled={loading}
           className="flex items-center gap-2 px-4 py-2 rounded-lg border border-purple-600/50 bg-purple-900/20 text-purple-300 hover:bg-purple-900/40 hover:border-purple-500 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-wait"

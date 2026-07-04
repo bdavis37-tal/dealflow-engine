@@ -88,7 +88,7 @@ export default function WaterfallAnalyzer({ output }: Props) {
             {scenarios.map(s => (
               <button
                 key={s.label}
-                onClick={() => setExitEV(s.ev)}
+                onClick={() => setExitEV(Math.max(s.ev, minEV))}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border transition-colors
                   ${Math.abs(exitEV - s.ev) < s.ev * 0.02
                     ? 'bg-slate-700 border-slate-500 text-slate-200'
@@ -109,6 +109,12 @@ export default function WaterfallAnalyzer({ output }: Props) {
           {/* If we have pre-computed waterfall data */}
           {waterfall && (
             <>
+              {exitEV !== waterfall.exit_ev && (
+                <p className="text-2xs text-slate-600">
+                  Bars scale the exact distribution computed at {fmtEV(waterfall.exit_ev)} linearly —
+                  preference breakpoints are not re-solved at the slider value.
+                </p>
+              )}
               {waterfall.share_classes.map((cls, i) => (
                 <WaterfallBar
                   key={i}
@@ -164,6 +170,71 @@ export default function WaterfallAnalyzer({ output }: Props) {
           )}
         </div>
       </div>
+
+      {/* Share class detail — exact engine output at the computed exit */}
+      {waterfall && waterfall.share_classes.length > 0 && (
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+            Share Class Detail
+          </h3>
+          <p className="text-xs text-slate-500 mb-4">
+            Exact distribution computed at {fmtEV(waterfall.exit_ev)}. Preference = invested × liquidation multiple.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-2 text-slate-500 text-xs font-medium">Class</th>
+                  <th className="text-right py-2 text-slate-500 text-xs font-medium">Invested</th>
+                  <th className="text-right py-2 text-slate-500 text-xs font-medium">Preference (× mult)</th>
+                  <th className="text-right py-2 text-slate-500 text-xs font-medium">Liq. Payout</th>
+                  <th className="text-right py-2 text-slate-500 text-xs font-medium">Conv. Value</th>
+                  <th className="text-right py-2 text-slate-500 text-xs font-medium">Receives</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waterfall.share_classes.map((cls, i) => (
+                  <tr key={i} className="border-b border-slate-800">
+                    <td className="py-2 text-slate-300">
+                      {cls.share_class}
+                      {cls.converted && <span className="ml-2 text-emerald-600 text-2xs">converted</span>}
+                    </td>
+                    <td className="py-2 text-right text-slate-400">
+                      {cls.invested_amount != null ? `$${fmt(cls.invested_amount)}M` : '—'}
+                    </td>
+                    <td className="py-2 text-right text-slate-300">
+                      ${fmt(cls.preference_amount)}M
+                      <span className="text-slate-600 text-2xs ml-1">({cls.preference_multiple.toFixed(1)}x)</span>
+                    </td>
+                    <td className="py-2 text-right text-slate-400">${fmt(cls.liquidation_payout)}M</td>
+                    <td className="py-2 text-right text-slate-400">${fmt(cls.conversion_value)}M</td>
+                    <td className="py-2 text-right text-slate-200 font-medium">${fmt(cls.gets)}M</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="py-2 text-slate-500">Common + ESOP</td>
+                  <td className="py-2 text-right text-slate-600">—</td>
+                  <td className="py-2 text-right text-slate-600">—</td>
+                  <td className="py-2 text-right text-slate-600">—</td>
+                  <td className="py-2 text-right text-slate-600">—</td>
+                  <td className="py-2 text-right text-slate-300">${fmt(waterfall.common_gets)}M</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Approximation / reconciliation notes from the engine */}
+          {waterfall.notes.length > 0 && (
+            <div className="mt-4 space-y-1">
+              {waterfall.notes.map((n, i) => (
+                <div key={i} className="text-xs text-slate-500 flex items-start gap-2">
+                  <span className="mt-0.5">ℹ</span><span>{n}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -230,11 +230,13 @@ export interface StartupValuationOutput {
 
   vertical_benchmarks: Record<string, unknown>
 
-  // AI modifier outputs (all null/false when modifier not applied)
+  // AI calibration outputs (all null/false when calibration not applied).
+  // The premium is EMERGENT from parameter-level calibration applied inside
+  // the methods before blending — never a post-blend scalar.
   ai_modifier_applied: boolean
-  ai_premium_multiplier: number | null
+  ai_premium_multiplier: number | null // blended / standard-parameter blend − 1
   ai_premium_context: string | null
-  blended_before_ai: number | null
+  blended_before_ai: number | null // counterfactual blend under standard parameters
   ai_native_score: number | null
   round_timing: RoundTimingSignal
 }

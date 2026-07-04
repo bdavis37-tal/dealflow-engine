@@ -14,31 +14,27 @@ export function roundFinancial(value: number): number {
   return Number(value.toPrecision(12))
 }
 
-export function formatCurrency(value: number, compact = false): string {
+/**
+ * Format a monetary value denominated in MILLIONS USD (project convention:
+ * `50.0` means $50M). Mirrors the backend's `_format_currency`.
+ * E.g. 50 → "$50.0M", 1800 → "$1.8B", 0.25 → "$250K".
+ */
+export function formatCurrency(value: number): string {
   const v = roundFinancial(value)
   const abs = Math.abs(v)
   const sign = v < 0 ? '-' : ''
 
-  if (compact) {
-    if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(1)}B`
-    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`
-    if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K`
-    return `${sign}$${abs.toFixed(0)}`
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(v)
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}B`
+  if (abs >= 1) return `${sign}$${abs.toFixed(1)}M`
+  if (abs >= 0.001) return `${sign}$${(abs * 1_000).toFixed(0)}K`
+  return '$0'
 }
 
 export function formatCurrencyCompact(value: number): string {
-  return formatCurrency(value, true)
+  return formatCurrency(value)
 }
 
-/** Format as accounting style: negative numbers in (parentheses). */
+/** Format as accounting style: negative numbers in (parentheses). Millions-denominated. */
 export function formatAccounting(value: number): string {
   if (value < 0) return `(${formatCurrency(Math.abs(value))})`
   return formatCurrency(value)

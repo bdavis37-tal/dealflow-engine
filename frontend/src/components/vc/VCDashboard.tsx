@@ -102,7 +102,7 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
           <HeroMetric label="Entry Ownership" value={pct(output.ownership.entry_ownership_pct)} />
           <HeroMetric label="Base Case MOIC" value={`${fmt(output.base_scenario.gross_moic)}x`} highlight />
           <HeroMetric label="Expected IRR" value={pct(output.expected_irr)} />
-          <HeroMetric label="Fund Returner" value={fmtEV(output.ownership.fund_returner_1x_exit)} />
+          <HeroMetric label="Fund Returner (gross)" value={fmtEV(output.ownership.fund_returner_1x_exit)} />
           <HeroMetric label="Base Contribution" value={`${fmt(output.base_scenario.fund_contribution_x, 2)}x fund`} />
         </div>
 
@@ -208,7 +208,10 @@ function OverviewTab({ output, fund }: { output: VCDealOutput; fund: FundProfile
             </tbody>
             <tfoot>
               <tr className="bg-slate-900/40">
-                <td className="py-2.5 text-slate-300 font-semibold text-sm">Expected</td>
+                <td className="py-2.5 text-slate-300 font-semibold text-sm">
+                  Expected
+                  <span className="block text-2xs font-normal text-slate-500">prob.-weighted, incl. failure</span>
+                </td>
                 <td className="py-2.5 text-right text-slate-500 text-xs">weighted</td>
                 <td className="py-2.5 text-right text-slate-400">—</td>
                 <td className="py-2.5 text-right text-slate-200 font-bold">{fmt(output.expected_moic)}x</td>
@@ -238,10 +241,12 @@ function OverviewTab({ output, fund }: { output: VCDealOutput; fund: FundProfile
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Fund Returner</h3>
           <div className="space-y-2 text-sm">
-            <SummaryRow label="1x Fund Exit" value={fmtEV(output.ownership.fund_returner_1x_exit)} />
-            <SummaryRow label="3x Fund Exit" value={fmtEV(output.ownership.fund_returner_3x_exit)} />
+            <SummaryRow label="1x Fund Exit (gross)" value={fmtEV(output.ownership.fund_returner_1x_exit)} />
+            <SummaryRow label="1x Fund Exit (net to LPs)" value={fmtEV(output.ownership.fund_returner_1x_exit_net)} />
+            <SummaryRow label="3x Fund Exit (gross)" value={fmtEV(output.ownership.fund_returner_3x_exit)} />
+            <SummaryRow label="3x Fund Exit (net to LPs)" value={fmtEV(output.ownership.fund_returner_3x_exit_net)} />
             <SummaryRow
-              label="Base achieves 1x fund?"
+              label="Base achieves 1x fund (gross)?"
               value={output.base_scenario.exit_enterprise_value > output.ownership.fund_returner_1x_exit ? '✓ Yes' : '✗ No'}
               highlight
             />

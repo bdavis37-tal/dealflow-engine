@@ -30,6 +30,13 @@ function fmt(n: number, dec = 1) {
 }
 function pct(n: number) { return `${(n * 100).toFixed(1)}%` }
 
+/** Mirror of backend FundProfile.investable_capital (fees out, recycling credit in). */
+function investableCapital(fund: FundProfile): number {
+  return fund.fund_size
+    - fund.fund_size * fund.management_fee_pct * fund.management_fee_years
+    + fund.fund_size * fund.recycling_pct
+}
+
 const STATUS_COLORS = {
   active: 'text-emerald-400',
   written_off: 'text-red-400',
@@ -212,14 +219,19 @@ export default function VCPortfolioDash({ fund }: Props) {
   const [output, setOutput] = useState<PortfolioOutput | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     savePositions(positions)
-    if (positions.length === 0) { setOutput(null); return }
+    if (positions.length === 0) { setOutput(null); setError(null); return }
     setLoading(true)
+    setError(null)
     analyzePortfolio({ fund_profile: fund, positions })
       .then(r => { setOutput(r); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(e => {
+        setLoading(false)
+        setError(e instanceof Error ? e.message : 'Portfolio analysis failed')
+      })
   }, [positions, fund])
 
   function addPosition(p: PortfolioPosition) {
@@ -249,17 +261,24 @@ export default function VCPortfolioDash({ fund }: Props) {
         <StatCard label="Fund Size" value={`$${fmt(fund.fund_size)}M`} />
         <StatCard
           label="Investable Capital"
-          value={`$${fmt(fund.fund_size - fund.fund_size * fund.management_fee_pct * fund.management_fee_years)}M`}
+          value={`$${fmt(stats?.investable_capital ?? investableCapital(fund))}M`}
         />
         <StatCard
           label="Initial Pool"
-          value={`$${fmt((fund.fund_size - fund.fund_size * fund.management_fee_pct * fund.management_fee_years) * (1 - fund.reserve_ratio))}M`}
+          value={`$${fmt(stats?.initial_check_pool ?? investableCapital(fund) * (1 - fund.reserve_ratio))}M`}
         />
         <StatCard
           label="Reserve Pool"
-          value={`$${fmt((fund.fund_size - fund.fund_size * fund.management_fee_pct * fund.management_fee_years) * fund.reserve_ratio)}M`}
+          value={`$${fmt(stats?.reserve_pool ?? investableCapital(fund) * fund.reserve_ratio)}M`}
         />
       </div>
+
+      {/* Analysis error */}
+      {error && (
+        <div className="text-xs text-red-300 bg-red-950/30 border border-red-800/20 rounded-lg p-3">
+          {error}
+        </div>
+      )}
 
       {/* Portfolio metrics (when positions exist) */}
       {stats && (
@@ -297,7 +316,13 @@ export default function VCPortfolioDash({ fund }: Props) {
                 ? 'bg-amber-900/30 text-amber-400 border border-amber-700/30'
                 : 'bg-red-900/30 text-red-400 border border-red-700/30'}`}
             >
-              Reserve: {stats.reserve_adequacy}
+              <span>
+                {stats.reserve_adequacy === 'over-committed' ? '✗' : stats.reserve_adequacy === 'tight' ? '⚠' : '✓'}
+              </span>
+              Reserves: {stats.reserve_adequacy}
+              {stats.reserve_adequacy === 'over-committed' && (
+                <span className="font-normal">— follow-on commitments exceed reserve pool</span>
+              )}
             </div>
           </div>
 
@@ -305,10 +330,13 @@ export default function VCPortfolioDash({ fund }: Props) {
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Performance Marks</h3>
             <div className="grid grid-cols-3 gap-4">
-              <PerfMetric label="TVPI" value={`${fmt(stats.tvpi)}x`} color={stats.tvpi >= 2 ? 'green' : stats.tvpi >= 1 ? 'yellow' : 'red'} sub="Total / Paid-In" />
-              <PerfMetric label="DPI" value={`${fmt(stats.dpi)}x`} color={stats.dpi >= 1 ? 'green' : 'neutral'} sub="Distributed / Paid-In" />
-              <PerfMetric label="RVPI" value={`${fmt(stats.rvpi)}x`} color="neutral" sub="Residual / Paid-In" />
+              <PerfMetric label="TVPI" value={`${fmt(stats.tvpi)}x`} color={stats.tvpi >= 2 ? 'green' : stats.tvpi >= 1 ? 'yellow' : 'red'} sub="Total / called (net of fees)" />
+              <PerfMetric label="DPI" value={`${fmt(stats.dpi)}x`} color={stats.dpi >= 1 ? 'green' : 'neutral'} sub="Distributed / called (net of fees)" />
+              <PerfMetric label="RVPI" value={`${fmt(stats.rvpi)}x`} color="neutral" sub="Residual / called (net of fees)" />
             </div>
+            <p className="mt-3 text-xs text-slate-600">
+              Multiples are net-style: the denominator is called capital including the management-fee load.
+            </p>
           </div>
 
           {/* Concentration */}

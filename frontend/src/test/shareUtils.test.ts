@@ -247,7 +247,11 @@ describe('property-based: round-trip fidelity for MA state', () => {
           const encoded = encodeState('ma', state as unknown as MAInputState)
           const decoded = decodeState(encoded)
           expect(decoded).not.toBeNull()
-          expect(decoded!.state).toEqual(state)
+          // Compare against the JSON-canonicalized state: the encoder's contract
+          // is JSON-semantics fidelity, and JSON.stringify(-0) === "0", so a
+          // fast-check-generated -0 legitimately round-trips to +0 (toEqual
+          // distinguishes them, which caused intermittent failures).
+          expect(decoded!.state).toEqual(JSON.parse(JSON.stringify(state)))
         },
       ),
     )

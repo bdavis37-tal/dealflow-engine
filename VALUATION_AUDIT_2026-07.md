@@ -135,7 +135,29 @@ Headline defects fixed:
 
 ---
 
-## 4. Residual Risks & Recommended Next Steps
+## 4. Phase 2 (2026-07-04): AI Parameter-Matrix Refactor + UI Closure
+
+### 4.1 AI premium: from post-blend scalar to inputs-up calibration
+
+The original AI-native premium — even after the Phase 1 cap — remained a post-blend scalar (`blended × (1 + premium)`). Phase 2 removed it entirely and replaced it with a **parameter-level configuration matrix** (`ai_toggle_config.json → parameter_matrix`), applied per-method *before* blending and interpolated by `ai_native_score`:
+
+- **ARR/comparable method**: the vertical's own multiple is uplifted by the configured premium × score, **capped at the same-stage AI-enabled-SaaS median** — a toggle can move a traditional company toward what a genuine AI company commands, never past it.
+- **Scorecard**: AI-native weight variant (product/IP 15→25%, competition 10→15%, marketing 10→5%; renormalized).
+- **Berkus**: caps re-apportioned toward prototype/IP and strategic relationships (total preserved at $3.5M — no hidden premium).
+- **Risk Factor Summation**: Technology/Competition/Litigation steps at $0.5M vs $0.25M (symmetric volatility scaling).
+- **Frozen verticals** (AI/ML infra, AI-enabled SaaS, defense tech) receive **zero** parameter shifts — their benchmarks already price AI.
+
+The final blended value is now strictly the weighted average of method results; the reported premium is **emergent** (computed against a standard-parameter counterfactual blend). Reference b2b_saas seed at $1M ARR: score 0 → 0%, score 0.5 → +22.2%, score 1.0 → +44.4% — monotonic, within the defensible (0%, 60%] window, invariant-tested (+46 tests, backend suite now 642).
+
+### 4.2 UI closure of remediation fields
+
+All engine fields added during remediation are now user-reachable: M&A `cash_yield` input, NM-accretion display, interest breakout and integration-cost P&L lines, a new per-year **EPS bridge waterfall** (the bridge output previously rendered nowhere), n/a sensitivity cells with matrix notes; VC bridge `monthly_burn`, a **cap-table/liquidation-stack editor** (previously nonexistent — the waterfall pointed at a missing editor), optional as-converted `ownership_pct`, gross-vs-net fund-returner rows, QSBS OBBBA tier display, honest write-off-bear scenario rendering, over-committed reserve state; IC memo relabeled gross/net.
+
+### 4.3 Latent frontend unit bug (found during wiring)
+
+`lib/formatters.ts` formatted millions-denominated state as raw dollars, and the custom-synergy default (`500_000`) would have submitted **$500 billion** of synergies to the engine. Formatters rewritten millions-denominated; all downstream `/1e6` double-conversions fixed. A `-0`-vs-`+0` flake in the share-link property test was also root-caused (fast-check generates `-0`; `JSON.stringify(-0) === "0"`) and fixed via JSON-canonical comparison.
+
+## 5. Residual Risks & Recommended Next Steps
 
 1. **Cap-table primitive.** Waterfall, pro-rata, SAFE conversion, and anti-dilution all approximate share math with dollar proportions unless `ownership_pct` is supplied. A first-class share-count cap table would eliminate the remaining approximation error.
 2. **Stale transition stages.** Series A→B and B→C probabilities have no post-2024 authoritative source; revisit when PitchBook/Carta publish 2026 cohort tables.

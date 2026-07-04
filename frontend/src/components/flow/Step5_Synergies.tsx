@@ -4,6 +4,7 @@ import type { SynergyAssumptions, SynergyItem, ModelMode } from '../../types/dea
 import CurrencyInput from '../inputs/CurrencyInput'
 import GuidedInput from '../inputs/GuidedInput'
 import { Plus, Trash2 } from 'lucide-react'
+import { formatCurrencyCompact } from '../../lib/formatters'
 
 interface Step5Props {
   synergies: SynergyAssumptions
@@ -26,7 +27,8 @@ export default function Step5_Synergies({ synergies, combinedRevenue, mode, onUp
   const addCustomCostSynergy = () => {
     const newItem: SynergyItem = {
       category: `Custom ${synergies.cost_synergies.length + 1}`,
-      annual_amount: 500_000,
+      annual_amount: 0.5, // $0.5M — monetary values are in millions
+
       phase_in_years: 3,
       cost_to_achieve: 0,
       is_revenue: false,
@@ -109,7 +111,7 @@ export default function Step5_Synergies({ synergies, combinedRevenue, mode, onUp
         <div className="mt-6 rounded-xl border border-green-900/40 bg-green-950/10 px-5 py-4 text-sm">
           <span className="text-slate-400">Total projected annual savings: </span>
           <span className="text-green-400 font-semibold tabular-nums">
-            ${(totalAnnual / 1_000_000).toFixed(1)}M/year
+            {formatCurrencyCompact(totalAnnual)}/year
           </span>
           <span className="text-slate-500 text-xs ml-2">at full run-rate</span>
         </div>

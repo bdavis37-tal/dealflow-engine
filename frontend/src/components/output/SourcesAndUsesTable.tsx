@@ -3,9 +3,11 @@ import { formatCurrencyCompact } from '../../lib/formatters'
 
 interface SourcesAndUsesTableProps {
   data: SourcesAndUses
+  /** Opening balance-sheet balancing plug ($M) — disclosed as a footnote when non-zero */
+  balancingPlug?: number
 }
 
-export default function SourcesAndUsesTable({ data }: SourcesAndUsesTableProps) {
+export default function SourcesAndUsesTable({ data, balancingPlug = 0 }: SourcesAndUsesTableProps) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-slate-100 mb-4">Sources & Uses of Funds</h2>
@@ -62,6 +64,14 @@ export default function SourcesAndUsesTable({ data }: SourcesAndUsesTableProps) 
         <div className="mt-2 text-xs text-amber-400">
           Sources and Uses do not balance — check deal structure assumptions.
         </div>
+      )}
+
+      {/* Opening balance-sheet plug disclosure */}
+      {Math.abs(balancingPlug) > 0.005 && (
+        <p className="mt-2 text-2xs text-slate-500">
+          Opening balance sheet includes a {formatCurrencyCompact(balancingPlug)} balancing
+          plug so Assets = Liabilities + Equity (see model notes).
+        </p>
       )}
     </div>
   )
