@@ -1,18 +1,27 @@
 /**
  * StartupValuationPDF — investor-facing PDF export.
  *
- * Range-first, audit-grade presentation: the calibrated valuation range is the
- * deliverable (banker "football field" format); the blended point estimate is
- * demoted to "model midpoint". Preparer advocacy is quarantined into a clearly
- * labeled representations section that the model provably does not incorporate
- * — report context (perspective, notes) lives only in frontend state and is
- * never sent to the valuation API.
+ * Headline logic: an investor reading this wants two numbers — the calibrated
+ * valuation range and what the preparer is asking for. When an ask is stated
+ * it headlines the cover next to the range (with its cohort placement), the
+ * benchmark table slots it into the distribution and shades the preparer's
+ * contended band, and the dilution model prices the current round at the ask.
+ * The blended point estimate is demoted to "model midpoint" — a derivable
+ * detail on the methods page, and the headline fallback only when no ask or
+ * placement is stated.
+ *
+ * Preparer advocacy stays quarantined in a clearly labeled representations
+ * section that the model provably does not incorporate — report context
+ * (perspective, notes, contended placement) lives only in frontend state and
+ * is never sent to the valuation API. The ask, by contrast, IS a model input:
+ * it prices deal mechanics (dilution, SAFE cap) but never moves the blend or
+ * range.
  *
  * Uses @react-pdf/renderer for in-browser PDF generation.
  */
 import { Fragment } from 'react'
 import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Svg, Rect, Line } from '@react-pdf/renderer'
-import type { StartupValuationOutput, StartupInput, ReportContext, PreparerNote } from '../../../types/startup'
+import type { StartupValuationOutput, StartupInput, ReportContext, PreparerNote, ContendedPlacement } from '../../../types/startup'
 import {
   VERTICAL_LABELS, STAGE_LABELS, GEOGRAPHY_LABELS,
   INSTRUMENT_LABELS, PRODUCT_STAGE_LABELS,
@@ -82,6 +91,11 @@ const s = StyleSheet.create({
   hlValue:      { fontSize: 22, fontFamily: 'Helvetica-Bold', color: C.ink },
   hlUnit:       { fontSize: 10, fontFamily: 'Helvetica', color: C.slate },
   hlSub:        { fontSize: 8, color: C.slate, marginTop: 3 },
+  // Paired headline: the range AND what the preparer is asking for
+  hlGrid:       { flexDirection: 'row', marginBottom: 12 },
+  hlCellRange:  { flex: 1.1, backgroundColor: C.bg, borderWidth: 1, borderColor: C.rule, borderRadius: 4, padding: 14, marginRight: 8 },
+  hlCellAsk:    { flex: 1, backgroundColor: C.accentLt, borderRadius: 4, padding: 14 },
+  hlValueSm:    { fontSize: 17, fontFamily: 'Helvetica-Bold', color: C.ink },
   // Method card
   methodCard:   { borderWidth: 1, borderColor: C.rule, borderRadius: 4, padding: 10, marginBottom: 8 },
   methodLabel:  { fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.ink, marginBottom: 4 },
@@ -145,24 +159,110 @@ function PageFooter({ company }: { company: string }) {
   )
 }
 
-function BenchmarkTable({ output }: { output: StartupValuationOutput }) {
+/**
+ * The percentile anchors bounding the preparer's asserted position: the
+ * explicit contended placement when set, otherwise the band the ask falls in.
+ */
+function preparerBand(
+  contended: ContendedPlacement | null,
+  askPercentile: number | null,
+  askLabel: string | null,
+): string[] {
+  if (contended != null) {
+    return {
+      p25_p50: ['P25', 'P50'],
+      p50_p75: ['P50', 'P75'],
+      above_p75: ['P75'],
+      above_p95: ['P95'],
+    }[contended]
+  }
+  if (askPercentile != null) {
+    if (askPercentile >= 95) return ['P95']
+    if (askPercentile >= 75) return ['P75', 'P95']
+    if (askPercentile >= 50) return ['P50', 'P75']
+    return ['P25', 'P50']
+  }
+  if (askLabel === 'above P95') return ['P95']
+  if (askLabel === 'above P75') return ['P75']
+  if (askLabel === 'below P25') return ['P25']
+  return []
+}
+
+function BenchmarkTable({ output, ask, contended }: {
+  output: StartupValuationOutput
+  ask: number | null
+  contended: ContendedPlacement | null
+}) {
+  const askPlacement = ask != null
+    ? computeModelPlacement(ask, output.benchmark_p25, output.benchmark_p50, output.benchmark_p75, output.benchmark_p95)
+    : null
+  const band = (ask != null || contended != null)
+    ? preparerBand(contended, askPlacement?.approx_percentile ?? null, askPlacement?.label ?? null)
+    : []
+
+  type Row = { key: string; label: string; val: number | null; isAsk?: boolean }
+  const rows: Row[] = [
+    { key: 'P25', label: 'P25 (Bottom Quartile)', val: output.benchmark_p25 },
+    { key: 'P50', label: 'P50 (Median)',          val: output.benchmark_p50 },
+    { key: 'P75', label: 'P75 (Top Quartile)',    val: output.benchmark_p75 },
+    { key: 'P95', label: 'P95 (Top 5%)',          val: output.benchmark_p95 },
+  ]
+  // The ask slots into the distribution where it actually sits.
+  if (ask != null) {
+    const idx = rows.findIndex(r => (r.val ?? 0) > ask)
+    rows.splice(idx === -1 ? rows.length : idx, 0, {
+      key: 'ask',
+      label: "Preparer's Ask",
+      val: ask,
+      isAsk: true,
+    })
+  }
+
   return (
     <>
       <View style={s.tableHead}>
         <Text style={s.tableCellHd}>Percentile</Text>
         <Text style={[s.tableCellHd, s.tableRight]}>Pre-Money Valuation</Text>
       </View>
-      {[
-        { label: 'P25 (Bottom Quartile)',  val: output.benchmark_p25 },
-        { label: 'P50 (Median)',           val: output.benchmark_p50 },
-        { label: 'P75 (Top Quartile)',     val: output.benchmark_p75 },
-        { label: 'P95 (Top 5%)',           val: output.benchmark_p95 },
-      ].map(r => (
-        <View key={r.label} style={s.tableRow}>
-          <Text style={s.tableCell}>{r.label}</Text>
-          <Text style={[s.tableCell, s.tableRight]}>{fmtM(r.val)}</Text>
-        </View>
-      ))}
+      {rows.map(r => {
+        const inBand = !r.isAsk && band.includes(r.key)
+        const rowStyle = r.isAsk
+          ? [s.tableRow, { backgroundColor: C.accentLt, borderLeftWidth: 3, borderLeftColor: C.accent }]
+          : inBand
+            ? [s.tableRow, { backgroundColor: C.bg }]
+            : [s.tableRow]
+        const cellStyle = (r.isAsk || inBand)
+          ? [s.tableCell, { fontFamily: 'Helvetica-Bold' as const }]
+          : [s.tableCell]
+        return (
+          <View key={r.key} style={rowStyle}>
+            <Text style={r.isAsk ? [...cellStyle, { color: C.accent }] : cellStyle}>
+              {r.label}
+              {r.isAsk && askPlacement != null && (
+                <Text style={{ color: C.slate, fontFamily: 'Helvetica' }}>
+                  {'  '}({askPlacement.label} of cohort)
+                </Text>
+              )}
+              {inBand && band[0] === r.key && (
+                <Text style={{ color: C.accent, fontSize: 7.5 }}>
+                  {'   '}PREPARER'S POSITION
+                </Text>
+              )}
+            </Text>
+            <Text style={r.isAsk ? [...cellStyle, s.tableRight, { color: C.accent }] : [...cellStyle, s.tableRight]}>
+              {fmtM(r.val)}
+            </Text>
+          </View>
+        )
+      })}
+      {(band.length > 0) && (
+        <Text style={{ fontSize: 6.5, color: C.mid, marginTop: 4 }}>
+          {contended != null
+            ? `Shaded band: the preparer's contended placement — ${CONTENDED_PLACEMENT_LABELS[contended]}.`
+            : "Shaded band: where the preparer's ask sits in the cohort distribution."}
+          {' '}The band is the preparer's assertion, not a model output.
+        </Text>
+      )}
     </>
   )
 }
@@ -265,15 +365,19 @@ function FootballField({ output, input }: { output: StartupValuationOutput; inpu
             )
           })}
 
-          {/* Model midpoint — solid accent line across the plot */}
-          <Line x1={midX} x2={midX} y1={TOP_PAD - 3} y2={plotH} stroke={C.accent} strokeWidth={1.4} />
+          {/* Model midpoint — thin dashed reference line (the blend is derivable
+              from the method bars; the deal-relevant marker is the ask) */}
+          <Line
+            x1={midX} x2={midX} y1={TOP_PAD - 3} y2={plotH}
+            stroke={C.mid} strokeWidth={0.9} strokeDasharray="3 2"
+          />
 
-          {/* Preparer's ask — dashed, visually distinct from the midpoint */}
+          {/* Preparer's ask — the price on the table; solid accent, most prominent */}
           {ask != null && (
             <Line
               x1={xFor(ask)} x2={xFor(ask)}
               y1={TOP_PAD - 3} y2={plotH}
-              stroke={C.black} strokeWidth={1} strokeDasharray="3 2"
+              stroke={C.accent} strokeWidth={1.6}
             />
           )}
         </Svg>
@@ -307,20 +411,20 @@ function FootballField({ output, input }: { output: StartupValuationOutput; inpu
 
       {/* Legend */}
       <View style={s.legendRow}>
+        {ask != null && (
+          <View style={s.legendItem}>
+            <View style={{ width: 12, height: 1.6, backgroundColor: C.accent }} />
+            <Text style={s.legendText}>Preparer's ask {fmtM(ask)}</Text>
+          </View>
+        )}
         <View style={s.legendItem}>
           <View style={{ width: 12, height: 6, backgroundColor: C.rule, borderWidth: 0.5, borderColor: C.light }} />
           <Text style={s.legendText}>Method range (tick = indicated value)</Text>
         </View>
         <View style={s.legendItem}>
-          <View style={{ width: 12, height: 1.4, backgroundColor: C.accent }} />
+          <View style={{ width: 12, borderBottomWidth: 1, borderBottomColor: C.mid, borderStyle: 'dashed' }} />
           <Text style={s.legendText}>Model midpoint {fmtM(output.blended_valuation)}</Text>
         </View>
-        {ask != null && (
-          <View style={s.legendItem}>
-            <View style={{ width: 12, borderBottomWidth: 1, borderBottomColor: C.black, borderStyle: 'dashed' }} />
-            <Text style={s.legendText}>Preparer's ask {fmtM(ask)}</Text>
-          </View>
-        )}
       </View>
       <Text style={{ fontSize: 6.5, color: C.light, marginTop: 3 }}>
         Vertical gridlines: P25 / P50 / P75 / P95 — {VERTICAL_LABELS[output.vertical]} {STAGE_LABELS[output.stage]} cohort.
@@ -347,6 +451,13 @@ function CoverPage({ output, input, reportContext }: {
   const perspectiveLabel = PERSPECTIVE_LABELS[reportContext.perspective]
   const preparedBy = reportContext.prepared_by?.trim() || perspectiveLabel
 
+  const ask = input.fundraise.pre_money_valuation_ask
+  const contended = reportContext.contended_placement ?? null
+  const askPlacement = ask != null
+    ? computeModelPlacement(ask, output.benchmark_p25, output.benchmark_p50, output.benchmark_p75, output.benchmark_p95)
+    : null
+  const atAsk = output.dilution_basis === 'preparer_ask'
+
   return (
     <Page size="A4" style={s.page}>
       {/* Accent bar */}
@@ -363,31 +474,66 @@ function CoverPage({ output, input, reportContext }: {
         dedicated section and are not inputs to the model.
       </Text>
 
-      {/* Range-first headline */}
-      <View style={[s.hlBox, { marginTop: 22 }]}>
-        <Text style={s.hlLabel}>CALIBRATED VALUATION RANGE</Text>
-        <Text style={s.hlValue}>
-          {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
-          <Text style={s.hlUnit}>  pre-money</Text>
-        </Text>
-        <Text style={[s.hlSub, { marginTop: 6 }]}>Model midpoint: {fmtM(output.blended_valuation)}</Text>
-        <Text style={s.hlSub}>{output.percentile_in_market} · {output.verdict_headline}</Text>
-      </View>
+      {/* Headline: the two numbers an investor actually needs — the calibrated
+          range and what the preparer is asking for. The model midpoint is a
+          derivable detail and lives on the methods page, not here. */}
+      {ask != null ? (
+        <View style={[s.hlGrid, { marginTop: 22 }]}>
+          <View style={s.hlCellRange}>
+            <Text style={[s.hlLabel, { color: C.slate }]}>CALIBRATED VALUATION RANGE</Text>
+            <Text style={s.hlValueSm}>
+              {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
+            </Text>
+            <Text style={[s.hlSub, { marginTop: 6 }]}>
+              pre-money · {vertical} {stage} cohort
+            </Text>
+          </View>
+          <View style={s.hlCellAsk}>
+            <Text style={s.hlLabel}>PREPARER'S ASK</Text>
+            <Text style={s.hlValueSm}>
+              {fmtM(ask)}
+              <Text style={s.hlUnit}>  pre-money</Text>
+            </Text>
+            <Text style={[s.hlSub, { marginTop: 6 }]}>
+              Cohort placement: {askPlacement?.label}
+              {contended != null ? ` · positioned as ${CONTENDED_PLACEMENT_LABELS[contended]}` : ''}
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[s.hlBox, { marginTop: 22 }]}>
+          <Text style={s.hlLabel}>CALIBRATED VALUATION RANGE</Text>
+          <Text style={s.hlValue}>
+            {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
+            <Text style={s.hlUnit}>  pre-money</Text>
+          </Text>
+          {contended != null ? (
+            <Text style={[s.hlSub, { marginTop: 6 }]}>
+              Preparer positions the company: {CONTENDED_PLACEMENT_LABELS[contended]} (no dollar ask stated)
+            </Text>
+          ) : (
+            <Text style={[s.hlSub, { marginTop: 6 }]}>Model midpoint: {fmtM(output.blended_valuation)}</Text>
+          )}
+        </View>
+      )}
 
       {/* Football field — the range in market context */}
       <FootballField output={output} input={input} />
 
       {/* Transaction summary */}
       <SectionHead title="Transaction Details" />
+      {ask != null && (
+        <KVRow label="Preparer's Ask (pre-money)" value={fmtM(ask)} />
+      )}
       <KVRow label="Fundraising Stage"       value={stage} />
       <KVRow label="Instrument"              value={instrument} />
       <KVRow label="Raise Amount"            value={fmtM(input.fundraise.raise_amount)} />
-      <KVRow label="Implied Dilution"        value={fmtPct(output.implied_dilution)} />
+      <KVRow
+        label={`Implied Dilution (at ${atAsk ? "preparer's ask" : 'model midpoint'})`}
+        value={fmtPct(output.implied_dilution)}
+      />
       {output.recommended_safe_cap != null && (
         <KVRow label="Suggested SAFE Cap" value={fmtM(output.recommended_safe_cap)} />
-      )}
-      {input.fundraise.pre_money_valuation_ask != null && (
-        <KVRow label="Preparer's Ask (pre-money)" value={fmtM(input.fundraise.pre_money_valuation_ask)} />
       )}
 
       <PageFooter company={output.company_name} />
@@ -399,20 +545,30 @@ function CoverPage({ output, input, reportContext }: {
 // Page 2: Market Benchmarks + Valuation Methods
 // ---------------------------------------------------------------------------
 
-function MethodsPage({ output }: { output: StartupValuationOutput }) {
+function MethodsPage({ output, input, reportContext }: {
+  output: StartupValuationOutput
+  input: StartupInput
+  reportContext: ReportContext
+}) {
   const applicable = output.method_results.filter(m => m.applicable && m.indicated_value != null)
   const notApplicable = output.method_results.filter(m => !m.applicable)
 
   return (
     <Page size="A4" style={s.page}>
-      {/* Market benchmarks — the distribution the range is calibrated against */}
+      {/* Market benchmarks — the distribution the range is calibrated against,
+          with the preparer's ask slotted in where it sits */}
       <SectionHead title={`Market Benchmarks — ${VERTICAL_LABELS[output.vertical]} ${STAGE_LABELS[output.stage]} cohort`} />
-      <BenchmarkTable output={output} />
+      <BenchmarkTable
+        output={output}
+        ask={input.fundraise.pre_money_valuation_ask}
+        contended={reportContext.contended_placement ?? null}
+      />
 
       <SectionHead title="Valuation Methods" />
       <Text style={{ fontSize: 8.5, color: C.slate, marginBottom: 12, lineHeight: 1.45 }}>
-        The calibrated range on page 1 is derived from the applicable methods below; the model midpoint is
-        their weighted blend. Each method is independently computed from the inputs provided.
+        The calibrated range on page 1 is derived from the applicable methods below; their weighted blend
+        is the model midpoint of {fmtM(output.blended_valuation)} ({output.percentile_in_market}).
+        Model verdict: {output.verdict_headline}. Each method is independently computed from the inputs provided.
       </Text>
 
       {applicable.map(m => (
@@ -476,6 +632,10 @@ function InputsPage({ output, input }: { output: StartupValuationOutput; input: 
       <SectionHead title="Founder Dilution Model" />
       <Text style={{ fontSize: 8.5, color: C.slate, marginBottom: 10, lineHeight: 1.4 }}>
         Projected founder ownership across current and modeled future rounds.
+        {output.dilution_basis === 'preparer_ask'
+          ? ` The current round is priced at the preparer's ask of ${fmtM(output.dilution_basis_pre_money)} pre-money — the deal actually on the table — not the model midpoint.`
+          : ` The current round is priced at the model midpoint of ${fmtM(output.dilution_basis_pre_money)} pre-money (no preparer ask was stated).`}
+        {' '}Future rounds are market projections from cohort benchmarks.
         Standard 10% option pool refresh assumed at each priced round.
       </Text>
       <View style={s.tableHead}>
@@ -616,13 +776,18 @@ const REPRESENTATIONS_TITLE: Record<ReportContext['perspective'], string> = {
   advisor: "Advisor's Notes",
 }
 
-function RepresentationsPage({ output, reportContext }: {
+function RepresentationsPage({ output, input, reportContext }: {
   output: StartupValuationOutput
+  input: StartupInput
   reportContext: ReportContext
 }) {
   const notes = printableNotes(reportContext)
   const contended = reportContext.contended_placement ?? null
   const title = REPRESENTATIONS_TITLE[reportContext.perspective]
+  const ask = input.fundraise.pre_money_valuation_ask
+  const askPlacement = ask != null
+    ? computeModelPlacement(ask, output.benchmark_p25, output.benchmark_p50, output.benchmark_p75, output.benchmark_p95)
+    : null
 
   const placement = computeModelPlacement(
     output.blended_valuation,
@@ -673,6 +838,9 @@ function RepresentationsPage({ output, reportContext }: {
           </Text>
           <Text style={{ fontSize: 8.5, color: C.slate, lineHeight: 1.55 }}>
             Model placement: {placement.label} of {cohort} cohort.
+            {ask != null && askPlacement != null
+              ? ` Preparer's ask: ${fmtM(ask)} (${askPlacement.label} of cohort).`
+              : ''}
             {' '}Preparer contends: {CONTENDED_PLACEMENT_LABELS[contended]}.
             {' '}Basis: {basis}.
             {contentionConsistentWithModel(contended, placement)
@@ -706,11 +874,11 @@ function ValuationDocument({ output, input, reportContext }: {
       subject="Pre-Money Valuation Analysis"
     >
       <CoverPage    output={output} input={input} reportContext={reportContext} />
-      <MethodsPage  output={output} />
+      <MethodsPage  output={output} input={input} reportContext={reportContext} />
       <InputsPage   output={output} input={input} />
       <InputsPage2  output={output} input={input} />
       {showRepresentations && (
-        <RepresentationsPage output={output} reportContext={reportContext} />
+        <RepresentationsPage output={output} input={input} reportContext={reportContext} />
       )}
     </Document>
   )

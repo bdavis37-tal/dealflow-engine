@@ -167,6 +167,11 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         <p className="text-4xl font-bold text-slate-100">
           {fmt(valuation_range_low)} – {fmt(valuation_range_high)}
         </p>
+        {output.dilution_basis === 'preparer_ask' && (
+          <p className="text-purple-300 text-sm mt-2 font-medium">
+            Preparer's ask: {fmt(output.dilution_basis_pre_money)} pre-money
+          </p>
+        )}
         <p className="text-slate-400 text-sm mt-2">Model midpoint: {fmt(blended_valuation)}</p>
         {output.ai_modifier_applied && output.blended_before_ai != null && (
           <p className="text-slate-500 text-xs mt-1">Midpoint with standard (non-AI) parameters: {fmt(output.blended_before_ai)}</p>
@@ -213,7 +218,9 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
           <p className={`text-lg font-bold ${implied_dilution > 0.25 ? 'text-amber-400' : 'text-slate-100'}`}>
             {fmtPct(implied_dilution)}
           </p>
-          <p className="text-2xs text-slate-600 mt-0.5">Raise / Post-money</p>
+          <p className="text-2xs text-slate-600 mt-0.5">
+            Raise / Post-money at {output.dilution_basis === 'preparer_ask' ? "preparer's ask" : 'model midpoint'}
+          </p>
         </div>
         {recommended_safe_cap && (
           <div className="bg-purple-900/20 border border-purple-700/30 rounded-lg p-3">
@@ -292,7 +299,7 @@ function MethodBreakdownPanel({ methods }: { methods: ValuationMethodResult[] })
   )
 }
 
-function DilutionPanel({ scenarios }: { scenarios: DilutionScenario[] }) {
+function DilutionPanel({ scenarios, output }: { scenarios: DilutionScenario[]; output: StartupValuationOutput }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
       <div className="flex items-center gap-2 mb-5">
@@ -301,6 +308,8 @@ function DilutionPanel({ scenarios }: { scenarios: DilutionScenario[] }) {
       </div>
       <p className="text-xs text-slate-500 mb-4">
         Projected founder ownership across current and typical future rounds.
+        Current round priced at {output.dilution_basis === 'preparer_ask' ? "the preparer's ask" : 'the model midpoint'} of {fmt(output.dilution_basis_pre_money)};
+        future rounds are market projections from cohort benchmarks.
         Includes option pool refresh at each priced round (standard 10% pre-money).
       </p>
 
@@ -526,7 +535,7 @@ export default function StartupDashboard({
       {/* Scorecard + Dilution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ScorecardPanel flags={output.investor_scorecard} />
-        <DilutionPanel scenarios={output.dilution_scenarios} />
+        <DilutionPanel scenarios={output.dilution_scenarios} output={output} />
       </div>
 
       {/* SAFE details */}

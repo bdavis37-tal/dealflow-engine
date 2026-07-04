@@ -1648,6 +1648,49 @@ class TestS2SAFEConversion:
         assert "proxy cap" in out.safe_conversion.note
 
 
+class TestDealMechanicsBasis:
+    """Deal mechanics price at the preparer's ask when provided; the model
+    midpoint is only the fallback. The blend/range never depend on the ask."""
+
+    def test_no_ask_uses_model_midpoint(self):
+        out = run_startup_valuation(_make_input())
+        assert out.dilution_basis == "model_midpoint"
+        assert out.dilution_basis_pre_money == pytest.approx(out.blended_valuation, abs=0.01)
+        assert out.dilution_scenarios[0].pre_money == pytest.approx(out.blended_valuation, abs=0.01)
+
+    def test_ask_prices_current_round_and_implied_dilution(self):
+        out = run_startup_valuation(_make_input(**{"fundraise.pre_money_valuation_ask": 15.0}))
+        assert out.dilution_basis == "preparer_ask"
+        assert out.dilution_basis_pre_money == pytest.approx(15.0)
+        current = out.dilution_scenarios[0]
+        assert current.pre_money == pytest.approx(15.0)
+        assert out.implied_dilution == pytest.approx(3.0 / 18.0, abs=1e-4)
+
+    def test_blend_and_range_are_invariant_to_ask(self):
+        base = run_startup_valuation(_make_input())
+        asked = run_startup_valuation(_make_input(**{"fundraise.pre_money_valuation_ask": 40.0}))
+        assert asked.blended_valuation == pytest.approx(base.blended_valuation)
+        assert asked.valuation_range_low == pytest.approx(base.valuation_range_low)
+        assert asked.valuation_range_high == pytest.approx(base.valuation_range_high)
+
+    def test_projected_rounds_stay_market_anchored(self):
+        """Future rounds are market projections — an aggressive ask must not
+        drag the projected next round up with it."""
+        base = run_startup_valuation(_make_input())
+        asked = run_startup_valuation(_make_input(**{"fundraise.pre_money_valuation_ask": 200.0}))
+        base_next = next(s for s in base.dilution_scenarios if "projected" in s.round_label)
+        asked_next = next(s for s in asked.dilution_scenarios if "projected" in s.round_label)
+        assert asked_next.pre_money == pytest.approx(base_next.pre_money, abs=0.01)
+
+    def test_above_market_ask_flags_down_round(self):
+        out = run_startup_valuation(_make_input(**{"fundraise.pre_money_valuation_ask": 200.0}))
+        assert any("down round" in w.lower() for w in out.warnings)
+
+    def test_basis_documented_in_computation_notes(self):
+        out = run_startup_valuation(_make_input(**{"fundraise.pre_money_valuation_ask": 15.0}))
+        assert any("preparer's ask" in n for n in out.computation_notes)
+
+
 class TestS3AIPremium:
     """S-3 (emergent model): defense_tech frozen; premium emerges from
     parameter-level calibration; range brackets blended."""

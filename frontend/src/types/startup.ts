@@ -207,6 +207,14 @@ export interface StartupValuationOutput {
   recommended_safe_cap: number | null
   implied_dilution: number
 
+  /**
+   * Basis the deal mechanics (implied dilution, current-round dilution, SAFE
+   * cap fallback) are priced at: the preparer's ask when one was provided,
+   * else the model midpoint. The blend/range never depend on the ask.
+   */
+  dilution_basis: 'preparer_ask' | 'model_midpoint'
+  dilution_basis_pre_money: number
+
   method_results: ValuationMethodResult[]
 
   benchmark_p25: number
