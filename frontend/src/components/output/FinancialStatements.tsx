@@ -15,6 +15,8 @@ function Row({
   indent,
   isPercentage,
   highlight,
+  displayOverrides,
+  cellTitles,
 }: {
   label: string
   values: number[]
@@ -22,6 +24,10 @@ function Row({
   indent?: boolean
   isPercentage?: boolean
   highlight?: boolean
+  /** Per-cell display string (e.g. "NM") — overrides numeric formatting when set */
+  displayOverrides?: (string | null)[]
+  /** Per-cell tooltip (title attribute) */
+  cellTitles?: (string | null)[]
 }) {
   const fmt = (v: number) => isPercentage ? formatPercentage(v, 1, true) : formatAccounting(v)
 
@@ -37,25 +43,39 @@ function Row({
       `}>
         {label}
       </td>
-      {values.map((v, i) => (
-        <td key={i} className={`
-          py-2 px-3 text-xs text-right tabular-nums
-          ${bold ? 'font-semibold text-slate-200' : 'text-slate-300'}
-          ${v < 0 ? 'text-red-300' : ''}
-          ${highlight ? 'font-bold' : ''}
-        `}>
-          {fmt(v)}
-        </td>
-      ))}
+      {values.map((v, i) => {
+        const override = displayOverrides?.[i] ?? null
+        return (
+          <td
+            key={i}
+            title={cellTitles?.[i] ?? undefined}
+            className={`
+              py-2 px-3 text-xs text-right tabular-nums
+              ${bold ? 'font-semibold text-slate-200' : 'text-slate-300'}
+              ${override != null ? 'text-slate-500' : v < 0 ? 'text-red-300' : ''}
+              ${highlight ? 'font-bold' : ''}
+            `}
+          >
+            {override ?? fmt(v)}
+          </td>
+        )
+      })}
     </tr>
   )
 }
+
+const NM_EXPLANATION =
+  'standalone EPS ≤ 0 — percentage not meaningful; verdict driven by EPS delta'
 
 export default function FinancialStatements({ incomeStatement, mode }: FinancialStatementsProps) {
   const [open, setOpen] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
   const isDeep = mode === 'deep'
   const hasDetail = incomeStatement.length > 0 && incomeStatement[0].acquirer_revenue > 0
+  const hasIntegrationCosts = incomeStatement.some(y => y.integration_costs > 0)
+  const hasInterestDetail = incomeStatement.some(
+    y => y.existing_interest !== 0 || y.foregone_cash_interest !== 0,
+  )
 
   return (
     <div>
@@ -120,12 +140,20 @@ export default function FinancialStatements({ incomeStatement, mode }: Financial
                 <Row label="Cost of Goods Sold" values={incomeStatement.map(y => -y.cogs)} indent />
                 <Row label="Gross Profit" values={incomeStatement.map(y => y.gross_profit)} bold highlight />
 
-                {/* SG&A with synergy detail */}
+                {/* SG&A with synergy / integration-cost detail */}
                 {showDetail && hasDetail && incomeStatement.some(y => y.synergy_cost > 0) ? (
                   <>
-                    <Row label="SG&A (before synergies)" values={incomeStatement.map(y => -(y.sga + y.synergy_cost))} indent />
+                    <Row label="SG&A (before synergies)" values={incomeStatement.map(y => -(y.sga + y.synergy_cost - y.integration_costs))} indent />
                     <Row label="Cost Synergies" values={incomeStatement.map(y => y.synergy_cost)} indent />
+                    {hasIntegrationCosts && (
+                      <Row label="Integration costs" values={incomeStatement.map(y => -y.integration_costs)} indent />
+                    )}
                     <Row label="SG&A (net)" values={incomeStatement.map(y => -y.sga)} bold />
+                  </>
+                ) : hasIntegrationCosts ? (
+                  <>
+                    <Row label="SG&A (excl. integration costs)" values={incomeStatement.map(y => -(y.sga - y.integration_costs))} indent />
+                    <Row label="Integration costs" values={incomeStatement.map(y => -y.integration_costs)} indent />
                   </>
                 ) : (
                   <Row label="SG&A" values={incomeStatement.map(y => -y.sga)} indent />
@@ -145,7 +173,22 @@ export default function FinancialStatements({ incomeStatement, mode }: Financial
                 )}
 
                 <Row label="EBIT" values={incomeStatement.map(y => y.ebit)} bold />
-                <Row label="Interest Expense" values={incomeStatement.map(y => -y.interest_expense)} indent />
+
+                {/* Interest expense — broken out when the engine reports components */}
+                {hasInterestDetail ? (
+                  <>
+                    <Row label="Acquisition debt interest" values={incomeStatement.map(y => -y.acquisition_interest)} indent />
+                    {incomeStatement.some(y => y.existing_interest !== 0) && (
+                      <Row label="Existing interest (combined)" values={incomeStatement.map(y => -y.existing_interest)} indent />
+                    )}
+                    {incomeStatement.some(y => y.foregone_cash_interest !== 0) && (
+                      <Row label="Foregone interest on cash" values={incomeStatement.map(y => -y.foregone_cash_interest)} indent />
+                    )}
+                    <Row label="Total Interest Expense" values={incomeStatement.map(y => -y.interest_expense)} bold />
+                  </>
+                ) : (
+                  <Row label="Interest Expense" values={incomeStatement.map(y => -y.interest_expense)} indent />
+                )}
 
                 {/* Transaction costs as separate line in detail view */}
                 {showDetail && hasDetail && incomeStatement.some(y => y.transaction_costs > 0) && (
@@ -168,11 +211,19 @@ export default function FinancialStatements({ incomeStatement, mode }: Financial
                 <Row
                   label="Accretion / (Dilution) %"
                   values={incomeStatement.map(y => y.accretion_dilution_pct)}
+                  displayOverrides={incomeStatement.map(y => y.accretion_is_nm ? 'NM' : null)}
+                  cellTitles={incomeStatement.map(y => y.accretion_is_nm ? NM_EXPLANATION : null)}
                   bold highlight isPercentage
                 />
               </tbody>
             </table>
           </div>
+
+          {incomeStatement.some(y => y.accretion_is_nm) && (
+            <p className="mt-2 text-2xs text-slate-500">
+              NM: {NM_EXPLANATION}
+            </p>
+          )}
         </div>
       )}
     </div>

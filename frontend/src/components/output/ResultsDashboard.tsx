@@ -17,6 +17,7 @@ import CreditProfile from './CreditProfile'
 import ImpliedValuationCard from './ImpliedValuationCard'
 import ReturnsDetail from './ReturnsDetail'
 import { checkAIStatus } from '../../lib/ai-api'
+import { formatEPS, formatPercentage } from '../../lib/formatters'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
@@ -44,6 +45,8 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
     standaloneEPS: yr.acquirer_standalone_eps,
     adPct: yr.accretion_dilution_pct,
   }))
+
+  const year1 = output.pro_forma_income_statement[0]
 
   return (
     <div className="animate-fade-in space-y-10 pb-24">
@@ -108,7 +111,10 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
 
       {/* Sources & Uses of Funds — fundamental deal presentation element */}
       {output.sources_and_uses && (
-        <SourcesAndUsesTable data={output.sources_and_uses} />
+        <SourcesAndUsesTable
+          data={output.sources_and_uses}
+          balancingPlug={output.balance_sheet_at_close.balancing_plug}
+        />
       )}
 
       {/* Implied Valuation Metrics */}
@@ -132,12 +138,12 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2a3a" />
               <XAxis dataKey="year" tick={{ fill: '#64748b', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => `$${v.toFixed(2)}`} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(v: number) => formatEPS(v)} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#0d1526', border: '1px solid #1e2a3a', borderRadius: 8 }}
                 labelStyle={{ color: '#94a3b8' }}
                 formatter={(value: number, name: string) => [
-                  `$${value.toFixed(2)}`,
+                  formatEPS(value),
                   name === 'proFormaEPS' ? 'Pro Forma EPS' : 'Standalone EPS',
                 ]}
               />
@@ -170,7 +176,30 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
               <div className={`w-6 h-0.5 border-t-2 ${output.deal_verdict === 'green' ? 'border-green-500' : 'border-red-500'}`} />
               Pro Forma EPS
             </div>
+            {year1 && (
+              <div className="flex items-center gap-1">
+                <span>|</span>
+                <span>Year 1:</span>
+                {year1.accretion_is_nm ? (
+                  <span
+                    className="text-slate-400 cursor-help"
+                    title="Standalone EPS ≤ 0 — percentage not meaningful; verdict driven by EPS delta"
+                  >
+                    NM
+                  </span>
+                ) : (
+                  <span className={year1.accretion_dilution_pct >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {formatPercentage(year1.accretion_dilution_pct, 1, true)}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
+          {year1?.accretion_is_nm && (
+            <p className="mt-1.5 text-center text-2xs text-slate-600">
+              Standalone EPS ≤ 0 — accretion percentage is not meaningful; the verdict is driven by the dollar EPS delta.
+            </p>
+          )}
         </div>
       </div>
 
@@ -235,9 +264,9 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
             {showNotes ? 'Hide' : 'Show'} model notes ({output.computation_notes.length})
           </button>
           {showNotes && (
-            <ul className="mt-2 space-y-1">
+            <ul className="mt-2 space-y-1 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 animate-fade-in">
               {output.computation_notes.map((note, i) => (
-                <li key={i} className="text-xs text-slate-500">- {note}</li>
+                <li key={i} className="font-mono text-2xs text-slate-500 leading-relaxed">- {note}</li>
               ))}
             </ul>
           )}

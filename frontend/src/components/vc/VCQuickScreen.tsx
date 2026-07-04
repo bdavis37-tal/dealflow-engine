@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react'
-import type { VCDealInput, VCVertical, VCStage, FundProfile } from '../../types/vc'
+import type { VCDealInput, VCVertical, VCStage, FundProfile, LiquidationPreference, PreferenceType } from '../../types/vc'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS, DEFAULT_DILUTION_ASSUMPTIONS } from '../../types/vc'
 
 interface Props {
@@ -112,6 +112,45 @@ function PctInput({
   )
 }
 
+/** Numeric input that allows blank ⇒ undefined (for truly optional fields). */
+function OptNumInput({
+  value,
+  onChange,
+  suffix,
+  placeholder = '',
+}: {
+  value: number | undefined
+  onChange: (v: number | undefined) => void
+  suffix?: string
+  placeholder?: string
+}) {
+  const [focused, setFocused] = useState(false)
+  const [raw, setRaw] = useState('')
+
+  function commit(text: string) {
+    const trimmed = text.trim()
+    if (trimmed === '') { onChange(undefined); return }
+    const parsed = parseFloat(trimmed)
+    if (!isNaN(parsed)) onChange(parsed)
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="text"
+        inputMode="decimal"
+        value={focused ? raw : (value ?? '')}
+        onFocus={() => { setFocused(true); setRaw(value != null ? String(value) : '') }}
+        onBlur={() => { setFocused(false); commit(raw) }}
+        onChange={e => { setRaw(e.target.value); commit(e.target.value) }}
+        placeholder={placeholder}
+        className="flex-1 min-w-0 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+      />
+      {suffix && <span className="text-slate-400 text-sm w-4">{suffix}</span>}
+    </div>
+  )
+}
+
 function Select<T extends string>({
   value,
   onChange,
@@ -149,10 +188,39 @@ const EXIT_YEAR_OPTIONS = [3, 4, 5, 6, 7, 8, 10, 12].map(y => ({
   label: `${y} years`,
 }))
 
+const PREFERENCE_TYPE_OPTIONS: { value: PreferenceType; label: string }[] = [
+  { value: 'non_participating', label: 'Non-participating' },
+  { value: 'participating', label: 'Participating' },
+  { value: 'participating_capped', label: 'Participating (capped)' },
+]
+
+function newLiquidationRow(seniority: number): LiquidationPreference {
+  return {
+    share_class: '',
+    invested_amount: 0,
+    preference_multiple: 1.0,
+    preference_type: 'non_participating',
+    anti_dilution: 'none',
+    seniority,
+  }
+}
+
 export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isLoading, error }: Props) {
   const [showDilution, setShowDilution] = useState(false)
+  const [showStack, setShowStack] = useState((deal.liquidation_stack ?? []).length > 0)
 
   const dilution = deal.dilution ?? DEFAULT_DILUTION_ASSUMPTIONS
+  const stack = deal.liquidation_stack ?? []
+
+  function updateStackRow(idx: number, updates: Partial<LiquidationPreference>) {
+    onUpdate({ liquidation_stack: stack.map((row, i) => (i === idx ? { ...row, ...updates } : row)) })
+  }
+  function addStackRow() {
+    onUpdate({ liquidation_stack: [...stack, newLiquidationRow(stack.length + 1)] })
+  }
+  function removeStackRow(idx: number) {
+    onUpdate({ liquidation_stack: stack.filter((_, i) => i !== idx) })
+  }
 
   // Live ownership preview
   const entryPct = deal.post_money_valuation && deal.check_size
@@ -349,6 +417,106 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
                   />
                 </Row>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Cap Table / Liquidation Stack (collapsible, optional) */}
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+          <button
+            onClick={() => setShowStack(v => !v)}
+            className="w-full flex items-center justify-between"
+          >
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Cap Table / Liquidation Stack
+            </h3>
+            <span className="text-xs text-slate-500">
+              {showStack ? '▲ Hide' : `▼ Edit (optional — enables waterfall${stack.length > 0 ? `, ${stack.length} classes` : ''})`}
+            </span>
+          </button>
+
+          {showStack && (
+            <div className="mt-4 space-y-3">
+              <p className="text-xs text-slate-500">
+                Add existing preferred classes to model the liquidation waterfall.
+                Ownership % is the as-converted fully diluted ownership of each class;
+                if blank, a dollar-proportion approximation is used (flagged in the results).
+              </p>
+              {stack.map((row, i) => (
+                <div key={i} className="bg-slate-900/40 border border-slate-800 rounded-lg p-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <Row label="Share Class">
+                      <input
+                        type="text"
+                        value={row.share_class}
+                        onChange={e => updateStackRow(i, { share_class: e.target.value })}
+                        placeholder="e.g. Series A Preferred"
+                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+                      />
+                    </Row>
+                    <Row label="Invested">
+                      <CurrencyInput
+                        value={row.invested_amount}
+                        onChange={v => updateStackRow(i, { invested_amount: v })}
+                      />
+                    </Row>
+                    <Row label="Pref. Multiple" hint="1.0 = 1x preference">
+                      <OptNumInput
+                        value={row.preference_multiple}
+                        onChange={v => updateStackRow(i, { preference_multiple: v ?? 1.0 })}
+                        suffix="x"
+                      />
+                    </Row>
+                    <Row label="Preference Type">
+                      <Select
+                        value={row.preference_type}
+                        onChange={v => updateStackRow(i, { preference_type: v })}
+                        options={PREFERENCE_TYPE_OPTIONS}
+                      />
+                    </Row>
+                    {row.preference_type === 'participating_capped' && (
+                      <Row label="Participation Cap" hint="Multiple of invested (blank = 3x)">
+                        <OptNumInput
+                          value={row.participation_cap}
+                          onChange={v => updateStackRow(i, { participation_cap: v != null && v > 0 ? v : undefined })}
+                          suffix="x"
+                          placeholder="3"
+                        />
+                      </Row>
+                    )}
+                    <Row label="Seniority" hint="1 = most senior">
+                      <OptNumInput
+                        value={row.seniority}
+                        onChange={v => updateStackRow(i, { seniority: Math.max(1, Math.round(v ?? 1)) })}
+                      />
+                    </Row>
+                    <Row label="Ownership % (optional)" hint="As-converted ownership; if blank, dollar-proportion approximation is used">
+                      <OptNumInput
+                        value={row.ownership_pct != null ? row.ownership_pct * 100 : undefined}
+                        onChange={v => updateStackRow(i, {
+                          ownership_pct: v != null ? Math.min(Math.max(v, 0), 100) / 100 : undefined,
+                        })}
+                        suffix="%"
+                        placeholder="blank = est."
+                      />
+                    </Row>
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      onClick={() => removeStackRow(i)}
+                      className="text-xs text-slate-600 hover:text-red-400 transition-colors"
+                    >
+                      remove class
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={addStackRow}
+                className="w-full py-2 border border-dashed border-slate-700 rounded-lg text-xs text-slate-400 hover:text-emerald-400 hover:border-emerald-700/50 transition-colors"
+              >
+                + Add share class
+              </button>
             </div>
           )}
         </div>

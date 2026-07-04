@@ -19,5 +19,38 @@
     "consumer": 0.4,
     "deep_tech_hardware": 0.4,
     "marketplace": 0.3
+  },
+  "parameter_matrix": {
+    "_comment": "Inputs-up AI-native calibration. Applied per-method BEFORE blending, only when is_ai_native=true, scaled by ai_native_score, and only for verticals NOT in frozen_on (their benchmarks already price AI).",
+    "standard": {
+      "scorecard_weights": null,
+      "berkus_cap_apportionment": null,
+      "rfs_step_value_overrides": {},
+      "arr_multiple_uplift": 0.0
+    },
+    "ai_native": {
+      "scorecard_weights": {
+        "management_team": 0.25,
+        "market_size": 0.20,
+        "product_technology": 0.25,
+        "competitive_environment": 0.15,
+        "marketing_sales_channels": 0.05,
+        "additional_financing_needed": 0.05,
+        "other_factors": 0.05
+      },
+      "berkus_cap_apportionment": {
+        "sound_idea": 0.55,
+        "prototype": 1.05,
+        "quality_management": 0.65,
+        "strategic_relationships": 0.90,
+        "product_rollout": 0.35
+      },
+      "rfs_step_value_overrides": {
+        "Technology": 0.50,
+        "Competition": 0.50,
+        "Litigation": 0.50
+      },
+      "arr_multiple_uplift_source": "vertical_premiums"
+    }
   }
 }

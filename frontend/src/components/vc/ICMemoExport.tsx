@@ -147,10 +147,16 @@ export default function ICMemoExport({ memo, fundName }: Props) {
                 <MemoField label="Entry Ownership" value={pct(memo.entry_ownership_pct)} highlight />
                 <MemoField label="Exit Ownership (est.)" value={pct(memo.ownership_at_exit)} />
                 <MemoField label="Total Dilution" value={pct(memo.total_dilution_pct)} />
-                <MemoField label="Expected Value" value={`$${fmt(memo.expected_value)}M`} highlight />
                 <MemoField
-                  label="Fund Returner Threshold"
+                  label="Expected Value"
+                  value={`$${fmt(memo.expected_value)}M`}
+                  sub="Probability-weighted, incl. failure case"
+                  highlight
+                />
+                <MemoField
+                  label="Fund Returner Threshold (gross)"
                   value={`${memo.fund_returner_threshold >= 1000 ? `$${(memo.fund_returner_threshold/1000).toFixed(1)}B` : `$${memo.fund_returner_threshold.toFixed(0)}M`}`}
+                  sub="Exit EV to return 1x fund before fees & carry"
                 />
                 <MemoField
                   label="Base Case Contribution"
@@ -167,7 +173,7 @@ export default function ICMemoExport({ memo, fundName }: Props) {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-700">
-                      {['Scenario', 'Prob.', 'Exit EV', 'MOIC', 'IRR', 'Proceeds', 'Fund Contrib.'].map(h => (
+                      {['Scenario', 'Prob.', 'Exit EV', 'Gross MOIC', 'Gross IRR', 'Gross Proceeds', 'Fund Contrib.'].map(h => (
                         <th key={h} className={`py-2 text-slate-500 text-xs font-medium ${h === 'Scenario' ? 'text-left' : 'text-right'}`}>{h}</th>
                       ))}
                     </tr>
@@ -254,23 +260,23 @@ function buildFinancialText(memo: ICMemoFinancials, fundName: string): string {
     `- Revenue Growth Rate: ${pct(memo.revenue_growth_rate)}`,
     `- Gross Margin: ${pct(memo.gross_margin)}`,
     memo.burn_rate_monthly > 0 ? `- Monthly Burn: $${fmt(memo.burn_rate_monthly)}M` : null,
-    memo.runway_months ? `- Runway: ${memo.runway_months.toFixed(0)} months` : null,
+    memo.runway_months != null ? `- Runway: ${memo.runway_months.toFixed(0)} months` : null,
     memo.arr_multiple_at_entry ? `- Entry ARR Multiple: ${memo.arr_multiple_at_entry.toFixed(0)}x (benchmark: ${memo.stage_median_arr_multiple?.toFixed(0)}x)` : null,
     `- Valuation vs. Market: ${memo.valuation_vs_benchmark}`,
     ``,
     `OWNERSHIP & RETURNS`,
     `- Entry Ownership: ${pct(memo.entry_ownership_pct)}`,
     `- Expected Exit Ownership: ${pct(memo.ownership_at_exit)} (after ${pct(memo.total_dilution_pct)} dilution)`,
-    `- Fund Returner Threshold: ${memo.fund_returner_threshold >= 1000 ? `$${(memo.fund_returner_threshold/1000).toFixed(1)}B` : `$${memo.fund_returner_threshold.toFixed(0)}M`} exit needed to return 1x fund`,
+    `- Fund Returner Threshold (gross): ${memo.fund_returner_threshold >= 1000 ? `$${(memo.fund_returner_threshold/1000).toFixed(1)}B` : `$${memo.fund_returner_threshold.toFixed(0)}M`} exit needed to return 1x fund before fees & carry`,
     `- Base Case Fund Contribution: ${fmt(memo.fund_contribution_base, 2)}x`,
     ``,
-    `RETURN SCENARIOS`,
+    `RETURN SCENARIOS (gross of fees & carry)`,
     `  Scenario  | Prob.   | Exit EV      | MOIC  | IRR   | Proceeds`,
     ...memo.scenarios.map(s =>
       `  ${s.label.padEnd(9)} | ${(s.probability * 100).toFixed(0).padStart(5)}%  | ${fmtEV(s.exit_enterprise_value).padStart(12)} | ${fmt(s.gross_moic).padStart(5)}x | ${(s.gross_irr * 100).toFixed(0).padStart(4)}% | $${fmt(s.gross_proceeds_to_fund)}M`
     ),
     ``,
-    `Expected Value (probability-weighted): $${fmt(memo.expected_value)}M`,
+    `Expected Value (probability-weighted, incl. failure case): $${fmt(memo.expected_value)}M`,
     ``,
     `FINANCIAL SUMMARY`,
     memo.financial_summary_text,

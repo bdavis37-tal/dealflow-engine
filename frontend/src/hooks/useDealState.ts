@@ -40,6 +40,7 @@ const defaultState: DealState = {
     debt_tranches: [],
     transaction_fees_pct: 0.02,
     advisory_fees: 0,
+    cash_yield: 0.043,
   },
   ppa: {
     asset_writeup: 0,
