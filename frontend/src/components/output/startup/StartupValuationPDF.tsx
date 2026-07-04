@@ -1,18 +1,24 @@
 /**
  * StartupValuationPDF — investor-facing PDF export.
  *
- * Renders a clean, factual valuation report suitable for sharing with investors.
- * No internal flags, signals, or editorial commentary — only methods, calculations,
- * metrics, and inputs.
+ * Range-first, audit-grade presentation: the calibrated valuation range is the
+ * deliverable (banker "football field" format); the blended point estimate is
+ * demoted to "model midpoint". Preparer advocacy is quarantined into a clearly
+ * labeled representations section that the model provably does not incorporate
+ * — report context (perspective, notes) lives only in frontend state and is
+ * never sent to the valuation API.
  *
  * Uses @react-pdf/renderer for in-browser PDF generation.
  */
-import { Document, Page, Text, View, StyleSheet, PDFDownloadLink } from '@react-pdf/renderer'
-import type { StartupValuationOutput, StartupInput } from '../../../types/startup'
+import { Fragment } from 'react'
+import { Document, Page, Text, View, StyleSheet, PDFDownloadLink, Svg, Rect, Line } from '@react-pdf/renderer'
+import type { StartupValuationOutput, StartupInput, ReportContext, PreparerNote } from '../../../types/startup'
 import {
   VERTICAL_LABELS, STAGE_LABELS, GEOGRAPHY_LABELS,
   INSTRUMENT_LABELS, PRODUCT_STAGE_LABELS,
+  PERSPECTIVE_LABELS, NOTE_ANCHOR_LABELS, CONTENDED_PLACEMENT_LABELS,
 } from '../../../types/startup'
+import { computeModelPlacement, contentionConsistentWithModel } from './placementUtils'
 import { FileDown } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -30,6 +36,11 @@ function fmtPct(v: number): string {
 
 function fmtMultiple(v: number): string {
   return `${v.toFixed(1)}×`
+}
+
+/** Notes that actually carry a claim — empty drafts are never printed. */
+function printableNotes(ctx: ReportContext): PreparerNote[] {
+  return ctx.notes.filter(n => n.claim.trim().length > 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -65,10 +76,11 @@ const s = StyleSheet.create({
   row:          { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: C.rule },
   rowLabel:     { fontSize: 9, color: C.mid, flex: 1 },
   rowValue:     { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.ink, textAlign: 'right' },
-  // Highlight box
-  hlBox:        { backgroundColor: C.accentLt, borderRadius: 4, padding: 12, marginBottom: 12 },
-  hlLabel:      { fontSize: 8, color: C.accent, marginBottom: 4 },
+  // Highlight box (range-first headline)
+  hlBox:        { backgroundColor: C.accentLt, borderRadius: 4, padding: 14, marginBottom: 12 },
+  hlLabel:      { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.accent, letterSpacing: 1, marginBottom: 5 },
   hlValue:      { fontSize: 22, fontFamily: 'Helvetica-Bold', color: C.ink },
+  hlUnit:       { fontSize: 10, fontFamily: 'Helvetica', color: C.slate },
   hlSub:        { fontSize: 8, color: C.slate, marginTop: 3 },
   // Method card
   methodCard:   { borderWidth: 1, borderColor: C.rule, borderRadius: 4, padding: 10, marginBottom: 8 },
@@ -82,6 +94,20 @@ const s = StyleSheet.create({
   tableCell:    { fontSize: 8.5, color: C.ink, flex: 1 },
   tableCellHd:  { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.mid, textTransform: 'uppercase', flex: 1 },
   tableRight:   { textAlign: 'right' },
+  // Representations
+  represBox:    { borderWidth: 1, borderColor: C.rule, borderLeftWidth: 3, borderLeftColor: C.accent, borderRadius: 3, padding: 10, marginBottom: 8, backgroundColor: C.bg },
+  represHead:   { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.ink, marginBottom: 4 },
+  represClaim:  { fontSize: 8.5, color: C.slate, lineHeight: 1.5 },
+  represEvid:   { fontSize: 8, color: C.mid, marginTop: 4 },
+  represEvidNone:{ fontSize: 8, color: C.light, marginTop: 4, fontFamily: 'Helvetica-Oblique' },
+  disclBox:     { borderWidth: 1, borderColor: C.rule, borderRadius: 3, padding: 10, marginBottom: 14, backgroundColor: C.bg },
+  // Chart text
+  chartLabel:   { position: 'absolute', fontSize: 7, color: C.slate },
+  chartValue:   { position: 'absolute', fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.ink, textAlign: 'right' },
+  chartBench:   { position: 'absolute', fontSize: 6, color: C.light, textAlign: 'center' },
+  legendRow:    { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
+  legendItem:   { flexDirection: 'row', alignItems: 'center', marginRight: 14, marginBottom: 2 },
+  legendText:   { fontSize: 6.5, color: C.mid, marginLeft: 4 },
   // Footer
   footer:       { position: 'absolute', bottom: 28, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between' },
   footerText:   { fontSize: 7, color: C.light },
@@ -109,63 +135,19 @@ function SectionHead({ title }: { title: string }) {
   )
 }
 
-function PageFooter({ company, page }: { company: string; page: number }) {
+function PageFooter({ company }: { company: string }) {
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   return (
     <View style={s.footer} fixed>
       <Text style={s.footerText}>{company} — Valuation Report · {date}</Text>
-      <Text style={s.footerText}>Dealflow Engine  ·  Page {page}</Text>
+      <Text style={s.footerText} render={({ pageNumber }) => `Dealflow Engine  ·  Page ${pageNumber}`} />
     </View>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Page 1: Cover + Valuation Summary
-// ---------------------------------------------------------------------------
-
-function CoverPage({ output, input }: { output: StartupValuationOutput; input: StartupInput }) {
-  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-  const stage = STAGE_LABELS[output.stage]
-  const vertical = VERTICAL_LABELS[output.vertical]
-  const geo = GEOGRAPHY_LABELS[input.fundraise.geography]
-  const instrument = INSTRUMENT_LABELS[input.fundraise.instrument]
-
+function BenchmarkTable({ output }: { output: StartupValuationOutput }) {
   return (
-    <Page size="A4" style={s.page}>
-      {/* Accent bar */}
-      <View style={s.coverAccent} />
-
-      {/* Company name */}
-      <Text style={s.coverTitle}>{output.company_name}</Text>
-      <Text style={s.coverSub}>Pre-Money Valuation Analysis — {stage} Round</Text>
-      <Text style={s.coverSub}>{vertical} · {geo}</Text>
-      <Text style={s.coverMeta}>Prepared {date} · Dealflow Engine</Text>
-
-      {/* Blended value highlight */}
-      <View style={[s.hlBox, { marginTop: 28 }]}>
-        <Text style={s.hlLabel}>BLENDED PRE-MONEY VALUATION</Text>
-        <Text style={s.hlValue}>{fmtM(output.blended_valuation)}</Text>
-        <Text style={s.hlSub}>
-          Range: {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
-          {'   ·   '}{output.percentile_in_market}
-        </Text>
-      </View>
-
-      {/* Transaction summary */}
-      <SectionHead title="Transaction Details" />
-      <KVRow label="Fundraising Stage"       value={stage} />
-      <KVRow label="Instrument"              value={instrument} />
-      <KVRow label="Raise Amount"            value={fmtM(input.fundraise.raise_amount)} />
-      <KVRow label="Implied Dilution"        value={fmtPct(output.implied_dilution)} />
-      {output.recommended_safe_cap != null && (
-        <KVRow label="Suggested SAFE Cap" value={fmtM(output.recommended_safe_cap)} />
-      )}
-      {input.fundraise.pre_money_valuation_ask != null && (
-        <KVRow label="Founder Ask (pre-money)" value={fmtM(input.fundraise.pre_money_valuation_ask)} />
-      )}
-
-      {/* Market benchmarks */}
-      <SectionHead title="Market Benchmarks — " />
+    <>
       <View style={s.tableHead}>
         <Text style={s.tableCellHd}>Percentile</Text>
         <Text style={[s.tableCellHd, s.tableRight]}>Pre-Money Valuation</Text>
@@ -181,14 +163,240 @@ function CoverPage({ output, input }: { output: StartupValuationOutput; input: S
           <Text style={[s.tableCell, s.tableRight]}>{fmtM(r.val)}</Text>
         </View>
       ))}
+    </>
+  )
+}
 
-      <PageFooter company={output.company_name} page={1} />
+// ---------------------------------------------------------------------------
+// Football field chart (SVG primitives + absolutely positioned text overlays).
+//
+// Note on the installed @react-pdf/renderer 4.5.1 API: SVG <Text> only types
+// SVGPresentationAttributes (no fontSize control), so all chart labels are
+// regular Text nodes absolutely positioned over the Svg — same visual result,
+// full typographic control, and it typechecks.
+// ---------------------------------------------------------------------------
+
+const CHART_W = 499            // A4 width 595 − 2×48 padding
+const ROW_H = 30               // per-method row: label line + bar
+const TOP_PAD = 14             // room for gridline percentile labels
+const AXIS_H = 16              // benchmark $ values under the plot
+
+interface FieldRow {
+  label: string
+  low: number
+  high: number
+  indicated: number
+}
+
+function FootballField({ output, input }: { output: StartupValuationOutput; input: StartupInput }) {
+  const rows: FieldRow[] = output.method_results
+    .filter(m => m.applicable && m.indicated_value != null)
+    .map(m => ({
+      label: m.method_label,
+      // Fall back to ±20% of the indicated value when a method has no range.
+      low: m.value_low ?? (m.indicated_value as number) * 0.8,
+      high: m.value_high ?? (m.indicated_value as number) * 1.2,
+      indicated: m.indicated_value as number,
+    }))
+
+  const benchmarks = [
+    { pct: 'P25', val: output.benchmark_p25 },
+    { pct: 'P50', val: output.benchmark_p50 },
+    { pct: 'P75', val: output.benchmark_p75 },
+    { pct: 'P95', val: output.benchmark_p95 },
+  ].filter(b => b.val > 0)
+
+  const ask = input.fundraise.pre_money_valuation_ask
+
+  const plotted: number[] = [
+    ...rows.flatMap(r => [r.low, r.high, r.indicated]),
+    ...benchmarks.map(b => b.val),
+    output.blended_valuation,
+    ...(ask != null ? [ask] : []),
+  ].filter(v => v > 0)
+
+  if (rows.length === 0 || plotted.length < 2) return null
+
+  const minV = Math.min(...plotted)
+  const maxV = Math.max(...plotted)
+  const lo = Math.max(0, 0.8 * minV)
+  const hi = 1.15 * maxV
+  if (hi <= lo) return null
+
+  const xFor = (v: number) => 1 + ((v - lo) / (hi - lo)) * (CHART_W - 2)
+
+  const plotH = TOP_PAD + rows.length * ROW_H + 6
+  const totalH = plotH + AXIS_H
+  const midX = xFor(output.blended_valuation)
+
+  return (
+    <View style={{ marginTop: 16 }}>
+      <View style={{ position: 'relative', height: totalH }}>
+        <Svg width={CHART_W} height={plotH}>
+          {/* Benchmark gridlines — the market context the range is read against */}
+          {benchmarks.map(b => (
+            <Line
+              key={b.pct}
+              x1={xFor(b.val)} x2={xFor(b.val)}
+              y1={TOP_PAD - 3} y2={plotH}
+              stroke={C.rule} strokeWidth={0.9}
+            />
+          ))}
+
+          {/* Method range bars with indicated-value ticks */}
+          {rows.map((r, i) => {
+            const barY = TOP_PAD + i * ROW_H + 13
+            const x0 = xFor(r.low)
+            const x1 = xFor(r.high)
+            const tickX = xFor(r.indicated)
+            return (
+              <Fragment key={r.label}>
+                <Rect
+                  x={x0} y={barY}
+                  width={Math.max(1, x1 - x0)} height={9}
+                  fill={C.rule} stroke={C.light} strokeWidth={0.5}
+                />
+                <Line
+                  x1={tickX} x2={tickX}
+                  y1={barY - 2} y2={barY + 11}
+                  stroke={C.ink} strokeWidth={1.4}
+                />
+              </Fragment>
+            )
+          })}
+
+          {/* Model midpoint — solid accent line across the plot */}
+          <Line x1={midX} x2={midX} y1={TOP_PAD - 3} y2={plotH} stroke={C.accent} strokeWidth={1.4} />
+
+          {/* Preparer's ask — dashed, visually distinct from the midpoint */}
+          {ask != null && (
+            <Line
+              x1={xFor(ask)} x2={xFor(ask)}
+              y1={TOP_PAD - 3} y2={plotH}
+              stroke={C.black} strokeWidth={1} strokeDasharray="3 2"
+            />
+          )}
+        </Svg>
+
+        {/* Gridline percentile labels (top) */}
+        {benchmarks.map(b => (
+          <Text key={`hd-${b.pct}`} style={[s.chartBench, { top: 0, left: xFor(b.val) - 10, width: 20 }]}>
+            {b.pct}
+          </Text>
+        ))}
+
+        {/* Method labels (left) and indicated values (right) per row */}
+        {rows.map((r, i) => (
+          <Text key={`lb-${r.label}`} style={[s.chartLabel, { top: TOP_PAD + i * ROW_H + 2, left: 0 }]}>
+            {r.label}
+          </Text>
+        ))}
+        {rows.map((r, i) => (
+          <Text key={`vl-${r.label}`} style={[s.chartValue, { top: TOP_PAD + i * ROW_H + 2, right: 0, width: 70 }]}>
+            {fmtM(r.indicated)}
+          </Text>
+        ))}
+
+        {/* Benchmark values (axis, below plot) */}
+        {benchmarks.map(b => (
+          <Text key={`ax-${b.pct}`} style={[s.chartBench, { top: plotH + 3, left: xFor(b.val) - 24, width: 48 }]}>
+            {fmtM(b.val)}
+          </Text>
+        ))}
+      </View>
+
+      {/* Legend */}
+      <View style={s.legendRow}>
+        <View style={s.legendItem}>
+          <View style={{ width: 12, height: 6, backgroundColor: C.rule, borderWidth: 0.5, borderColor: C.light }} />
+          <Text style={s.legendText}>Method range (tick = indicated value)</Text>
+        </View>
+        <View style={s.legendItem}>
+          <View style={{ width: 12, height: 1.4, backgroundColor: C.accent }} />
+          <Text style={s.legendText}>Model midpoint {fmtM(output.blended_valuation)}</Text>
+        </View>
+        {ask != null && (
+          <View style={s.legendItem}>
+            <View style={{ width: 12, borderBottomWidth: 1, borderBottomColor: C.black, borderStyle: 'dashed' }} />
+            <Text style={s.legendText}>Preparer's ask {fmtM(ask)}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={{ fontSize: 6.5, color: C.light, marginTop: 3 }}>
+        Vertical gridlines: P25 / P50 / P75 / P95 — {VERTICAL_LABELS[output.vertical]} {STAGE_LABELS[output.stage]} cohort.
+        Values in USD millions, pre-money.
+      </Text>
+    </View>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page 1: Cover + Calibrated Valuation Range (football field)
+// ---------------------------------------------------------------------------
+
+function CoverPage({ output, input, reportContext }: {
+  output: StartupValuationOutput
+  input: StartupInput
+  reportContext: ReportContext
+}) {
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  const stage = STAGE_LABELS[output.stage]
+  const vertical = VERTICAL_LABELS[output.vertical]
+  const geo = GEOGRAPHY_LABELS[input.fundraise.geography]
+  const instrument = INSTRUMENT_LABELS[input.fundraise.instrument]
+  const perspectiveLabel = PERSPECTIVE_LABELS[reportContext.perspective]
+  const preparedBy = reportContext.prepared_by?.trim() || perspectiveLabel
+
+  return (
+    <Page size="A4" style={s.page}>
+      {/* Accent bar */}
+      <View style={s.coverAccent} />
+
+      {/* Company name */}
+      <Text style={s.coverTitle}>{output.company_name}</Text>
+      <Text style={s.coverSub}>Pre-Money Valuation Analysis — {stage} Round</Text>
+      <Text style={s.coverSub}>{vertical} · {geo}</Text>
+      <Text style={s.coverMeta}>Prepared {date} · Dealflow Engine</Text>
+      <Text style={[s.coverMeta, { marginTop: 3 }]}>Prepared by: {preparedBy} ({perspectiveLabel})</Text>
+      <Text style={[s.coverDiscl, { marginTop: 6 }]}>
+        Computed results are independent of preparer role. Preparer representations, if any, appear in a
+        dedicated section and are not inputs to the model.
+      </Text>
+
+      {/* Range-first headline */}
+      <View style={[s.hlBox, { marginTop: 22 }]}>
+        <Text style={s.hlLabel}>CALIBRATED VALUATION RANGE</Text>
+        <Text style={s.hlValue}>
+          {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
+          <Text style={s.hlUnit}>  pre-money</Text>
+        </Text>
+        <Text style={[s.hlSub, { marginTop: 6 }]}>Model midpoint: {fmtM(output.blended_valuation)}</Text>
+        <Text style={s.hlSub}>{output.percentile_in_market} · {output.verdict_headline}</Text>
+      </View>
+
+      {/* Football field — the range in market context */}
+      <FootballField output={output} input={input} />
+
+      {/* Transaction summary */}
+      <SectionHead title="Transaction Details" />
+      <KVRow label="Fundraising Stage"       value={stage} />
+      <KVRow label="Instrument"              value={instrument} />
+      <KVRow label="Raise Amount"            value={fmtM(input.fundraise.raise_amount)} />
+      <KVRow label="Implied Dilution"        value={fmtPct(output.implied_dilution)} />
+      {output.recommended_safe_cap != null && (
+        <KVRow label="Suggested SAFE Cap" value={fmtM(output.recommended_safe_cap)} />
+      )}
+      {input.fundraise.pre_money_valuation_ask != null && (
+        <KVRow label="Preparer's Ask (pre-money)" value={fmtM(input.fundraise.pre_money_valuation_ask)} />
+      )}
+
+      <PageFooter company={output.company_name} />
     </Page>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Page 2: Valuation Methods
+// Page 2: Market Benchmarks + Valuation Methods
 // ---------------------------------------------------------------------------
 
 function MethodsPage({ output }: { output: StartupValuationOutput }) {
@@ -197,10 +405,14 @@ function MethodsPage({ output }: { output: StartupValuationOutput }) {
 
   return (
     <Page size="A4" style={s.page}>
+      {/* Market benchmarks — the distribution the range is calibrated against */}
+      <SectionHead title={`Market Benchmarks — ${VERTICAL_LABELS[output.vertical]} ${STAGE_LABELS[output.stage]} cohort`} />
+      <BenchmarkTable output={output} />
+
       <SectionHead title="Valuation Methods" />
       <Text style={{ fontSize: 8.5, color: C.slate, marginBottom: 12, lineHeight: 1.45 }}>
-        The blended valuation above is a weighted average of the applicable methods below.
-        Each method is independently computed from the inputs provided.
+        The calibrated range on page 1 is derived from the applicable methods below; the model midpoint is
+        their weighted blend. Each method is independently computed from the inputs provided.
       </Text>
 
       {applicable.map(m => (
@@ -236,7 +448,7 @@ function MethodsPage({ output }: { output: StartupValuationOutput }) {
           <Text style={s.methodValue}>
             {fmtMultiple(output.ai_premium_multiplier)} applied
             {output.blended_before_ai != null
-              ? `  ·  Base: ${fmtM(output.blended_before_ai)} → Adjusted: ${fmtM(output.blended_valuation)}`
+              ? `  ·  Base: ${fmtM(output.blended_before_ai)}  ·  Adjusted: ${fmtM(output.blended_valuation)}`
               : ''}
           </Text>
           {output.ai_premium_context != null && (
@@ -245,7 +457,7 @@ function MethodsPage({ output }: { output: StartupValuationOutput }) {
         </View>
       )}
 
-      <PageFooter company={output.company_name} page={2} />
+      <PageFooter company={output.company_name} />
     </Page>
   )
 }
@@ -321,13 +533,13 @@ function InputsPage({ output, input }: { output: StartupValuationOutput; input: 
         <KVRow label="Cash on Hand"                    value={fmtM(t.cash_on_hand)} />
       )}
 
-      <PageFooter company={output.company_name} page={3} />
+      <PageFooter company={output.company_name} />
     </Page>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Page 4: Team, Product, Market Inputs + Disclaimer
+// Page 4: Team, Product, Market Inputs + Provenance + Disclaimer
 // ---------------------------------------------------------------------------
 
 function InputsPage2({ output, input }: { output: StartupValuationOutput; input: StartupInput }) {
@@ -362,14 +574,15 @@ function InputsPage2({ output, input }: { output: StartupValuationOutput; input:
       <KVRow label="Annual Market Growth Rate"  value={fmtPct(input.market.market_growth_rate)} />
       <KVRow label="Competitive Moat"           value={input.market.competitive_moat.charAt(0).toUpperCase() + input.market.competitive_moat.slice(1)} />
 
-      {/* Benchmark source note */}
+      {/* Provenance */}
       <View style={{ marginTop: 20 }}>
-        <Text style={[s.sectionHead, { marginBottom: 6 }]}>Data Sources</Text>
+        <Text style={[s.sectionHead, { marginBottom: 6 }]}>Provenance</Text>
         <View style={s.rule} />
         <Text style={{ fontSize: 7.5, color: C.mid, lineHeight: 1.5 }}>
-          Market benchmarks sourced from: Carta State of Private Markets Q4 2025 / Q1 2026 ·
-          Carta State of Pre-Seed Q1 2026 · PitchBook-NVCA Venture Monitor FY2025 ·
-          Aventis Advisors SaaS Multiples 2026 · SaaS Capital Index Q1 2026.
+          Benchmark data: Carta State of Private Markets Q4 2025 / Q1 2026, Carta State of Pre-Seed Q1 2026,
+          PitchBook-NVCA Venture Monitor FY2025, Aventis Advisors SaaS Multiples 2026, SaaS Capital Index
+          Q1 2026 (2026-Q2 vintage). Valuation methods: weighted blend of the methods on page 2; weights and
+          applicability as shown. Engine: Dealflow Engine startup valuation module.
           Vertical: {VERTICAL_LABELS[output.vertical]} · Stage: {STAGE_LABELS[output.stage]}.
         </Text>
       </View>
@@ -387,7 +600,89 @@ function InputsPage2({ output, input }: { output: StartupValuationOutput; input:
         </Text>
       </View>
 
-      <PageFooter company={output.company_name} page={4} />
+      <PageFooter company={output.company_name} />
+    </Page>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Conditional page: Preparer's Representations + placement reconciliation.
+// Advocacy is quarantined here — the model provably does not incorporate it.
+// ---------------------------------------------------------------------------
+
+const REPRESENTATIONS_TITLE: Record<ReportContext['perspective'], string> = {
+  founder: "Preparer's Representations",
+  investor: 'Diligence Notes',
+  advisor: "Advisor's Notes",
+}
+
+function RepresentationsPage({ output, reportContext }: {
+  output: StartupValuationOutput
+  reportContext: ReportContext
+}) {
+  const notes = printableNotes(reportContext)
+  const contended = reportContext.contended_placement ?? null
+  const title = REPRESENTATIONS_TITLE[reportContext.perspective]
+
+  const placement = computeModelPlacement(
+    output.blended_valuation,
+    output.benchmark_p25,
+    output.benchmark_p50,
+    output.benchmark_p75,
+    output.benchmark_p95,
+  )
+  const cohort = `${VERTICAL_LABELS[output.vertical]} ${STAGE_LABELS[output.stage]}`
+
+  // Note numbers (1-based, in printed order) whose anchor is benchmark_placement
+  const placementNoteNumbers = notes
+    .map((n, i) => ({ n, num: i + 1 }))
+    .filter(({ n }) => n.anchor === 'benchmark_placement')
+    .map(({ num }) => num)
+  const basis = placementNoteNumbers.length > 0
+    ? `Representation${placementNoteNumbers.length > 1 ? 's' : ''} ${placementNoteNumbers.join(', ')}`
+    : 'see representations above'
+
+  return (
+    <Page size="A4" style={s.page}>
+      <SectionHead title={title} />
+
+      {/* Standing disclaimer — same copy regardless of perspective */}
+      <View style={s.disclBox}>
+        <Text style={{ fontSize: 8, color: C.slate, lineHeight: 1.55 }}>
+          The computed valuation range in this report does not incorporate the representations below.
+          They are statements of the preparer, presented for the reader's independent assessment.
+          Where evidence references are provided, readers are encouraged to verify them directly.
+        </Text>
+      </View>
+
+      {notes.map((n, i) => (
+        <View key={n.id} style={s.represBox}>
+          <Text style={s.represHead}>Representation {i + 1} — {NOTE_ANCHOR_LABELS[n.anchor]}</Text>
+          <Text style={s.represClaim}>{n.claim}</Text>
+          {n.evidence?.trim()
+            ? <Text style={s.represEvid}>Evidence: {n.evidence.trim()}</Text>
+            : <Text style={s.represEvidNone}>No evidence reference provided</Text>}
+        </View>
+      ))}
+
+      {/* Placement reconciliation — factual, never in the preparer's favor */}
+      {contended != null && (
+        <View style={[s.disclBox, { marginTop: 12, borderLeftWidth: 3, borderLeftColor: C.accent }]}>
+          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.ink, marginBottom: 4 }}>
+            Placement Reconciliation
+          </Text>
+          <Text style={{ fontSize: 8.5, color: C.slate, lineHeight: 1.55 }}>
+            Model placement: {placement.label} of {cohort} cohort.
+            {' '}Preparer contends: {CONTENDED_PLACEMENT_LABELS[contended]}.
+            {' '}Basis: {basis}.
+            {contentionConsistentWithModel(contended, placement)
+              ? " Preparer's contention is consistent with the model."
+              : ''}
+          </Text>
+        </View>
+      )}
+
+      <PageFooter company={output.company_name} />
     </Page>
   )
 }
@@ -396,17 +691,27 @@ function InputsPage2({ output, input }: { output: StartupValuationOutput; input:
 // Root PDF document
 // ---------------------------------------------------------------------------
 
-function ValuationDocument({ output, input }: { output: StartupValuationOutput; input: StartupInput }) {
+function ValuationDocument({ output, input, reportContext }: {
+  output: StartupValuationOutput
+  input: StartupInput
+  reportContext: ReportContext
+}) {
+  const showRepresentations =
+    printableNotes(reportContext).length > 0 || reportContext.contended_placement != null
+
   return (
     <Document
       title={`${output.company_name} — Valuation Report`}
       author="Dealflow Engine"
       subject="Pre-Money Valuation Analysis"
     >
-      <CoverPage    output={output} input={input} />
+      <CoverPage    output={output} input={input} reportContext={reportContext} />
       <MethodsPage  output={output} />
       <InputsPage   output={output} input={input} />
       <InputsPage2  output={output} input={input} />
+      {showRepresentations && (
+        <RepresentationsPage output={output} reportContext={reportContext} />
+      )}
     </Document>
   )
 }
@@ -418,14 +723,15 @@ function ValuationDocument({ output, input }: { output: StartupValuationOutput; 
 interface PDFExportButtonProps {
   output: StartupValuationOutput
   input: StartupInput
+  reportContext: ReportContext
 }
 
-export default function PDFExportButton({ output, input }: PDFExportButtonProps) {
+export default function PDFExportButton({ output, input, reportContext }: PDFExportButtonProps) {
   const filename = `${output.company_name.replace(/\s+/g, '_')}_Valuation_Report.pdf`
 
   return (
     <PDFDownloadLink
-      document={<ValuationDocument output={output} input={input} />}
+      document={<ValuationDocument output={output} input={input} reportContext={reportContext} />}
       fileName={filename}
     >
       {({ loading }: { loading: boolean }) => (
@@ -441,3 +747,6 @@ export default function PDFExportButton({ output, input }: PDFExportButtonProps)
     </PDFDownloadLink>
   )
 }
+
+// Exported for the smoke-render script (not used by the app UI)
+export { ValuationDocument }

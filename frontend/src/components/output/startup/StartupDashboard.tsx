@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from 'react'
 import { RefreshCw, TrendingUp, Users, BarChart2, AlertTriangle, ChevronDown, ChevronUp, CheckCircle, AlertCircle, XCircle, Info } from 'lucide-react'
-import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput } from '../../../types/startup'
+import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput, ReportContext, PreparerNote } from '../../../types/startup'
 import ShareButton from '../../shared/ShareButton'
 import PDFExportButton from './StartupValuationPDF'
 import type { StartupInputState } from '../../../lib/shareUtils'
@@ -12,11 +12,18 @@ import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'
 import { checkAIStatus } from '../../../lib/ai-api'
 import StartupAINarrative from './StartupAINarrative'
 import RoundTimingPanel from './RoundTimingPanel'
+import ReportContextPanel from './ReportContextPanel'
 
 interface Props {
   output: StartupValuationOutput
   startupInput: StartupInput
   onReset: () => void
+  // Report context: presentation-layer only — never sent to the valuation API
+  reportContext: ReportContext
+  onUpdateReportContext: (updates: Partial<ReportContext>) => void
+  onAddNote: () => void
+  onUpdateNote: (id: string, updates: Partial<Omit<PreparerNote, 'id'>>) => void
+  onRemoveNote: (id: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -154,14 +161,16 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Valuation Range</h3>
       </div>
 
-      {/* Main number */}
+      {/* Main number — the range is the deliverable */}
       <div className="text-center mb-6">
-        <p className="text-slate-500 text-xs mb-1">Blended Pre-Money Valuation</p>
-        <p className="text-5xl font-bold text-slate-100">{fmt(blended_valuation)}</p>
+        <p className="text-slate-500 text-xs mb-1">Calibrated Valuation Range (pre-money)</p>
+        <p className="text-4xl font-bold text-slate-100">
+          {fmt(valuation_range_low)} – {fmt(valuation_range_high)}
+        </p>
+        <p className="text-slate-400 text-sm mt-2">Model midpoint: {fmt(blended_valuation)}</p>
         {output.ai_modifier_applied && output.blended_before_ai != null && (
-          <p className="text-slate-500 text-xs mt-1">With standard (non-AI) parameters: {fmt(output.blended_before_ai)}</p>
+          <p className="text-slate-500 text-xs mt-1">Midpoint with standard (non-AI) parameters: {fmt(output.blended_before_ai)}</p>
         )}
-        <p className="text-slate-400 text-sm mt-1">Range: {fmt(valuation_range_low)} – {fmt(valuation_range_high)}</p>
         <p className="text-purple-400 text-xs mt-2 font-medium">{percentile_in_market}</p>
       </div>
 
@@ -437,7 +446,10 @@ function SAFEPanel({ safe }: { safe: NonNullable<StartupValuationOutput['safe_co
 // Main dashboard
 // ---------------------------------------------------------------------------
 
-export default function StartupDashboard({ output, startupInput, onReset }: Props) {
+export default function StartupDashboard({
+  output, startupInput, onReset,
+  reportContext, onUpdateReportContext, onAddNote, onUpdateNote, onRemoveNote,
+}: Props) {
   const [aiAvailable, setAiAvailable] = useState(false)
   useEffect(() => {
     checkAIStatus().then(s => setAiAvailable(s.ai_available)).catch(() => {})
@@ -452,7 +464,7 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
           <h1 className="text-2xl font-bold text-slate-100">{output.company_name} — Valuation Report</h1>
         </div>
         <div className="flex items-center gap-2">
-          <PDFExportButton output={output} input={startupInput} />
+          <PDFExportButton output={output} input={startupInput} reportContext={reportContext} />
           <ShareButton
             module="startup"
             inputState={{
@@ -476,6 +488,16 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
           </button>
         </div>
       </div>
+
+      {/* Report context — perspective, preparer identity, notes (presentation only) */}
+      <ReportContextPanel
+        output={output}
+        reportContext={reportContext}
+        onUpdate={onUpdateReportContext}
+        onAddNote={onAddNote}
+        onUpdateNote={onUpdateNote}
+        onRemoveNote={onRemoveNote}
+      />
 
       {/* Verdict */}
       <VerdictBanner verdict={output.verdict} headline={output.verdict_headline} subtext={output.verdict_subtext} />
