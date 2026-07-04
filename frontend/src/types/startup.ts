@@ -242,6 +242,55 @@ export interface StartupValuationOutput {
 }
 
 // ---------------------------------------------------------------------------
+// Report context (presentation-layer only)
+//
+// INVARIANCE GUARANTEE: everything in this section lives ONLY in frontend
+// state and is NEVER sent to the valuation API. Computed results are
+// bit-identical regardless of perspective, preparer, or notes.
+// ---------------------------------------------------------------------------
+
+export type ReportPerspective = 'founder' | 'investor' | 'advisor'
+
+export interface PreparerNote {
+  id: string
+  anchor: 'team' | 'traction' | 'product' | 'market' | 'method' | 'benchmark_placement'
+  claim: string
+  evidence?: string // contract #, award, LOI, link — how a reader can verify
+}
+
+export interface ReportContext {
+  perspective: ReportPerspective
+  prepared_by?: string // display name, optional
+  contended_placement?: 'p25_p50' | 'p50_p75' | 'above_p75' | 'above_p95' | null
+  notes: PreparerNote[]
+}
+
+export type NoteAnchor = PreparerNote['anchor']
+export type ContendedPlacement = NonNullable<ReportContext['contended_placement']>
+
+export const PERSPECTIVE_LABELS: Record<ReportPerspective, string> = {
+  founder: 'Founder',
+  investor: 'Investor',
+  advisor: 'Advisor',
+}
+
+export const NOTE_ANCHOR_LABELS: Record<NoteAnchor, string> = {
+  team: 'Team',
+  traction: 'Traction',
+  product: 'Product',
+  market: 'Market',
+  method: 'Methodology',
+  benchmark_placement: 'Benchmark Placement',
+}
+
+export const CONTENDED_PLACEMENT_LABELS: Record<ContendedPlacement, string> = {
+  p25_p50: 'In line with median (P25–P50)',
+  p50_p75: 'P50–P75',
+  above_p75: 'Above P75',
+  above_p95: 'Above P95',
+}
+
+// ---------------------------------------------------------------------------
 // UI State
 // ---------------------------------------------------------------------------
 
