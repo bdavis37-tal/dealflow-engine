@@ -17,18 +17,20 @@ interface CurrencyInputProps {
 }
 
 function parseNumericInput(raw: string): number {
-  const cleaned = raw.replace(/[^0-9.\-]/g, '')
+  const cleaned = raw.replace(/[^0-9.-]/g, '')
   // Reject multiple decimal points
   if ((cleaned.match(/\./g) || []).length > 1) return NaN
   const parsed = parseFloat(cleaned)
   return Number.isFinite(parsed) ? parsed : NaN
 }
 
+// Values are denominated in millions USD (project convention: 50 = $50M)
 function formatDisplay(value: number): string {
   if (!value && value !== 0) return ''
-  if (Math.abs(value) >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`
-  if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
-  if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(0)}K`
+  const abs = Math.abs(value)
+  if (abs >= 1_000) return `$${(value / 1_000).toFixed(2)}B`
+  if (abs >= 1) return `$${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(2)}M`
+  if (abs >= 0.001) return `$${(value * 1_000).toFixed(0)}K`
   return `$${value.toFixed(0)}`
 }
 

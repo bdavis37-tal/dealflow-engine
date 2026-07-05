@@ -9,6 +9,7 @@ import type { ChatMessage } from '../../lib/ai-api'
 import { streamChat } from '../../lib/ai-api'
 import AIBadge from '../shared/AIBadge'
 import StreamingText from '../shared/StreamingText'
+import { formatCurrencyCompact } from '../../lib/formatters'
 
 interface AIChatPanelProps {
   dealInput: DealInput
@@ -57,7 +58,7 @@ export default function AIChatPanel({ dealInput, dealOutput, onApplyChanges }: A
   const [messages, setMessages] = useState<UIMessage[]>([
     {
       role: 'assistant',
-      content: `I have full context of this deal — ${dealInput.acquirer.company_name} acquiring ${dealInput.target.company_name} for $${(dealInput.target.acquisition_price / 1e6).toFixed(0)}M. Ask me anything.`,
+      content: `I have full context of this deal — ${dealInput.acquirer.company_name} acquiring ${dealInput.target.company_name} for ${formatCurrencyCompact(dealInput.target.acquisition_price)}. Ask me anything.`,
     },
   ])
   const [input, setInput] = useState('')

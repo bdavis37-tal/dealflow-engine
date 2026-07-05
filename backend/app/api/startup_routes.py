@@ -9,8 +9,6 @@ import logging
 import os
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 
 from ..engine import round_financial_output
 from ..engine.startup_models import StartupInput, StartupValuationOutput, StartupVertical, StartupStage
@@ -21,6 +19,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/startup")
 
 _DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "startup_valuation_benchmarks.json")
+
+
+def _load_benchmark_data() -> dict:
+    with open(_DATA_PATH, "r") as f:
+        return json.load(f)
+
+
+# Benchmark data is static — load once at module import instead of per request.
+_BENCHMARK_DATA: dict = _load_benchmark_data()
 
 
 @router.post("/value", response_model=StartupValuationOutput, summary="Run startup valuation")
@@ -40,9 +47,9 @@ async def value_startup(inp: StartupInput) -> StartupValuationOutput:
             inp.fundraise.raise_amount,
         )
         result = run_startup_valuation(inp)
-        return JSONResponse(content=round_financial_output(result))
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail="Invalid startup inputs. Please check your values.")
+        # Return the validated model (honors response_model) with float noise
+        # rounded at the output boundary.
+        return StartupValuationOutput.model_validate(round_financial_output(result))
     except Exception:
         logger.exception("Startup valuation failed")
         raise HTTPException(status_code=500, detail="Startup valuation encountered an internal error. Please try again.")
@@ -60,51 +67,37 @@ async def get_benchmarks(
     Use this to pre-fill UI components with market-calibrated defaults before the user
     provides custom inputs.
     """
-    try:
-        with open(_DATA_PATH, "r") as f:
-            data = json.load(f)
+    data = _BENCHMARK_DATA
+    vdata = data.get("verticals", {}).get(vertical.value, {})
+    stage_data = vdata.get(stage.value, {})
 
-        vdata = data.get("verticals", {}).get(vertical.value, {})
-        stage_data = vdata.get(stage.value, {})
+    if not stage_data:
+        raise HTTPException(status_code=404, detail=f"No benchmark data for vertical '{vertical.value}' at stage '{stage.value}'.")
 
-        if not stage_data:
-            raise HTTPException(status_code=404, detail=f"No benchmark data for vertical '{vertical.value}' at stage '{stage.value}'.")
-
-        return {
-            "vertical": vertical.value,
-            "vertical_label": vdata.get("label", vertical.value),
-            "stage": stage.value,
-            "benchmarks": stage_data,
-            "market_wide": data.get("market_wide_medians", {}).get(stage.value, {}),
-            "nrr_multiple_lookup": data.get("nrr_multiple_lookup", {}),
-            "burn_multiple_bands": data.get("burn_multiple_bands", {}),
-            "rule_of_40_bands": data.get("rule_of_40_bands", {}),
-        }
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Failed to retrieve startup benchmarks")
-        raise HTTPException(status_code=500, detail="Failed to retrieve benchmark data.")
+    return {
+        "vertical": vertical.value,
+        "vertical_label": vdata.get("label", vertical.value),
+        "stage": stage.value,
+        "benchmarks": stage_data,
+        "market_wide": data.get("market_wide_medians", {}).get(stage.value, {}),
+        "nrr_multiple_lookup": data.get("nrr_multiple_lookup", {}),
+        "burn_multiple_bands": data.get("burn_multiple_bands", {}),
+        "rule_of_40_bands": data.get("rule_of_40_bands", {}),
+    }
 
 
 @router.get("/verticals", summary="List startup verticals")
 async def list_verticals() -> list[dict]:
     """Return all supported startup verticals with labels."""
-    try:
-        with open(_DATA_PATH, "r") as f:
-            data = json.load(f)
-        verticals = data.get("verticals", {})
-        return [
-            {
-                "value": v.value,
-                "label": verticals.get(v.value, {}).get("label", v.value),
-                "description": verticals.get(v.value, {}).get("description", ""),
-            }
-            for v in StartupVertical
-        ]
-    except Exception:
-        logger.exception("Failed to list verticals")
-        raise HTTPException(status_code=500, detail="Failed to retrieve vertical list.")
+    verticals = _BENCHMARK_DATA.get("verticals", {})
+    return [
+        {
+            "value": v.value,
+            "label": verticals.get(v.value, {}).get("label", v.value),
+            "description": verticals.get(v.value, {}).get("description", ""),
+        }
+        for v in StartupVertical
+    ]
 
 
 @router.get("/stages", summary="List startup funding stages")
@@ -132,8 +125,7 @@ async def startup_sensitivity(inp: StartupInput) -> dict:
     - most_impactful: the single input with the largest swing
     """
     try:
-        result = run_startup_sensitivity(inp)
-        return JSONResponse(content=result)
+        return run_startup_sensitivity(inp)
     except Exception:
         logger.exception("Startup sensitivity analysis failed")
         raise HTTPException(status_code=500, detail="Sensitivity analysis failed.")

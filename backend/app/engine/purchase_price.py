@@ -22,13 +22,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import DealInput, PurchasePriceAllocation as PPAInput
+from .models import DealInput
 
 
 @dataclass
 class PPAResult:
     """Results of purchase price allocation."""
-    purchase_price: float           # Enterprise value paid
+    purchase_price: float           # Enterprise value paid (acquisition_price is defined as EV)
+    equity_consideration: float     # EV - target debt + target cash (what is paid for the equity)
     net_assets_book_value: float    # Target's pre-deal book equity (approx)
     asset_writeup: float            # PP&E fair value step-up
     identifiable_intangibles: float # Customer relationships, IP, trade names, etc.
@@ -44,7 +45,12 @@ def compute_ppa(deal: DealInput) -> PPAResult:
     """
     Perform purchase price allocation for a transaction.
 
-    Goodwill = Purchase Price - Fair Value of Net Identifiable Assets (ASC 805)
+    CONVENTION: `target.acquisition_price` is the ENTERPRISE VALUE (EV) paid.
+    The consideration transferred for the equity (ASC 805 basis for goodwill) is:
+
+        Equity consideration = EV - target debt + target cash
+
+    Goodwill = Equity consideration - Fair Value of Net Identifiable Assets
 
     FVNA = Target book equity
          + PP&E step-up (asset_writeup)
@@ -64,6 +70,12 @@ def compute_ppa(deal: DealInput) -> PPAResult:
     ppa = deal.ppa
     tax_rate = deal.acquirer.tax_rate
 
+    # Equity consideration: acquisition_price is EV, so back out net debt.
+    # Floored at zero — a target whose debt exceeds EV + cash has no equity value.
+    equity_consideration = max(
+        0.0, target.acquisition_price - target.total_debt + target.cash_on_hand
+    )
+
     # Approximate target net assets (book equity)
     # = cash + NWC - pre-existing debt (rough proxy; a real model uses full BS)
     net_assets_book = (
@@ -82,9 +94,10 @@ def compute_ppa(deal: DealInput) -> PPAResult:
     # FVNA = Book value + step-ups + intangibles - DTL
     fvna = net_assets_book + ppa.asset_writeup + ppa.identifiable_intangibles - dtl
 
-    # Goodwill is the residual — what you paid above the fair value of what you got
-    # Goodwill = Purchase Price - FVNA
-    goodwill = max(0.0, target.acquisition_price - fvna)
+    # Goodwill is the residual — what you paid for the EQUITY above the fair
+    # value of what you got. Using EV here would overstate goodwill by target
+    # net debt (audit finding F-10).
+    goodwill = max(0.0, equity_consideration - fvna)
 
     # Annual D&A from asset writeup: straight-line over useful life
     # Per ASC 805, PP&E is stepped up to fair value and depreciated from that higher basis
@@ -104,6 +117,7 @@ def compute_ppa(deal: DealInput) -> PPAResult:
 
     return PPAResult(
         purchase_price=target.acquisition_price,
+        equity_consideration=equity_consideration,
         net_assets_book_value=net_assets_book,
         asset_writeup=ppa.asset_writeup,
         identifiable_intangibles=ppa.identifiable_intangibles,

@@ -12,10 +12,45 @@ import type {
   MarketProfile,
   FundraisingProfile,
   StartupInput,
+  ReportContext,
+  PreparerNote,
 } from '../types/startup'
 import { valueStartup } from '../lib/api'
 
 const STORAGE_KEY = 'startup_valuation_state'
+
+// Report context is presentation-layer state ONLY. It is persisted under its
+// own key and is intentionally NEVER included in the /api/startup/value
+// payload — computed results must be identical regardless of perspective.
+const REPORT_CONTEXT_KEY = 'startup_report_context'
+
+const defaultReportContext: ReportContext = {
+  perspective: 'founder',
+  notes: [],
+  contended_placement: null,
+}
+
+function loadReportContext(): ReportContext {
+  try {
+    const raw = localStorage.getItem(REPORT_CONTEXT_KEY)
+    if (!raw) return defaultReportContext
+    const parsed = JSON.parse(raw) as Partial<ReportContext>
+    return {
+      ...defaultReportContext,
+      ...parsed,
+      notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+    }
+  } catch {
+    return defaultReportContext
+  }
+}
+
+function makeNoteId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `note_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
 
 const AI_TOGGLE_CONFIG = {
   frozen_on: ['ai_ml_infrastructure', 'ai_enabled_saas'] as const,
@@ -110,12 +145,18 @@ function loadFromStorage(): StartupState {
 
 export function useStartupState() {
   const [state, setState] = useState<StartupState>(loadFromStorage)
+  const [reportContext, setReportContext] = useState<ReportContext>(loadReportContext)
 
   // Persist inputs to localStorage
   useEffect(() => {
     const { output: _output, isLoading: _isLoading, error: _error, ...persistable } = state
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable))
   }, [state])
+
+  // Persist report context under its own key (never part of the API payload)
+  useEffect(() => {
+    localStorage.setItem(REPORT_CONTEXT_KEY, JSON.stringify(reportContext))
+  }, [reportContext])
 
   const setStep = useCallback((step: StartupFlowStep) => {
     setState(s => ({ ...s, step }))
@@ -167,6 +208,33 @@ export function useStartupState() {
   const reset = useCallback(() => {
     localStorage.removeItem(STORAGE_KEY)
     setState(defaultState)
+  }, [])
+
+  // --- Report context actions (presentation only — never sent to the API) ---
+
+  const updateReportContext = useCallback((updates: Partial<ReportContext>) => {
+    setReportContext(c => ({ ...c, ...updates }))
+  }, [])
+
+  const addNote = useCallback((note?: Partial<Omit<PreparerNote, 'id'>>) => {
+    setReportContext(c => ({
+      ...c,
+      notes: [
+        ...c.notes,
+        { id: makeNoteId(), anchor: note?.anchor ?? 'traction', claim: note?.claim ?? '', evidence: note?.evidence },
+      ],
+    }))
+  }, [])
+
+  const updateNote = useCallback((id: string, updates: Partial<Omit<PreparerNote, 'id'>>) => {
+    setReportContext(c => ({
+      ...c,
+      notes: c.notes.map(n => (n.id === id ? { ...n, ...updates } : n)),
+    }))
+  }, [])
+
+  const removeNote = useCallback((id: string) => {
+    setReportContext(c => ({ ...c, notes: c.notes.filter(n => n.id !== id) }))
   }, [])
 
   const setAINative = useCallback((value: boolean) => {
@@ -234,5 +302,10 @@ export function useStartupState() {
     runValuation,
     setAINative,
     updateAIAnswer,
+    reportContext,
+    updateReportContext,
+    addNote,
+    updateNote,
+    removeNote,
   }
 }

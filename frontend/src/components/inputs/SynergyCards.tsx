@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import type { SynergyItem } from '../../types/deal'
 import CurrencyInput from './CurrencyInput'
+import { formatCurrencyCompact } from '../../lib/formatters'
 
 interface SynergyCategory {
   id: string
@@ -77,12 +78,13 @@ export default function SynergyCards({ combinedRevenue, selected, onChange }: Sy
       onChange(selected.filter(s => s.category !== cat.id))
       setExpanded(prev => { const next = new Set(prev); next.delete(cat.id); return next })
     } else {
-      const estimate = Math.round(combinedRevenue * cat.estimatedPctRevenue)
+      // Values are in $M — keep one decimal so small deals don't round to $0M
+      const estimate = Math.round(combinedRevenue * cat.estimatedPctRevenue * 10) / 10
       const newItem: SynergyItem = {
         category: cat.id,
         annual_amount: estimate,
         phase_in_years: 3,
-        cost_to_achieve: Math.round(estimate * 0.5),
+        cost_to_achieve: Math.round(estimate * 0.5 * 10) / 10,
         is_revenue: cat.isRevenue,
       }
       onChange([...selected, newItem])
@@ -143,7 +145,7 @@ export default function SynergyCards({ combinedRevenue, selected, onChange }: Sy
                   label="Estimated annual savings"
                   value={item.annual_amount}
                   onChange={v => updateAmount(cat.id, v)}
-                  defaultNote={`We estimated ~$${(combinedRevenue * cat.estimatedPctRevenue / 1_000_000).toFixed(1)}M based on typical deals. Adjust if you have a better number.`}
+                  defaultNote={`We estimated ~${formatCurrencyCompact(combinedRevenue * cat.estimatedPctRevenue)} based on typical deals. Adjust if you have a better number.`}
                 />
               </div>
             )}

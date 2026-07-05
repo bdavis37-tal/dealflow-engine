@@ -136,6 +136,13 @@ export default function SensitivityExplorer({
         </div>
       </div>
 
+      {/* Matrix assumption / data-quality note */}
+      {matrix.note && (
+        <p className="mt-3 text-2xs text-slate-500 italic leading-relaxed">
+          {matrix.note}
+        </p>
+      )}
+
       {/* Legend */}
       <div className="flex items-center gap-3 mt-4 text-2xs text-slate-500">
         <span>Less accretive</span>
@@ -152,10 +159,17 @@ export default function SensitivityExplorer({
             <span>Base case</span>
           </>
         )}
+        {matrix.data.some(row => row.some(v => v === null)) && (
+          <>
+            <span className="ml-2">|</span>
+            <div className="w-4 h-3 rounded-sm bg-slate-800/40 border border-slate-700" />
+            <span>n/a — scenario did not compute</span>
+          </>
+        )}
       </div>
 
-      {/* AI Scenario Narrative — appears when a cell is pinned */}
-      {pinned && dealInput && dealOutput && (
+      {/* AI Scenario Narrative — appears when a computed cell is pinned */}
+      {pinned && dealInput && dealOutput && matrix.data[pinned[0]][pinned[1]] !== null && (
         <ScenarioNarrative
           dealInput={dealInput}
           dealOutput={dealOutput}
@@ -163,7 +177,7 @@ export default function SensitivityExplorer({
           colLabel={matrix.col_label}
           rowValue={matrix.row_values[pinned[0]]}
           colValue={matrix.col_values[pinned[1]]}
-          accretionPct={matrix.data[pinned[0]][pinned[1]] * 100}
+          accretionPct={(matrix.data[pinned[0]][pinned[1]] as number) * 100}
           aiAvailable={aiAvailable}
         />
       )}

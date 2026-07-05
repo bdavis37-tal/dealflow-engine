@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect } from 'react'
 import { RefreshCw, TrendingUp, Users, BarChart2, AlertTriangle, ChevronDown, ChevronUp, CheckCircle, AlertCircle, XCircle, Info } from 'lucide-react'
-import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput } from '../../../types/startup'
+import type { StartupValuationOutput, ValuationMethodResult, DilutionScenario, ScorecardFlag, ValuationSignal, ValuationVerdict, StartupInput, ReportContext, PreparerNote } from '../../../types/startup'
 import ShareButton from '../../shared/ShareButton'
 import PDFExportButton from './StartupValuationPDF'
 import type { StartupInputState } from '../../../lib/shareUtils'
@@ -12,11 +12,18 @@ import { VERTICAL_LABELS, STAGE_LABELS } from '../../../types/startup'
 import { checkAIStatus } from '../../../lib/ai-api'
 import StartupAINarrative from './StartupAINarrative'
 import RoundTimingPanel from './RoundTimingPanel'
+import ReportContextPanel from './ReportContextPanel'
 
 interface Props {
   output: StartupValuationOutput
   startupInput: StartupInput
   onReset: () => void
+  // Report context: presentation-layer only — never sent to the valuation API
+  reportContext: ReportContext
+  onUpdateReportContext: (updates: Partial<ReportContext>) => void
+  onAddNote: () => void
+  onUpdateNote: (id: string, updates: Partial<Omit<PreparerNote, 'id'>>) => void
+  onRemoveNote: (id: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -93,31 +100,40 @@ function VerdictBanner({ verdict, headline, subtext }: { verdict: ValuationVerdi
 }
 
 // ---------------------------------------------------------------------------
-// AI Modifier Banner (shown only when ai_modifier_applied=true)
+// AI Calibration Banner (shown only when ai_modifier_applied=true).
+// The premium is EMERGENT: the AI-native toggle calibrates the inputs of the
+// individual valuation methods (scorecard weights, Berkus caps, ARR multiple)
+// before blending — it is never a multiplier applied to the blended value.
 // ---------------------------------------------------------------------------
 
 function AIModifierBanner({ output }: { output: StartupValuationOutput }) {
   if (!output.ai_modifier_applied || output.blended_before_ai == null) return null
 
   const premiumPct = ((output.blended_valuation / output.blended_before_ai) - 1) * 100
+  const sign = premiumPct >= 0 ? '+' : ''
 
   return (
     <div className="rounded-xl border border-purple-600/50 bg-purple-900/20 p-5">
       <div className="flex items-center gap-2 mb-3">
         <TrendingUp size={16} className="text-purple-400" />
-        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI-Native Premium Applied</span>
+        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI-Native Calibration</span>
       </div>
       <p className="text-2xl font-bold text-purple-300 mb-2">
-        +{premiumPct.toFixed(0)}% AI-Native Premium
+        {sign}{premiumPct.toFixed(0)}% Emergent AI-Native Premium
+      </p>
+      <p className="text-sm text-slate-400 leading-relaxed mb-1">
+        This premium emerges from parameter-level calibration of the valuation methods
+        (ARR multiple uplift, scorecard weight shift toward product/IP, Berkus cap
+        re-apportionment) — it is not a multiplier applied to the blended value.
       </p>
       {output.ai_premium_context && (
-        <p className="text-sm text-slate-400 leading-relaxed mb-3">{output.ai_premium_context}</p>
+        <p className="text-sm text-slate-500 leading-relaxed mb-3">{output.ai_premium_context}</p>
       )}
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-slate-500">Base Valuation:</span>
+        <span className="text-slate-500">Standard Parameters:</span>
         <span className="text-slate-300 font-medium">{fmt(output.blended_before_ai)}</span>
         <span className="text-slate-600">→</span>
-        <span className="text-slate-500">AI-Adjusted:</span>
+        <span className="text-slate-500">AI-Calibrated:</span>
         <span className="text-purple-300 font-semibold">{fmt(output.blended_valuation)}</span>
       </div>
     </div>
@@ -145,14 +161,21 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Valuation Range</h3>
       </div>
 
-      {/* Main number */}
+      {/* Main number — the range is the deliverable */}
       <div className="text-center mb-6">
-        <p className="text-slate-500 text-xs mb-1">Blended Pre-Money Valuation</p>
-        <p className="text-5xl font-bold text-slate-100">{fmt(blended_valuation)}</p>
-        {output.ai_modifier_applied && output.blended_before_ai != null && (
-          <p className="text-slate-500 text-xs mt-1">Before AI premium: {fmt(output.blended_before_ai)}</p>
+        <p className="text-slate-500 text-xs mb-1">Calibrated Valuation Range (pre-money)</p>
+        <p className="text-4xl font-bold text-slate-100">
+          {fmt(valuation_range_low)} – {fmt(valuation_range_high)}
+        </p>
+        {output.dilution_basis === 'preparer_ask' && (
+          <p className="text-purple-300 text-sm mt-2 font-medium">
+            Preparer's ask: {fmt(output.dilution_basis_pre_money)} pre-money
+          </p>
         )}
-        <p className="text-slate-400 text-sm mt-1">Range: {fmt(valuation_range_low)} – {fmt(valuation_range_high)}</p>
+        <p className="text-slate-400 text-sm mt-2">Model midpoint: {fmt(blended_valuation)}</p>
+        {output.ai_modifier_applied && output.blended_before_ai != null && (
+          <p className="text-slate-500 text-xs mt-1">Midpoint with standard (non-AI) parameters: {fmt(output.blended_before_ai)}</p>
+        )}
         <p className="text-purple-400 text-xs mt-2 font-medium">{percentile_in_market}</p>
       </div>
 
@@ -195,7 +218,9 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
           <p className={`text-lg font-bold ${implied_dilution > 0.25 ? 'text-amber-400' : 'text-slate-100'}`}>
             {fmtPct(implied_dilution)}
           </p>
-          <p className="text-2xs text-slate-600 mt-0.5">Raise / Post-money</p>
+          <p className="text-2xs text-slate-600 mt-0.5">
+            Raise / Post-money at {output.dilution_basis === 'preparer_ask' ? "preparer's ask" : 'model midpoint'}
+          </p>
         </div>
         {recommended_safe_cap && (
           <div className="bg-purple-900/20 border border-purple-700/30 rounded-lg p-3">
@@ -274,7 +299,7 @@ function MethodBreakdownPanel({ methods }: { methods: ValuationMethodResult[] })
   )
 }
 
-function DilutionPanel({ scenarios }: { scenarios: DilutionScenario[] }) {
+function DilutionPanel({ scenarios, output }: { scenarios: DilutionScenario[]; output: StartupValuationOutput }) {
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
       <div className="flex items-center gap-2 mb-5">
@@ -283,6 +308,8 @@ function DilutionPanel({ scenarios }: { scenarios: DilutionScenario[] }) {
       </div>
       <p className="text-xs text-slate-500 mb-4">
         Projected founder ownership across current and typical future rounds.
+        Current round priced at {output.dilution_basis === 'preparer_ask' ? "the preparer's ask" : 'the model midpoint'} of {fmt(output.dilution_basis_pre_money)};
+        future rounds are market projections from cohort benchmarks.
         Includes option pool refresh at each priced round (standard 10% pre-money).
       </p>
 
@@ -428,7 +455,10 @@ function SAFEPanel({ safe }: { safe: NonNullable<StartupValuationOutput['safe_co
 // Main dashboard
 // ---------------------------------------------------------------------------
 
-export default function StartupDashboard({ output, startupInput, onReset }: Props) {
+export default function StartupDashboard({
+  output, startupInput, onReset,
+  reportContext, onUpdateReportContext, onAddNote, onUpdateNote, onRemoveNote,
+}: Props) {
   const [aiAvailable, setAiAvailable] = useState(false)
   useEffect(() => {
     checkAIStatus().then(s => setAiAvailable(s.ai_available)).catch(() => {})
@@ -443,7 +473,7 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
           <h1 className="text-2xl font-bold text-slate-100">{output.company_name} — Valuation Report</h1>
         </div>
         <div className="flex items-center gap-2">
-          <PDFExportButton output={output} input={startupInput} />
+          <PDFExportButton output={output} input={startupInput} reportContext={reportContext} />
           <ShareButton
             module="startup"
             inputState={{
@@ -467,6 +497,16 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
           </button>
         </div>
       </div>
+
+      {/* Report context — perspective, preparer identity, notes (presentation only) */}
+      <ReportContextPanel
+        output={output}
+        reportContext={reportContext}
+        onUpdate={onUpdateReportContext}
+        onAddNote={onAddNote}
+        onUpdateNote={onUpdateNote}
+        onRemoveNote={onRemoveNote}
+      />
 
       {/* Verdict */}
       <VerdictBanner verdict={output.verdict} headline={output.verdict_headline} subtext={output.verdict_subtext} />
@@ -495,7 +535,7 @@ export default function StartupDashboard({ output, startupInput, onReset }: Prop
       {/* Scorecard + Dilution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ScorecardPanel flags={output.investor_scorecard} />
-        <DilutionPanel scenarios={output.dilution_scenarios} />
+        <DilutionPanel scenarios={output.dilution_scenarios} output={output} />
       </div>
 
       {/* SAFE details */}

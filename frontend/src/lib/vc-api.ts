@@ -186,6 +186,9 @@ export interface BridgeRoundInput {
   current_ownership_pct: number
   fund_is_participating: boolean
   pro_rata_amount: number
+  /** Company monthly burn (USD millions) — enables real runway computation.
+   *  When absent the backend returns additional_runway_months = null. */
+  monthly_burn?: number | null
 }
 
 export async function analyzeBridge(inp: BridgeRoundInput): Promise<BridgeRoundOutput> {

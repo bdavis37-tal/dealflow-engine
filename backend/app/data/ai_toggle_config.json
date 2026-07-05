@@ -1,13 +1,14 @@
 {
+  "_comment_frozen_on": "frozen_on verticals are AI-native by definition — their benchmark percentiles already price AI (incl. defense_tech, whose PitchBook 2025 comps describe AI-native defense). No additional premium may be stacked.",
   "_comment_frozen_off": "frozen_off contains M&A industry identifiers (not startup verticals) where AI-native premium does not apply",
-  "frozen_on": ["ai_ml_infrastructure", "ai_enabled_saas"],
+  "frozen_on": ["ai_ml_infrastructure", "ai_enabled_saas", "defense_tech"],
   "frozen_off": ["construction", "restaurants", "retail", "real_estate", "agriculture", "waste_management", "staffing"],
-  "default_on": ["defense_tech", "healthtech", "biotech_pharma", "developer_tools"],
+  "default_on": ["healthtech", "biotech_pharma", "developer_tools"],
   "default_off": ["b2b_saas", "fintech", "deep_tech_hardware", "consumer", "climate_energy", "marketplace", "vertical_saas"],
   "vertical_premiums": {
     "ai_ml_infrastructure": 0.0,
     "ai_enabled_saas": 0.0,
-    "defense_tech": 1.5,
+    "defense_tech": 0.0,
     "healthtech": 1.0,
     "biotech_pharma": 0.8,
     "b2b_saas": 0.8,
@@ -18,5 +19,38 @@
     "consumer": 0.4,
     "deep_tech_hardware": 0.4,
     "marketplace": 0.3
+  },
+  "parameter_matrix": {
+    "_comment": "Inputs-up AI-native calibration. Applied per-method BEFORE blending, only when is_ai_native=true, scaled by ai_native_score, and only for verticals NOT in frozen_on (their benchmarks already price AI).",
+    "standard": {
+      "scorecard_weights": null,
+      "berkus_cap_apportionment": null,
+      "rfs_step_value_overrides": {},
+      "arr_multiple_uplift": 0.0
+    },
+    "ai_native": {
+      "scorecard_weights": {
+        "management_team": 0.25,
+        "market_size": 0.20,
+        "product_technology": 0.25,
+        "competitive_environment": 0.15,
+        "marketing_sales_channels": 0.05,
+        "additional_financing_needed": 0.05,
+        "other_factors": 0.05
+      },
+      "berkus_cap_apportionment": {
+        "sound_idea": 0.55,
+        "prototype": 1.05,
+        "quality_management": 0.65,
+        "strategic_relationships": 0.90,
+        "product_rollout": 0.35
+      },
+      "rfs_step_value_overrides": {
+        "Technology": 0.50,
+        "Competition": 0.50,
+        "Litigation": 0.50
+      },
+      "arr_multiple_uplift_source": "vertical_premiums"
+    }
   }
 }

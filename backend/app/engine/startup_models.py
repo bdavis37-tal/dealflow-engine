@@ -4,9 +4,12 @@ All monetary values in USD millions. Percentages as decimals.
 """
 from __future__ import annotations
 
+import logging
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Literal, Optional
+from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +122,18 @@ class MarketProfile(BaseModel):
     tam_usd_billions: float = Field(gt=0.0, description="Total Addressable Market in USD billions")
     sam_usd_millions: float = Field(gt=0.0, description="Serviceable Addressable Market in USD millions")
     market_growth_rate: float = Field(default=0.15, ge=0.0, description="Annual market growth rate as decimal")
-    competitive_moat: str = Field(default="medium", description="low | medium | high")
+    competitive_moat: Literal["low", "medium", "high"] = Field(default="medium", description="low | medium | high")
+
+    @field_validator("competitive_moat", mode="before")
+    @classmethod
+    def _coerce_competitive_moat(cls, v: object) -> str:
+        """Coerce/normalize moat values instead of raising (engines never raise)."""
+        if isinstance(v, str):
+            normalized = v.strip().lower()
+            if normalized in ("low", "medium", "high"):
+                return normalized
+        logger.warning("Unknown competitive_moat value %r — defaulting to 'medium'", v)
+        return "medium"
 
 
 class FundraisingProfile(BaseModel):
@@ -130,6 +144,10 @@ class FundraisingProfile(BaseModel):
     raise_amount: float = Field(gt=0.0, description="Target raise amount in USD millions")
     instrument: InstrumentType = InstrumentType.SAFE
     pre_money_valuation_ask: Optional[float] = Field(default=None, ge=0.0, description="Founder's pre-money ask in USD millions; null = use engine output")
+    safe_type: Literal["post_money", "pre_money"] = Field(
+        default="post_money",
+        description="SAFE mechanics. post_money (YC 2018+ standard, ~87% of market): ownership = raise/cap. pre_money (legacy): ownership = raise/(cap+raise).",
+    )
     safe_discount: float = Field(default=0.0, ge=0.0, le=0.5, description="SAFE discount rate if applicable (0.20 = 20%)")
     has_mfn_clause: bool = Field(default=False)
     existing_safe_stack: float = Field(default=0.0, ge=0.0, description="Total outstanding SAFEs not yet converted, USD millions")
@@ -194,8 +212,15 @@ class SAFEConversionSummary(BaseModel):
     safe_amount: float
     valuation_cap: float
     discount_rate: float
-    conversion_price_at_cap: float  # cap / shares at next round
-    implied_ownership_pct: float
+    safe_type: str = "post_money"  # 'post_money' | 'pre_money'
+    # Per-share conversion price requires a share count, which the engine does
+    # not model — None unless shares outstanding are known.
+    conversion_price_at_cap: Optional[float] = None
+    implied_ownership_pct: float  # ownership implied by the cap alone
+    next_round_pre_money: Optional[float] = None   # projected next priced round pre-money
+    conversion_valuation: Optional[float] = None   # min(cap, next_round_pre × (1 − discount))
+    conversion_ownership_pct: Optional[float] = None  # ownership at projected conversion
+    governing_term: Optional[str] = None  # 'cap' | 'discount' — which term set the conversion price
     note: str
 
 
@@ -225,10 +250,19 @@ class ScorecardFlag(BaseModel):
 
 
 class ValuationVerdict(str, Enum):
-    STRONG = "strong"        # Top quartile for stage; founder has pricing power
-    FAIR = "fair"            # Median range; standard market terms
-    STRETCHED = "stretched"  # Above median; growth must accelerate to sustain
-    AT_RISK = "at_risk"      # Below median; re-examine fundamentals before raising
+    """
+    Verdict for the blended valuation relative to the vertical/stage benchmark
+    distribution and the founder's ask. Exact mapping (see
+    startup_engine._assign_verdict):
+      STRETCHED: blended >= P75 — above-market; strong story required to sustain
+      STRONG:    P50 <= blended < P75 — top half; founder has pricing power
+      FAIR:      P25 <= blended < P50 — below median but market-rate terms
+      AT_RISK:   blended < P25 — below-market; hit milestones before raising
+    """
+    STRONG = "strong"        # P50–P75: top half; founder has pricing power
+    FAIR = "fair"            # P25–P50: below median; standard market terms
+    STRETCHED = "stretched"  # >= P75: top quartile; growth must accelerate to sustain
+    AT_RISK = "at_risk"      # < P25: below market; re-examine fundamentals before raising
 
 
 class StartupValuationOutput(BaseModel):
@@ -242,7 +276,13 @@ class StartupValuationOutput(BaseModel):
     valuation_range_low: float           # P25 of applicable methods
     valuation_range_high: float          # P75 of applicable methods
     recommended_safe_cap: Optional[float]  # Suggested cap if raising on SAFE
-    implied_dilution: float              # Raise amount / post-money
+    implied_dilution: float              # Raise amount / post-money at the deal-mechanics basis
+
+    # Deal-mechanics basis: the actual deal (dilution, SAFE conversion, projected
+    # rounds) prices off the preparer's ask when one is provided — the model
+    # midpoint is only the fallback. The blend/range above never depends on the ask.
+    dilution_basis: str = Field(default="model_midpoint", description="'preparer_ask' | 'model_midpoint'")
+    dilution_basis_pre_money: float = Field(default=0.0, description="Pre-money the deal mechanics are priced at, USD millions")
 
     # Method breakdown
     method_results: list[ValuationMethodResult]
@@ -274,11 +314,14 @@ class StartupValuationOutput(BaseModel):
     # Raw benchmark data (pass-through for UI)
     vertical_benchmarks: dict
 
-    # AI modifier outputs (all None/False when modifier not applied)
+    # AI calibration outputs (all None/False when calibration not applied).
+    # The premium is EMERGENT: it arises from parameter-level calibration of
+    # the individual methods (scorecard weights, Berkus caps, RFS steps, ARR
+    # multiple uplift) applied BEFORE blending — never a post-blend scalar.
     ai_modifier_applied: bool = Field(default=False)
-    ai_premium_multiplier: Optional[float] = Field(default=None, description="Effective premium factor applied")
-    ai_premium_context: Optional[str] = Field(default=None, description="Human-readable premium explanation")
-    blended_before_ai: Optional[float] = Field(default=None, description="Pre-modifier blended value, USD millions")
+    ai_premium_multiplier: Optional[float] = Field(default=None, description="Emergent premium: blended / standard-parameter blend − 1")
+    ai_premium_context: Optional[str] = Field(default=None, description="Human-readable calibration explanation")
+    blended_before_ai: Optional[float] = Field(default=None, description="Counterfactual blend under standard (non-AI) parameters, USD millions")
     ai_native_score: Optional[float] = Field(default=None, description="Score from 4-question assessment [0.0–1.0]")
 
     # Round timing signal

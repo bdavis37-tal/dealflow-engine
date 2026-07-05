@@ -20,6 +20,7 @@ const defaultStructure = (s: Partial<DealStructure>): DealStructure => ({
   debt_tranches: s.debt_tranches ?? [],
   transaction_fees_pct: s.transaction_fees_pct ?? 0.02,
   advisory_fees: s.advisory_fees ?? 0,
+  cash_yield: s.cash_yield ?? 0.043,
 })
 
 export default function Step4_Financing({ structure, dealSize, mode, onUpdate, onNext, onBack }: Step4Props) {
@@ -78,6 +79,26 @@ export default function Step4_Financing({ structure, dealSize, mode, onUpdate, o
         debt={debt}
         onChange={handleSliderChange}
       />
+
+      {/* Cash opportunity cost — shown whenever cash funds part of the deal */}
+      {s.cash_percentage > 0 && (
+        <div className="mt-6 rounded-xl border border-slate-700 bg-slate-800/20 p-5">
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <GuidedInput
+              label="Yield on cash used"
+              value={((s.cash_yield ?? 0.043) * 100).toFixed(2)}
+              onChange={v => onUpdate({ cash_yield: Number(v) / 100 })}
+              type="number" suffix="%" min={0} max={20} step={0.01}
+              help="Opportunity cost of paying with balance-sheet cash: the interest income you stop earning on that cash. The model deducts this foregone interest from pro forma earnings each year."
+              defaultNote="4.3% — H1 2026 short-term rate"
+            />
+            <p className="text-2xs text-slate-500 leading-relaxed pt-7">
+              Foregone interest on the cash portion is deducted from combined earnings —
+              paying with cash is not free.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Deep model: tranche configuration */}
       {mode === 'deep' && s.debt_percentage > 0 && (

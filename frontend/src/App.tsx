@@ -70,6 +70,11 @@ export default function App() {
     runValuation,
     setAINative,
     updateAIAnswer,
+    reportContext,
+    updateReportContext,
+    addNote,
+    updateNote,
+    removeNote,
   } = useStartupState()
 
   // VC state
@@ -186,6 +191,11 @@ export default function App() {
               fundraise: startupState.fundraise as FundraisingProfile,
             }}
             onReset={resetStartup}
+            reportContext={reportContext}
+            onUpdateReportContext={updateReportContext}
+            onAddNote={addNote}
+            onUpdateNote={updateNote}
+            onRemoveNote={removeNote}
           />
         </AppShell>
       )

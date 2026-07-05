@@ -20,6 +20,14 @@ function fmt(n: number, dec = 1) {
 }
 function pct(n: number) { return `${(n * 100).toFixed(1)}%` }
 
+/** Plain-English label for the §1202 exclusion tier (OBBBA 50/75/100%). */
+function exclusionTierLabel(exclusionPct: number): string {
+  if (exclusionPct >= 1) return '100% exclusion (5-year holding period satisfied)'
+  if (exclusionPct >= 0.75) return '75% exclusion (4-year OBBBA tier)'
+  if (exclusionPct >= 0.5) return '50% exclusion (3-year OBBBA tier)'
+  return 'No exclusion yet — holding period below the 3-year OBBBA tier'
+}
+
 /** Shared numeric input with focus/blur pattern to prevent keystroke fighting */
 function GovNumInput({
   value,
@@ -71,7 +79,7 @@ function QSBSScreener({ fund }: { fund: FundProfile }) {
     issuance_date_post_july_2025: false,
     fund_size: fund.fund_size,
     lp_count: 50,
-    lp_marginal_tax_rate: 0.37,
+    lp_marginal_tax_rate: 0.238,
   })
   const [result, setResult] = useState<QSBSOutput | null>(null)
   const [loading, setLoading] = useState(false)
@@ -94,9 +102,9 @@ function QSBSScreener({ fund }: { fund: FundProfile }) {
     { key: 'incorporated_in_c_corp', label: 'C-Corporation', note: 'Must be a domestic C-Corp (not LLC, S-Corp, or partnership)' },
     { key: 'domestic_us_corp', label: 'US Domestic Corporation', note: 'Organized under US state law' },
     { key: 'active_business', label: 'Active Trade or Business', note: 'Cannot be professional services, finance, insurance, or holding company' },
-    { key: 'assets_at_issuance_under_50m', label: 'Assets ≤ $50M at Issuance', note: 'Aggregate gross assets at time of stock issuance' },
+    { key: 'assets_at_issuance_under_50m', label: 'Gross Assets Under §1202 Threshold at Issuance', note: 'Aggregate gross assets ≤ $50M (pre-July-2025 stock) or ≤ $75M (stock issued after July 4, 2025 — OBBBA)' },
     { key: 'original_issuance', label: 'Original Issuance', note: 'Acquired directly from corporation (not secondary market)' },
-    { key: 'issuance_date_post_july_2025', label: 'Issued After July 4, 2025', note: 'New $15M exclusion cap applies (vs $10M prior)' },
+    { key: 'issuance_date_post_july_2025', label: 'Issued After July 4, 2025', note: 'OBBBA terms apply: $15M per-taxpayer cap (vs $10M), $75M gross-asset test (vs $50M), and tiered 50/75/100% exclusion at 3/4/5-year holding periods' },
   ]
 
   return (
@@ -188,7 +196,11 @@ function QSBSScreener({ fund }: { fund: FundProfile }) {
                 {result.is_eligible ? 'QSBS Eligible' : 'Not QSBS Eligible'}
               </div>
               <div className="text-xs text-slate-500">
-                {result.holding_period_satisfied ? '5-year holding period satisfied' : `${result.years_remaining_to_qualify?.toFixed(1)} more years needed for exclusion`}
+                {result.holding_period_satisfied
+                  ? exclusionTierLabel(result.exclusion_pct_applicable)
+                  : result.years_remaining_to_qualify != null
+                    ? `${result.years_remaining_to_qualify.toFixed(1)} more years to the full 100% exclusion`
+                    : 'Holding period not yet satisfied'}
               </div>
             </div>
           </div>
@@ -201,13 +213,20 @@ function QSBSScreener({ fund }: { fund: FundProfile }) {
                 <div className="text-xs text-slate-500">{result.irc_citation}</div>
               </div>
               <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="text-xs text-slate-500">Exclusion % applicable</div>
+                <div className={`text-lg font-bold ${result.exclusion_pct_applicable >= 1 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {(result.exclusion_pct_applicable * 100).toFixed(0)}%
+                </div>
+                <div className="text-xs text-slate-500">{exclusionTierLabel(result.exclusion_pct_applicable)}</div>
+              </div>
+              <div className="bg-slate-900/50 rounded-lg p-3">
                 <div className="text-xs text-slate-500">Est. tax saved / LP</div>
                 <div className="text-lg font-bold text-emerald-400">${fmt(result.estimated_federal_tax_saved_per_lp)}M</div>
-                <div className="text-xs text-slate-500">at {pct(0.37)} marginal rate</div>
+                <div className="text-xs text-slate-500">at {pct(form.lp_marginal_tax_rate)} rate avoided</div>
               </div>
-              <div className="col-span-2 bg-slate-900/50 rounded-lg p-3">
-                <div className="text-xs text-slate-500">Total LP benefit (all {result.estimated_total_lp_benefit ? form.lp_count : '?'} LPs)</div>
-                <div className="text-2xl font-bold text-emerald-400">${fmt(result.estimated_total_lp_benefit)}M</div>
+              <div className="bg-slate-900/50 rounded-lg p-3">
+                <div className="text-xs text-slate-500">Total LP benefit (all {form.lp_count} LPs)</div>
+                <div className="text-lg font-bold text-emerald-400">${fmt(result.estimated_total_lp_benefit)}M</div>
                 <div className="text-xs text-slate-600">Each LP separately qualifies; assumes equal ownership</div>
               </div>
             </div>
@@ -334,6 +353,7 @@ function BridgeModeler() {
     current_ownership_pct: 0,
     fund_is_participating: true,
     pro_rata_amount: 0,
+    monthly_burn: undefined,
   })
   const [result, setResult] = useState<BridgeRoundOutput | null>(null)
   const [loading, setLoading] = useState(false)
@@ -397,6 +417,17 @@ function BridgeModeler() {
             <label className="block text-xs font-medium text-slate-400 mb-1">Maturity (months)</label>
             <GovNumInput value={form.maturity_months} onChange={v => setForm(f => ({...f, maturity_months: parseInt(v) || 18}))} />
           </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-slate-400 mb-1">Monthly Burn ($M) — optional</label>
+            <GovNumInput
+              value={form.monthly_burn ?? ''}
+              onChange={v => {
+                const parsed = parseFloat(v)
+                setForm(f => ({...f, monthly_burn: !isNaN(parsed) && parsed > 0 ? parsed : undefined}))
+              }}
+            />
+            <p className="text-xs text-slate-500 mt-1">Used to compute the real runway extension from the bridge. Leave blank if unknown.</p>
+          </div>
         </div>
         <button onClick={run} disabled={!ok || loading} className={`w-full py-2.5 rounded-xl font-semibold text-sm transition-colors ${ok && !loading ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
           {loading ? 'Analyzing…' : 'Analyze Bridge Round'}
@@ -414,19 +445,60 @@ function BridgeModeler() {
             <MetricBox label="Dilution from Bridge" value={pct(result.dilution_from_bridge)} />
             <MetricBox label="Effective Conv. Price" value={`$${fmt(result.effective_conversion_price, 0)}M`} />
             <MetricBox label="Implied Discount" value={pct(result.implied_discount_to_next_round)} />
-            {result.additional_runway_months && <MetricBox label="Runway Added (est.)" value={`${result.additional_runway_months.toFixed(0)} mo`} />}
+            <MetricBox
+              label="Runway Added (est.)"
+              value={result.additional_runway_months != null
+                ? `${result.additional_runway_months.toFixed(0)} mo`
+                : '— (enter monthly burn)'}
+            />
           </div>
-          <div className="bg-emerald-950/20 border border-emerald-700/20 rounded-lg p-3">
-            <div className="text-xs font-medium text-emerald-400 mb-1">Recommendation</div>
-            <div className="text-sm text-slate-300">{result.recommendation}</div>
-          </div>
+          <BridgeRecommendation recommendation={result.recommendation} rationale={bridgeRationale(result)} />
           <div className="space-y-1">
-            {result.notes.map((n, i) => (
+            {result.notes.filter(n => n !== bridgeRationale(result)).map((n, i) => (
               <div key={i} className="text-xs text-slate-500 flex items-start gap-2"><span>ℹ</span><span>{n}</span></div>
             ))}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/** The engine appends the recommendation rationale as the last note. */
+function bridgeRationale(result: BridgeRoundOutput): string | null {
+  return result.notes.length > 0 ? result.notes[result.notes.length - 1] : null
+}
+
+function BridgeRecommendation({ recommendation, rationale }: { recommendation: string; rationale: string | null }) {
+  const styles: Record<string, { box: string; badge: string; label: string }> = {
+    participate: {
+      box: 'bg-emerald-950/20 border-emerald-700/20',
+      badge: 'bg-emerald-900/50 text-emerald-400',
+      label: 'Participate',
+    },
+    monitor: {
+      box: 'bg-amber-950/20 border-amber-700/20',
+      badge: 'bg-amber-900/50 text-amber-400',
+      label: 'Monitor',
+    },
+    pass: {
+      box: 'bg-red-950/20 border-red-800/20',
+      badge: 'bg-red-900/50 text-red-400',
+      label: 'Pass',
+    },
+  }
+  const s = styles[recommendation] ?? {
+    box: 'bg-slate-900/50 border-slate-700',
+    badge: 'bg-slate-800 text-slate-300',
+    label: recommendation,
+  }
+  return (
+    <div className={`border rounded-lg p-3 ${s.box}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xs font-medium text-slate-400">Recommendation</span>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${s.badge}`}>{s.label}</span>
+      </div>
+      {rationale && <div className="text-sm text-slate-300 leading-relaxed">{rationale}</div>}
     </div>
   )
 }

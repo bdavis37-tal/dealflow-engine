@@ -19,25 +19,41 @@ from .models import (
 def _leverage_risk(
     deal: DealInput,
     output: DealOutput,
+    benchmarks: dict | None = None,
 ) -> RiskItem | None:
     """
     Leverage risk: high debt/EBITDA increases bankruptcy risk and limits flexibility.
 
-    Thresholds (based on credit market norms):
-      < 4.0x: Normal
-      4.0x–6.0x: Elevated (Medium/High)
-      > 6.0x: Critical
+    Audit fix F-15:
+      - Acquisition debt includes explicit debt tranches when present (the
+        debt_percentage shorthand is only used when no tranches are modeled).
+      - The metric is GROSS total debt / EBITDA and is named accordingly
+        (no cash netting happens here).
+      - Thresholds come from the target industry's
+        typical_debt_capacity_turns_ebitda benchmark (medium = industry debt
+        capacity; critical = 1.5× that, floored at capacity + 1 turn).
+      - The tolerance-band text handles the already-above-critical case instead
+        of printing a negative decline percentage.
     """
-    # Post-close net debt = acquisition debt + existing acquirer debt - combined cash
-    acq_debt = deal.target.acquisition_price * deal.structure.debt_percentage
+    # Acquisition debt: explicit tranches when present, else debt% × EV
+    if deal.structure.debt_tranches:
+        acq_debt = sum(t.amount for t in deal.structure.debt_tranches)
+    else:
+        acq_debt = deal.target.acquisition_price * deal.structure.debt_percentage
     total_debt = acq_debt + deal.acquirer.total_debt
     combined_ebitda = deal.acquirer.ebitda + deal.target.ebitda
     if combined_ebitda <= 0:
         return None
 
     leverage = total_debt / combined_ebitda
-    threshold_medium = 4.0
-    threshold_critical = 6.0
+
+    # Industry-specific debt capacity (audit fix F-15)
+    debt_capacity_turns = 4.0
+    if benchmarks:
+        ind = benchmarks.get(deal.target.industry.value, {})
+        debt_capacity_turns = float(ind.get("typical_debt_capacity_turns_ebitda", 4.0))
+    threshold_medium = debt_capacity_turns
+    threshold_critical = max(debt_capacity_turns * 1.5, debt_capacity_turns + 1.0)
 
     if leverage < threshold_medium:
         return None  # No flag needed
@@ -45,36 +61,49 @@ def _leverage_risk(
     if leverage >= threshold_critical:
         severity = RiskSeverity.CRITICAL
         description = (
-            f"Debt load is extremely high at {leverage:.1f}x EBITDA. "
+            f"Total debt load is extremely high at {leverage:.1f}x combined EBITDA "
+            f"(typical {deal.target.industry.value} debt capacity: ~{debt_capacity_turns:.1f}x). "
             "This level of leverage significantly elevates default risk and will "
             "severely restrict the company's financial flexibility."
         )
     else:
-        severity = RiskSeverity.HIGH if leverage > 5.0 else RiskSeverity.MEDIUM
+        midpoint = (threshold_medium + threshold_critical) / 2
+        severity = RiskSeverity.HIGH if leverage > midpoint else RiskSeverity.MEDIUM
         description = (
-            f"Post-close leverage of {leverage:.1f}x EBITDA is above typical comfort "
-            "levels for most lenders. The business has limited cushion if EBITDA "
-            "underperforms projections."
+            f"Post-close total leverage of {leverage:.1f}x combined EBITDA is above "
+            f"the typical {debt_capacity_turns:.1f}x debt capacity for "
+            f"{deal.target.industry.value}. The business has limited cushion if "
+            "EBITDA underperforms projections."
         )
 
-    # Tolerance band: max EBITDA decline before breach of 6x covenant
-    ebitda_buffer = max(0.0, total_debt / threshold_critical - combined_ebitda)
+    # Tolerance band: EBITDA level at which the critical threshold is breached.
+    # Handles both directions — never prints a negative decline percentage.
     safe_ebitda = total_debt / threshold_critical
-    decline_pct = (combined_ebitda - safe_ebitda) / combined_ebitda * 100
+    if safe_ebitda < combined_ebitda:
+        decline_pct = (combined_ebitda - safe_ebitda) / combined_ebitda * 100
+        tolerance_band = (
+            f"Deal hits the critical {threshold_critical:.1f}x leverage threshold if "
+            f"EBITDA falls by more than {decline_pct:.0f}% (to ${safe_ebitda:.1f}M)."
+        )
+    else:
+        growth_pct = (safe_ebitda - combined_ebitda) / combined_ebitda * 100
+        tolerance_band = (
+            f"EBITDA is already below the ${safe_ebitda:.1f}M needed to support "
+            f"{threshold_critical:.1f}x leverage — it must grow {growth_pct:.0f}% "
+            "just to reach the critical threshold."
+        )
 
     return RiskItem(
         description=description,
         severity=severity,
-        metric_name="Post-Close Debt / EBITDA",
+        metric_name="Post-Close Total Debt / EBITDA",
         current_value=leverage,
         threshold_value=threshold_critical,
-        tolerance_band=(
-            f"Deal hits critical leverage threshold if EBITDA falls by more than "
-            f"{decline_pct:.0f}% (to ${safe_ebitda:.1f}M)."
-        ),
+        tolerance_band=tolerance_band,
         plain_english=(
             f"For every $1 of annual profit, the combined company owes ${leverage:.1f} "
-            "in debt. Most lenders get nervous above $4."
+            f"in debt. Lenders in {deal.target.industry.value} typically get nervous "
+            f"above ${debt_capacity_turns:.1f}."
         ),
     )
 
@@ -143,8 +172,16 @@ def _interest_rate_sensitivity_risk(
     Interest rate risk: how many basis points of rate increase would flip to dilution?
 
     Threshold: if < 200bp of headroom, flag.
+
+    Audit fix F-17: acquisition debt includes explicit tranches when present,
+    and the per-share drag uses PRO FORMA shares (standalone share count
+    understates headroom for stock deals).
     """
-    acq_debt = deal.target.acquisition_price * deal.structure.debt_percentage
+    # Acquisition debt: explicit tranches when present, else debt% × EV
+    if deal.structure.debt_tranches:
+        acq_debt = sum(t.amount for t in deal.structure.debt_tranches)
+    else:
+        acq_debt = deal.target.acquisition_price * deal.structure.debt_percentage
     if acq_debt <= 0:
         return None
 
@@ -160,7 +197,14 @@ def _interest_rate_sensitivity_risk(
 
     # Estimate: each 100bp increase adds ~(acq_debt * 0.01 * (1-tax)) to annual interest drag
     tax_rate = deal.acquirer.tax_rate
-    shares = deal.acquirer.shares_outstanding
+    # Pro forma share count: standalone + shares issued as stock consideration
+    new_shares = 0.0
+    if deal.structure.stock_percentage > 0 and deal.acquirer.share_price > 0:
+        new_shares = (
+            deal.target.acquisition_price * deal.structure.stock_percentage
+            / deal.acquirer.share_price
+        )
+    shares = deal.acquirer.shares_outstanding + new_shares
     if shares <= 0:
         return None
 
@@ -284,12 +328,15 @@ def _purchase_price_risk(
                     f"median {ai_rev.get('median', 0)}x"
                 )
 
-    overpay_threshold = median_multiple * 1.5
+    # Audit fix F-16: the flag TRIGGERS at the industry high multiple; severity
+    # escalates to HIGH above 1.5× the median. threshold_value and the tolerance
+    # text report the actual trigger (high_multiple), not the escalation level.
+    severity_escalation_threshold = median_multiple * 1.5
 
     if entry_multiple < high_multiple:
         return None, ai_benchmark_context  # Within normal range
 
-    severity = RiskSeverity.HIGH if entry_multiple > overpay_threshold else RiskSeverity.MEDIUM
+    severity = RiskSeverity.HIGH if entry_multiple > severity_escalation_threshold else RiskSeverity.MEDIUM
     pct_above_median = (entry_multiple - median_multiple) / median_multiple * 100
 
     # Adjust description to mention AI-native context when applicable
@@ -323,11 +370,13 @@ def _purchase_price_risk(
         severity=severity,
         metric_name="Entry EV/EBITDA Multiple",
         current_value=entry_multiple,
-        threshold_value=overpay_threshold,
+        threshold_value=high_multiple,
         tolerance_band=(
+            f"Flagged above the industry high of {high_multiple:.1f}× "
+            f"(severity escalates above {severity_escalation_threshold:.1f}×, i.e. 1.5× median). "
             f"At the current price, EBITDA must grow to "
             f"${deal.target.acquisition_price / median_multiple:.1f}M "
-            f"to reach a fair {median_multiple:.1f}× multiple."
+            f"to reach the median {median_multiple:.1f}× multiple."
         ),
         plain_english=plain,
     ), ai_benchmark_context
@@ -666,7 +715,7 @@ def analyze_risks(
         price_risk = None
 
     risk_functions = [
-        lambda: _leverage_risk(deal, output),
+        lambda: _leverage_risk(deal, output, benchmarks),
         lambda: _synergy_execution_risk(deal, output),
         lambda: _interest_rate_sensitivity_risk(deal, output, base_accretion),
         lambda: _integration_cost_risk(deal),

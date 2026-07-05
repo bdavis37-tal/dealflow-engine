@@ -15,17 +15,25 @@ from .models import Industry
 
 # ---------------------------------------------------------------------------
 # Interest rate assumptions (update periodically)
-# These represent typical acquisition financing rates as of 2024-2025.
+# Vintage: H1 2026 credit markets (SOFR ~4.3%).
+#   Middle market: unitranche/direct lending at SOFR + 500-700bps
+#     (Capstone Partners / Houlihan Lokey private credit reports, Q1 2026).
+#   Large cap / quality upper-middle-market: SOFR + 425-475bps.
+# NOTE: all deal-size thresholds are in MILLIONS USD per project convention
+# (e.g. 250.0 = $250M).
 # ---------------------------------------------------------------------------
-MIDDLE_MARKET_RATE_RANGE = (0.07, 0.09)   # $10M–$250M deals
-LARGE_CAP_RATE_RANGE = (0.055, 0.075)     # $250M+ deals
-BLENDED_MIDDLE_MARKET_RATE = 0.08
-BLENDED_LARGE_CAP_RATE = 0.065
+MIDDLE_MARKET_RATE_RANGE = (0.09, 0.11)   # $10M–$250M deals
+LARGE_CAP_RATE_RANGE = (0.075, 0.09)      # $250M+ deals
+BLENDED_MIDDLE_MARKET_RATE = 0.10
+BLENDED_LARGE_CAP_RATE = 0.08
 
-# Transaction fee scale by deal size
+# Deal size above which large-cap financing rates apply (millions USD)
+LARGE_CAP_DEAL_SIZE_THRESHOLD = 250.0
+
+# Transaction fee scale by deal size (thresholds in millions USD)
 FEE_TIERS = [
-    (50_000_000, 0.030),      # < $50M → ~3%
-    (500_000_000, 0.020),     # $50M–$500M → ~2%
+    (50.0, 0.030),            # < $50M → ~3%
+    (500.0, 0.020),           # $50M–$500M → ~2%
     (float("inf"), 0.015),    # > $500M → ~1.5%
 ]
 
@@ -45,11 +53,11 @@ def _load_benchmarks() -> dict:
 @dataclass
 class DefaultAssumptions:
     """Smart default assumptions for a given deal context."""
-    # Financing
+    # Financing (H1 2026 vintage — see rate constants above)
     tax_rate: float = 0.25
     transaction_fees_pct: float = 0.02
-    blended_interest_rate: float = 0.08
-    interest_rate_range: tuple[float, float] = field(default_factory=lambda: (0.07, 0.09))
+    blended_interest_rate: float = 0.10
+    interest_rate_range: tuple[float, float] = field(default_factory=lambda: (0.09, 0.11))
 
     # Industry benchmarks
     ebitda_margin: float = 0.15
@@ -75,7 +83,11 @@ class DefaultAssumptions:
 
 
 def get_transaction_fee_pct(deal_size: float) -> float:
-    """Return typical transaction fees as % of deal size, scaled by deal size."""
+    """Return typical transaction fees as % of deal size.
+
+    Args:
+        deal_size: Acquisition enterprise value in MILLIONS USD (e.g. 200.0 = $200M).
+    """
     for threshold, rate in FEE_TIERS:
         if deal_size < threshold:
             return rate
@@ -83,8 +95,12 @@ def get_transaction_fee_pct(deal_size: float) -> float:
 
 
 def get_interest_rate(deal_size: float) -> float:
-    """Return blended acquisition debt interest rate based on deal size."""
-    if deal_size < 250_000_000:
+    """Return blended acquisition debt interest rate based on deal size.
+
+    Args:
+        deal_size: Acquisition enterprise value in MILLIONS USD (e.g. 200.0 = $200M).
+    """
+    if deal_size < LARGE_CAP_DEAL_SIZE_THRESHOLD:
         return BLENDED_MIDDLE_MARKET_RATE
     return BLENDED_LARGE_CAP_RATE
 
@@ -99,8 +115,8 @@ def get_defaults(
 
     Args:
         industry: The target company's industry vertical.
-        deal_size: Total acquisition price (enterprise value).
-        target_revenue: Target's annual revenue.
+        deal_size: Total acquisition price (enterprise value) in MILLIONS USD.
+        target_revenue: Target's annual revenue in MILLIONS USD.
 
     Returns:
         DefaultAssumptions populated with industry-specific benchmarks.
@@ -113,7 +129,7 @@ def get_defaults(
     tx_fee_pct = get_transaction_fee_pct(deal_size)
     interest_rate = get_interest_rate(deal_size)
 
-    if deal_size < 250_000_000:
+    if deal_size < LARGE_CAP_DEAL_SIZE_THRESHOLD:
         rate_range = MIDDLE_MARKET_RATE_RANGE
     else:
         rate_range = LARGE_CAP_RATE_RANGE

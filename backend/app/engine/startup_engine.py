@@ -14,11 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import os
 from typing import Optional
 
-from .ai_modifier import AIModifierInput, AIModifierOutput, apply_ai_modifier
+from .ai_modifier import AIParameterSet, get_ai_parameters
 from .startup_models import (
     StartupInput,
     StartupValuationOutput,
@@ -80,26 +79,37 @@ def _get_vertical_baseline(vdata: dict, stage: StartupStage) -> float:
 # Method 1: Berkus Method
 # ---------------------------------------------------------------------------
 
-def _score_berkus_dimension(
-    label: str,
-    signal: bool | float,
-    weight: float = 1.0,
-) -> float:
-    """Return a 0–1 score for a single Berkus dimension."""
-    if isinstance(signal, bool):
-        return 1.0 if signal else 0.4  # 0.4 = partial credit for presence alone
-    return float(max(0.0, min(1.0, signal)))
+# 2025-era Berkus ceiling: up to $0.7M per dimension, $3.5M total pre-money.
+# Berkus is deliberately NOT benchmark-anchored — it provides an independent
+# qualitative signal uncorrelated with the comparable-based methods.
+_BERKUS_DIMENSION_CAP = 0.7  # USD millions per dimension
+_BERKUS_TOTAL_CAP = _BERKUS_DIMENSION_CAP * 5  # $3.5M
 
 
-def _run_berkus(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
+def _run_berkus(
+    inp: StartupInput,
+    vdata: dict,
+    berkus_caps: Optional[dict[str, float]] = None,
+) -> ValuationMethodResult:
     """
-    Berkus Method: 5 factors × up to 20% of regional median = max valuation.
-    Updated formulation: each dimension = score × 20% × regional_median.
+    Berkus Method: 5 factors × up to $0.7M each = $3.5M max (2025-era Berkus
+    ceiling). The regional premium scales the CAP — not a vertical median —
+    so the method keeps its accepted ~$3–3.5M ceiling and stays independent
+    of the comparable benchmarks used by the other methods.
+
+    `berkus_caps` (AI parameter matrix) re-apportions the $3.5M total across
+    the 5 dimensions (keys: idea, management, prototype, relationships,
+    rollout) without changing the total — no hidden premium. The regional
+    premium still scales each cap.
     """
-    # Regional baseline
     regional_premium = _get_regional_premium(inp.fundraise.geography.value)
-    vertical_baseline = _get_vertical_baseline(vdata, inp.fundraise.stage)
-    regional_median = vertical_baseline * regional_premium
+    # Effective per-dimension caps (pre-regional). Standard = uniform $0.7M.
+    caps = {
+        d: (berkus_caps or {}).get(d, _BERKUS_DIMENSION_CAP)
+        for d in ("idea", "management", "prototype", "relationships", "rollout")
+    }
+    reapportioned = berkus_caps is not None
+    factor_max = _BERKUS_DIMENSION_CAP * regional_premium  # standard max per dimension
 
     # Dimension scoring (0–1 each; max contribution = 20% × regional_median each)
     if inp.berkus_scores:
@@ -162,11 +172,31 @@ def _run_berkus(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         elif prod.stage in [ProductStage.BETA, ProductStage.PAYING_CUSTOMERS]:
             s_rollout = 0.4
 
-    # Calculate indicated value
-    factor_max = 0.20 * regional_median  # max per dimension
-    indicated = (s_idea + s_management + s_prototype + s_relationships + s_rollout) * factor_max
+    # Calculate indicated value: per-dimension score × per-dimension cap × regional premium
+    indicated = (
+        s_idea * caps["idea"]
+        + s_management * caps["management"]
+        + s_prototype * caps["prototype"]
+        + s_relationships * caps["relationships"]
+        + s_rollout * caps["rollout"]
+    ) * regional_premium
     value_low = indicated * 0.7
     value_high = indicated * 1.4
+
+    if reapportioned:
+        cap_desc = (
+            f"AI-native calibration re-apportions the ${_BERKUS_TOTAL_CAP:.1f}M Berkus ceiling "
+            f"toward prototype/IP (caps: "
+            + ", ".join(f"{d} ${c * regional_premium:.2f}M" for d, c in caps.items())
+            + f"; total unchanged) × "
+            f"{inp.fundraise.geography.value.replace('_', ' ').title()} premium {regional_premium:.2f}x. "
+        )
+    else:
+        cap_desc = (
+            f"5 dimensions × up to ${factor_max:.2f}M each "
+            f"(${_BERKUS_TOTAL_CAP:.1f}M Berkus ceiling × "
+            f"{inp.fundraise.geography.value.replace('_', ' ').title()} premium {regional_premium:.2f}x). "
+        )
 
     return ValuationMethodResult(
         method_name="berkus",
@@ -176,13 +206,15 @@ def _run_berkus(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         value_high=round(value_high, 2),
         applicable=inp.fundraise.stage == StartupStage.PRE_SEED,
         rationale=(
-            f"5 dimensions scored against regional median of ${regional_median:.1f}M "
-            f"({inp.fundraise.geography.value.replace('_', ' ').title()} premium {regional_premium:.1f}x). "
-            f"Scores: Idea {s_idea:.0%}, Team {s_management:.0%}, Product {s_prototype:.0%}, "
+            cap_desc
+            + f"Scores: Idea {s_idea:.0%}, Team {s_management:.0%}, Product {s_prototype:.0%}, "
             f"Relationships {s_relationships:.0%}, Sales {s_rollout:.0%}."
         ),
         inputs_used={
-            "regional_median": regional_median,
+            "per_dimension_cap": round(factor_max, 3),
+            "per_dimension_caps": {d: round(c * regional_premium, 3) for d, c in caps.items()},
+            "ai_reapportioned": reapportioned,
+            "total_cap": round(_BERKUS_TOTAL_CAP * regional_premium, 3),
             "regional_premium": regional_premium,
             "scores": {
                 "idea": round(s_idea, 2),
@@ -199,19 +231,48 @@ def _run_berkus(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
 # Method 2: Scorecard Method
 # ---------------------------------------------------------------------------
 
-def _run_scorecard(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
+def _run_scorecard(
+    inp: StartupInput,
+    vdata: dict,
+    warnings: Optional[list[str]] = None,
+    weights_override: Optional[dict[str, float]] = None,
+) -> ValuationMethodResult:
     """
     Scorecard Method: 7 weighted factors vs. regional comparable.
     Weighted sum (50–150% range) × regional median.
+
+    `weights_override` (AI parameter matrix) replaces the benchmark weights
+    with the score-blended AI-native weights; both always sum to 1.0, so the
+    shift re-weights factors (toward product/IP) without a hidden premium.
+
+    User-provided scorecard_scores are validated: missing factors are filled
+    with the neutral 1.0, values are clamped to [0.5, 1.5], and unknown keys
+    are ignored with a warning (appended to `warnings` when provided).
     """
     regional_premium = _get_regional_premium(inp.fundraise.geography.value)
     vertical_baseline = _get_vertical_baseline(vdata, inp.fundraise.stage)
     regional_median = vertical_baseline * regional_premium
 
-    weights = _BENCHMARKS["scorecard_weights"]
+    weights = weights_override or _BENCHMARKS["scorecard_weights"]
 
     if inp.scorecard_scores:
-        scores = inp.scorecard_scores
+        provided = inp.scorecard_scores
+        unknown_keys = sorted(k for k in provided if k not in weights)
+        if unknown_keys and warnings is not None:
+            warnings.append(
+                f"Unknown scorecard factor(s) ignored: {', '.join(unknown_keys)}. "
+                f"Valid factors: {', '.join(weights)}."
+            )
+        scores = {}
+        for factor in weights:
+            raw = provided.get(factor, 1.0)  # missing factor = peer average, not zero
+            clamped = max(0.5, min(1.5, float(raw)))
+            if clamped != raw and warnings is not None:
+                warnings.append(
+                    f"Scorecard factor '{factor}' value {raw} clamped to {clamped} "
+                    "(valid range 0.5–1.5)."
+                )
+            scores[factor] = clamped
     else:
         t = inp.traction
         team = inp.team
@@ -261,16 +322,23 @@ def _run_scorecard(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         sales_score = max(0.5, min(1.5, sales_score))
 
         # Additional financing needed (0.5–1.5; less = better)
-        runway = (inp.traction.cash_on_hand / inp.traction.monthly_burn_rate) if inp.traction.monthly_burn_rate > 0 else 24
-        if runway >= 18: financing_score = 1.2
+        # burn==0 AND cash==0 means the data is unknown — score neutral, not best-case.
+        if t.monthly_burn_rate > 0:
+            runway: Optional[float] = t.cash_on_hand / t.monthly_burn_rate
+        elif t.cash_on_hand == 0:
+            runway = None  # unknown
+        else:
+            runway = 24.0  # cash with no burn: genuinely long runway
+        if runway is None: financing_score = 1.0
+        elif runway >= 18: financing_score = 1.2
         elif runway >= 12: financing_score = 1.0
         elif runway >= 6: financing_score = 0.8
         else: financing_score = 0.6
 
-        # Other factors
+        # Other factors (geography is already priced via the regional premium
+        # multiplier — do not double-count it here)
         other_score = 1.0
         if prod.regulatory_clearance: other_score = 1.2
-        if inp.fundraise.geography.value in ["bay_area", "new_york"]: other_score = min(1.5, other_score + 0.1)
 
         scores = {
             "management_team": mgmt,
@@ -305,6 +373,8 @@ def _run_scorecard(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         inputs_used={
             "regional_median": regional_median,
             "weighted_multiplier": round(weighted_sum, 3),
+            "weights": {k: round(v, 4) for k, v in weights.items()},
+            "ai_weights_applied": weights_override is not None,
             "scores": {k: round(v, 2) for k, v in scores.items()},
         },
     )
@@ -314,10 +384,24 @@ def _run_scorecard(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
 # Method 3: Risk Factor Summation
 # ---------------------------------------------------------------------------
 
-def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
+def _run_rfs(
+    inp: StartupInput,
+    vdata: dict,
+    warnings: Optional[list[str]] = None,
+    step_overrides: Optional[dict[str, float]] = None,
+) -> ValuationMethodResult:
     """
-    Risk Factor Summation: 12 categories, each -2 to +2.
-    Each step = ±$250K (±$0.25M). Starting baseline = scorecard indicated value.
+    Risk Factor Summation: 12 categories, each -max_steps to +max_steps
+    (max_steps from the risk_factor_summation benchmark block, currently ±2).
+    Each step = ±$250K (±$0.25M) scaled to the vertical baseline.
+
+    `step_overrides` (AI parameter matrix) widens the raw per-step value for
+    specific volatility categories (Technology, Competition, Litigation).
+    The widening is symmetric — negative scores in those categories subtract
+    more, positive scores add more.
+
+    User-provided risk_factor_scores are clamped to ±max_steps; unknown
+    categories are ignored with a warning (appended to `warnings` when provided).
     """
     regional_premium = _get_regional_premium(inp.fundraise.geography.value)
     vertical_baseline = _get_vertical_baseline(vdata, inp.fundraise.stage)
@@ -327,11 +411,39 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
     # For defense tech ($10M+) or AI infra ($10M+), flat $0.25M is negligible;
     # scaling keeps each step at ~3.2% of baseline regardless of vertical.
     market_median = _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
-    raw_adj = _BENCHMARKS["risk_factor_summation"]["adjustment_per_step_usd_millions"]
-    adj_per_step = raw_adj * (base / market_median) if market_median > 0 else raw_adj
+    rfs_config = _BENCHMARKS["risk_factor_summation"]
+    raw_adj = rfs_config["adjustment_per_step_usd_millions"]
+    max_steps = int(rfs_config.get("max_steps", 2))
+    valid_categories = rfs_config.get("categories", [])
+    baseline_scale = (base / market_median) if market_median > 0 else 1.0
+    adj_per_step = raw_adj * baseline_scale
+
+    def _step_for(category: str) -> float:
+        """Per-category step value: overridden raw step × baseline scaling."""
+        raw = (step_overrides or {}).get(category, raw_adj)
+        return raw * baseline_scale
 
     if inp.risk_factor_scores:
-        rfs = inp.risk_factor_scores
+        provided = inp.risk_factor_scores
+        unknown_keys = sorted(
+            k for k in provided if valid_categories and k not in valid_categories
+        )
+        if unknown_keys and warnings is not None:
+            warnings.append(
+                f"Unknown risk factor categor{'ies' if len(unknown_keys) > 1 else 'y'} ignored: "
+                f"{', '.join(unknown_keys)}. Valid categories: {', '.join(valid_categories)}."
+            )
+        rfs = {}
+        for category, raw in provided.items():
+            if valid_categories and category not in valid_categories:
+                continue
+            clamped = max(-max_steps, min(max_steps, int(raw)))
+            if clamped != raw and warnings is not None:
+                warnings.append(
+                    f"Risk factor '{category}' score {raw} clamped to {clamped} "
+                    f"(valid range -{max_steps} to +{max_steps})."
+                )
+            rfs[category] = clamped
     else:
         t = inp.traction
         team = inp.team
@@ -378,8 +490,17 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         rfs["Sales / Marketing"] = sales_score
 
         # Funding / Capital Raising
-        runway = (t.cash_on_hand / t.monthly_burn_rate) if t.monthly_burn_rate > 0 else 18
-        rfs["Funding / Capital Raising"] = 1 if runway >= 18 else 0 if runway >= 12 else -1
+        # burn==0 AND cash==0 means runway is unknown — neutral, not best-case.
+        if t.monthly_burn_rate > 0:
+            runway: Optional[float] = t.cash_on_hand / t.monthly_burn_rate
+        elif t.cash_on_hand == 0:
+            runway = None  # unknown
+        else:
+            runway = 18.0  # cash with no burn: healthy
+        if runway is None:
+            rfs["Funding / Capital Raising"] = 0
+        else:
+            rfs["Funding / Capital Raising"] = 1 if runway >= 18 else 0 if runway >= 12 else -1
 
         # Competition
         comp_map = {"low": -2, "medium": 0, "high": 1}
@@ -414,9 +535,17 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         ]: exit_score += 1
         rfs["Exit Potential"] = max(-2, min(2, exit_score))
 
-    total_adjustment = sum(rfs.values()) * adj_per_step
+    total_adjustment = sum(score * _step_for(category) for category, score in rfs.items())
     indicated = base + total_adjustment
     indicated = max(0.5, indicated)  # floor at $500K
+
+    step_note = ""
+    if step_overrides:
+        step_note = (
+            " AI-native calibration widens the per-step value for "
+            + ", ".join(sorted(step_overrides))
+            + " (symmetric — cuts both ways)."
+        )
 
     return ValuationMethodResult(
         method_name="risk_factor_summation",
@@ -428,11 +557,14 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         rationale=(
             f"Base ${base:.1f}M + total adjustment ${total_adjustment:+.2f}M "
             f"from {sum(rfs.values())} net score across 12 risk categories "
-            f"(${adj_per_step:.2f}M per step)."
+            f"(${adj_per_step:.2f}M per step)." + step_note
         ),
         inputs_used={
             "base": base,
             "adjustment_per_step": adj_per_step,
+            "step_overrides": {
+                k: round(v * baseline_scale, 4) for k, v in (step_overrides or {}).items()
+            },
             "scores": rfs,
             "total_adjustment": round(total_adjustment, 2),
         },
@@ -443,15 +575,35 @@ def _run_rfs(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
 # Method 4: ARR Multiple
 # ---------------------------------------------------------------------------
 
-def _run_arr_multiple(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
+def _run_arr_multiple(
+    inp: StartupInput,
+    vdata: dict,
+    arr_uplift: float = 0.0,
+    notes: Optional[list[str]] = None,
+) -> ValuationMethodResult:
     """
     ARR Multiple method. Uses NRR and growth rate to select the appropriate multiple band.
-    Only applicable when ARR > 0.
+    Only applicable when has_revenue is set AND ARR > 0 (consistent with the
+    NRR scorecard flag, which also gates on has_revenue).
+
+    `arr_uplift` (AI parameter matrix) lifts the vertical P50 multiple by
+    (1 + uplift), CAPPED at the same-stage ai_enabled_saas arr_multiple_p50 —
+    an AI toggle can lift a traditional company's multiple toward, but never
+    beyond, what a true AI-enabled SaaS company commands. The P25/P75 bounds
+    are scaled by the same effective factor so the indicated value can never
+    invert out of its own range.
     """
     t = inp.traction
     arr = t.annual_recurring_revenue or (t.monthly_recurring_revenue * 12)
 
-    if arr <= 0:
+    if arr <= 0 or not t.has_revenue:
+        if arr > 0 and not t.has_revenue:
+            rationale = (
+                "Recurring revenue was provided but has_revenue is false — "
+                "ARR multiple method gated off. Set has_revenue=true to include it."
+            )
+        else:
+            rationale = "No ARR reported — ARR multiple method not applicable."
         return ValuationMethodResult(
             method_name="arr_multiple",
             method_label="ARR Multiple",
@@ -459,8 +611,8 @@ def _run_arr_multiple(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
             value_low=None,
             value_high=None,
             applicable=False,
-            rationale="No ARR reported — ARR multiple method not applicable.",
-            inputs_used={"arr": 0},
+            rationale=rationale,
+            inputs_used={"arr": arr},
         )
 
     # Determine base multiple from vertical benchmarks
@@ -481,7 +633,34 @@ def _run_arr_multiple(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
             inputs_used={"arr": arr},
         )
 
-    base_multiple = p50_multiple
+    # --- AI-native ARR multiple uplift (parameter matrix) ---
+    # effective_p50 = vertical_p50 × (1 + uplift), capped at the same-stage
+    # ai_enabled_saas p50. P25/P75 scale by the same effective factor.
+    uplift_factor = 1.0
+    uplift_cap = None
+    cap_bound = False
+    if arr_uplift > 0:
+        uplift_cap = (
+            _BENCHMARKS["verticals"]
+            .get(StartupVertical.AI_ENABLED_SAAS.value, {})
+            .get(inp.fundraise.stage.value, {})
+            .get("arr_multiple_p50")
+        )
+        target_multiple = p50_multiple * (1 + arr_uplift)
+        if uplift_cap is not None and target_multiple > uplift_cap:
+            # Never lift a traditional company beyond what a true AI-enabled
+            # SaaS company commands (never below the vertical's own P50).
+            target_multiple = max(p50_multiple, float(uplift_cap))
+            cap_bound = True
+            if notes is not None:
+                notes.append(
+                    f"AI-native ARR multiple uplift capped at the {inp.fundraise.stage.value.replace('_', ' ')} "
+                    f"AI-enabled SaaS median of {uplift_cap:.1f}x — the uplift lifts a multiple toward, "
+                    "but never beyond, what a true AI-enabled SaaS company commands."
+                )
+        uplift_factor = target_multiple / p50_multiple if p50_multiple > 0 else 1.0
+
+    base_multiple = p50_multiple * uplift_factor
 
     # NRR adjustment
     nrr = t.net_revenue_retention
@@ -515,17 +694,40 @@ def _run_arr_multiple(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
     else:
         burn_adj = 0.0
 
-    adjusted_multiple = base_multiple * (1 + nrr_adj + growth_adj + gm_adj + burn_adj)
-    adjusted_multiple = max(1.0, adjusted_multiple)
+    adjustment_factor = 1 + nrr_adj + growth_adj + gm_adj + burn_adj
+    adjusted_multiple = max(1.0, base_multiple * adjustment_factor)
+
+    # Apply the same AI uplift factor and adjustment factor to the P25/P75
+    # bounds so the indicated value (adjusted P50) can never invert out of
+    # its own range (S-5 bracket fix preserved).
+    low_multiple = (
+        p25_multiple * uplift_factor if p25_multiple is not None else base_multiple * 0.7
+    ) * adjustment_factor
+    high_multiple = (
+        p75_multiple * uplift_factor if p75_multiple is not None else base_multiple * 1.4
+    ) * adjustment_factor
 
     indicated = arr * adjusted_multiple
-    value_low = arr * (p25_multiple or adjusted_multiple * 0.7)
-    value_high = arr * (p75_multiple or adjusted_multiple * 1.4)
+    value_low = min(arr * low_multiple, indicated)
+    value_high = max(arr * high_multiple, indicated)
 
-    # Rule of 40
-    yoy_growth_pct = mom * 12 * 100 if mom else 0
-    ebitda_margin_pct = (1 - inp.traction.gross_margin) * -100  # rough proxy
-    rule_of_40 = yoy_growth_pct + ebitda_margin_pct
+    # Rule of 40: compounded annual growth + burn-based operating margin proxy.
+    # MoM growth compounds — (1+mom)^12 − 1 — it does not simply multiply by 12.
+    yoy_growth_pct = ((1 + mom) ** 12 - 1) * 100 if mom > 0 else 0.0
+    # Margin proxy from burn: ≈ −(annualized burn) / ARR. Zero burn ≈ breakeven.
+    margin_pct = -((t.monthly_burn_rate * 12) / arr) * 100 if t.monthly_burn_rate > 0 else 0.0
+    rule_of_40 = yoy_growth_pct + margin_pct
+
+    # Grade against the benchmark rule_of_40_bands
+    ro40_bands = _BENCHMARKS.get("rule_of_40_bands", {})
+    rule_of_40_band = None
+    for band_name in ["elite", "excellent", "strong", "average", "below_bar"]:
+        band = ro40_bands.get(band_name)
+        if band and rule_of_40 >= band.get("min", 0):
+            rule_of_40_band = band.get("label", band_name)
+            break
+    if rule_of_40_band is None:
+        rule_of_40_band = ro40_bands.get("below_bar", {}).get("label", "below bar")
 
     return ValuationMethodResult(
         method_name="arr_multiple",
@@ -536,17 +738,31 @@ def _run_arr_multiple(inp: StartupInput, vdata: dict) -> ValuationMethodResult:
         applicable=True,
         rationale=(
             f"ARR ${arr:.2f}M × {adjusted_multiple:.1f}x adjusted multiple "
-            f"(base {base_multiple:.0f}x, NRR {nrr:.0%} adj {nrr_adj:+.0%}, "
+            f"(base {base_multiple:.1f}x"
+            + (
+                f" incl. AI-native uplift ×{uplift_factor:.2f}"
+                + (" — capped at AI-enabled SaaS median" if cap_bound else "")
+                if uplift_factor > 1.0
+                else ""
+            )
+            + f", NRR {nrr:.0%} adj {nrr_adj:+.0%}, "
             f"growth adj {growth_adj:+.0%}, GM adj {gm_adj:+.0%})."
         ),
         inputs_used={
             "arr": arr,
-            "base_multiple_p50": base_multiple,
+            "base_multiple_p50": p50_multiple,
+            "effective_base_multiple": round(base_multiple, 2),
+            "arr_multiple_uplift": round(arr_uplift, 4),
+            "uplift_factor": round(uplift_factor, 4),
+            "uplift_cap_multiple": uplift_cap,
+            "uplift_cap_bound": cap_bound,
             "adjusted_multiple": round(adjusted_multiple, 2),
+            "adjustment_factor": round(adjustment_factor, 3),
             "nrr": nrr,
             "mom_growth": mom,
             "gross_margin": gm,
             "rule_of_40_approx": round(rule_of_40, 1),
+            "rule_of_40_band": rule_of_40_band,
         },
     )
 
@@ -721,32 +937,79 @@ def _compute_round_timing(inp: StartupInput, vdata: dict) -> RoundTimingSignal:
 # Dilution modeling
 # ---------------------------------------------------------------------------
 
+def _projected_round(
+    vertical: StartupVertical,
+    next_stage: StartupStage,
+    floor_pre: float,
+) -> tuple[float, float]:
+    """
+    Project (pre_money, raise_amount) for the next round from the vertical's
+    next-stage benchmark block, falling back to market-wide medians.
+    floor_pre enforces a step-up over the prior round's post-money.
+    """
+    ndata = _get_vertical_data(vertical, next_stage)
+    market = _BENCHMARKS["market_wide_medians"].get(next_stage.value, {})
+    market_pre = market.get("valuation_pre_money_median") or market.get("valuation_median") or 0.0
+    pre = max(ndata.get("valuation_p50") or market_pre, floor_pre)
+    raise_amount = (
+        ndata.get("round_size_median")
+        or market.get("round_size_median")
+        or (3.0 if next_stage == StartupStage.SEED else 10.0)
+    )
+    return float(pre), float(raise_amount)
+
+
 def _build_dilution_scenarios(
     inp: StartupInput,
-    blended_pre_money: float,
+    basis_pre_money: float,
+    model_pre_money: float,
 ) -> list[DilutionScenario]:
     """
-    Project dilution across the current round and the next two typical rounds.
+    Project dilution across the current round and the next typical rounds,
+    using the vertical's per-stage round sizes and valuation medians.
+
+    The CURRENT round is priced at `basis_pre_money` — the preparer's ask when
+    one was provided, otherwise the model midpoint. Dilution describes the
+    actual deal on the table, so it flows off the price actually being asked,
+    not the model's blend.
+
+    Projected FUTURE rounds stay anchored to `model_pre_money` (the model
+    midpoint): they are market projections, and the model does not assume the
+    market validates the preparer's ask. When the ask is above market, a
+    projected round can therefore price below the current post-money — that is
+    the down-round risk, surfaced as a warning by the orchestrator.
+
+    Existing SAFEs convert at the next PRICED round: if the current round is
+    priced equity they convert now; otherwise conversion is deferred to the
+    first projected priced round.
     """
     raise_amount = inp.fundraise.raise_amount
     stage = inp.fundraise.stage
+    vertical = inp.fundraise.vertical
     scenarios: list[DilutionScenario] = []
 
-    # Starting ownership
+    # Existing SAFE stack: converts at the next priced round.
     existing_safe_pct = 0.0
-    if inp.fundraise.existing_safe_stack > 0 and blended_pre_money > 0:
-        existing_safe_pct = min(0.30, inp.fundraise.existing_safe_stack / blended_pre_money)
+    pending_safe_stack = 0.0
+    if inp.fundraise.existing_safe_stack > 0:
+        if inp.fundraise.instrument == InstrumentType.PRICED_EQUITY and basis_pre_money > 0:
+            # Current round is priced — SAFEs convert into it now.
+            existing_safe_pct = min(0.30, inp.fundraise.existing_safe_stack / basis_pre_money)
+        else:
+            # Current round is a SAFE/note — conversion deferred to the
+            # projected next priced round below.
+            pending_safe_stack = inp.fundraise.existing_safe_stack
 
     founder_pct = 1.0 - existing_safe_pct
 
     # Current round
-    post_money = blended_pre_money + raise_amount
+    post_money = basis_pre_money + raise_amount
     inv_pct = raise_amount / post_money
     new_founder_pct = founder_pct * (1 - inv_pct)
 
     scenarios.append(DilutionScenario(
         round_label=f"Current ({stage.value.replace('_', ' ').title()})",
-        pre_money=round(blended_pre_money, 2),
+        pre_money=round(basis_pre_money, 2),
         raise_amount=round(raise_amount, 2),
         post_money=round(post_money, 2),
         investor_ownership_pct=round(inv_pct, 4),
@@ -757,35 +1020,40 @@ def _build_dilution_scenarios(
 
     founder_pct = new_founder_pct
 
-    # Next round projections based on typical market data
+    # Next round projections from the vertical's per-stage benchmark blocks.
+    # Step-up floors anchor to the MODEL-midpoint post-money, not the ask —
+    # future rounds are market projections (see docstring).
+    model_post = model_pre_money + raise_amount
     next_rounds: list[tuple[str, float, float, float]] = []  # (label, pre_money, raise, option_pool)
-    series_a_median = _BENCHMARKS["market_wide_medians"]["series_a"]["valuation_pre_money_median"]
     if stage == StartupStage.PRE_SEED:
-        seed_median = _BENCHMARKS["market_wide_medians"]["seed"]["valuation_pre_money_median"]
-        # Projected Seed pre-money must exceed current post-money (step-up floor: 1.5x post-money)
-        seed_pre = max(seed_median, post_money * 1.5)
-        seed_post = seed_pre + 3.0
+        # Projected Seed pre-money must exceed model post-money (step-up floor: 1.5x post-money)
+        seed_pre, seed_raise = _projected_round(vertical, StartupStage.SEED, model_post * 1.5)
+        seed_post = seed_pre + seed_raise
         # Projected Series A pre-money must exceed projected Seed post-money (floor: 2x seed post)
-        series_a_pre = max(series_a_median, seed_post * 2.0)
+        series_a_pre, series_a_raise = _projected_round(vertical, StartupStage.SERIES_A, seed_post * 2.0)
         next_rounds = [
-            ("Seed (projected)", seed_pre, 3.0, 0.10),
-            ("Series A (projected)", series_a_pre, 10.0, 0.10),
+            ("Seed (projected)", seed_pre, seed_raise, 0.10),
+            ("Series A (projected)", series_a_pre, series_a_raise, 0.10),
         ]
     elif stage == StartupStage.SEED:
-        # Projected Series A pre-money must exceed current post-money (floor: 2x post-money)
-        series_a_pre = max(series_a_median, post_money * 2.0)
+        # Projected Series A pre-money must exceed model post-money (floor: 2x post-money)
+        series_a_pre, series_a_raise = _projected_round(vertical, StartupStage.SERIES_A, model_post * 2.0)
         next_rounds = [
-            ("Series A (projected)", series_a_pre, 10.0, 0.10),
+            ("Series A (projected)", series_a_pre, series_a_raise, 0.10),
         ]
 
     for label, next_pre, next_raise, option_pool in next_rounds:
         # Option pool shuffle: pool comes out of pre-money
-        pre_with_pool = next_pre  # pool already baked in to market medians
         pool_dilution = option_pool  # applied to existing shareholders
-        post = pre_with_pool + next_raise
+        post = next_pre + next_raise
         inv_pct = next_raise / post
-        # Founder diluted by option pool first, then investor
-        founder_after_pool = founder_pct * (1 - pool_dilution)
+        # Deferred SAFE stack converts at the first projected priced round
+        safe_conversion_pct = 0.0
+        if pending_safe_stack > 0 and next_pre > 0:
+            safe_conversion_pct = min(0.30, pending_safe_stack / next_pre)
+            pending_safe_stack = 0.0
+        # Founder diluted by SAFE conversion and option pool first, then investor
+        founder_after_pool = founder_pct * (1 - safe_conversion_pct) * (1 - pool_dilution)
         founder_after_inv = founder_after_pool * (1 - inv_pct)
 
         scenarios.append(DilutionScenario(
@@ -805,38 +1073,116 @@ def _build_dilution_scenarios(
 
 def _build_safe_conversion(
     inp: StartupInput,
-    blended_pre_money: float,
+    basis_pre_money: float,
+    model_pre_money: float,
 ) -> Optional[SAFEConversionSummary]:
     """
-    Model how the current SAFE converts at the next hypothetical priced round.
+    Model how the current SAFE converts at the projected next priced round.
+
+    `basis_pre_money` (preparer's ask when provided, else the model midpoint)
+    anchors the capless-SAFE proxy cap. The projected next priced round stays
+    anchored to `model_pre_money` — it is a market projection, so an
+    above-market cap can convert at the discount instead of the cap. This is
+    the same projection convention as the dilution model.
+
+    Mechanics depend on safe_type:
+      - post_money (YC 2018+ standard, ~87% of market): ownership at cap = raise / cap
+      - pre_money (legacy):                             ownership at cap = raise / (cap + raise)
+
+    Conversion at the projected next priced round happens at the LOWER of the
+    cap and next_round_pre × (1 − discount); the governing term is reported.
+    conversion_price_at_cap is None — a per-share price requires a share
+    count, which the engine does not model.
     """
     if inp.fundraise.instrument != InstrumentType.SAFE:
         return None
 
-    cap = inp.fundraise.pre_money_valuation_ask or blended_pre_money
-    discount = inp.fundraise.safe_discount
-    raise_amount = inp.fundraise.raise_amount
+    f = inp.fundraise
+    capless = f.pre_money_valuation_ask is None
+    cap = f.pre_money_valuation_ask or basis_pre_money
+    discount = f.safe_discount
+    raise_amount = f.raise_amount
+    safe_type = f.safe_type
 
-    # At conversion: investor gets shares at the LOWER of (cap price) or (discount price)
-    implied_ownership = raise_amount / (cap + raise_amount)
+    # Ownership implied by the cap alone
+    if safe_type == "post_money":
+        implied_ownership = raise_amount / cap if cap > 0 else 0.0
+    else:
+        implied_ownership = raise_amount / (cap + raise_amount) if (cap + raise_amount) > 0 else 0.0
 
-    note_parts = [f"SAFE of ${raise_amount:.2f}M with a ${cap:.1f}M valuation cap."]
+    # Projected next priced round (same market-anchored projection as the
+    # dilution model — floors off the model midpoint, not the ask)
+    current_post = model_pre_money + raise_amount
+    next_round_pre: Optional[float] = None
+    next_round_label = ""
+    if f.stage == StartupStage.PRE_SEED:
+        next_round_pre, _ = _projected_round(f.vertical, StartupStage.SEED, current_post * 1.5)
+        next_round_label = "Seed"
+    elif f.stage == StartupStage.SEED:
+        next_round_pre, _ = _projected_round(f.vertical, StartupStage.SERIES_A, current_post * 2.0)
+        next_round_label = "Series A"
+
+    governing_term: Optional[str] = None
+    conversion_valuation: Optional[float] = None
+    conversion_ownership: Optional[float] = None
+    if next_round_pre is not None and cap > 0:
+        discounted_valuation = next_round_pre * (1 - discount) if discount > 0 else None
+        if discounted_valuation is not None and discounted_valuation < cap:
+            governing_term = "discount"
+            conversion_valuation = discounted_valuation
+            # Discount conversion prices off the round itself (pre-money mechanics)
+            conversion_ownership = raise_amount / (conversion_valuation + raise_amount)
+        else:
+            governing_term = "cap"
+            conversion_valuation = cap
+            if safe_type == "post_money":
+                conversion_ownership = raise_amount / cap
+            else:
+                conversion_ownership = raise_amount / (cap + raise_amount)
+
+    type_label = "post-money" if safe_type == "post_money" else "pre-money"
+    note_parts = [
+        f"{type_label.capitalize()} SAFE of ${raise_amount:.2f}M with a ${cap:.1f}M valuation cap "
+        f"(implied ownership at cap: {implied_ownership:.1%})."
+    ]
+    if capless:
+        note_parts.append(
+            "No explicit cap was provided — the engine's blended valuation is used as a proxy cap."
+        )
+    if next_round_pre is not None and governing_term is not None:
+        note_parts.append(
+            f"At the projected {next_round_label} round (~${next_round_pre:.1f}M pre-money), "
+            f"the {'discount' if governing_term == 'discount' else 'valuation cap'} governs: "
+            f"conversion at ${conversion_valuation:.1f}M for ~{conversion_ownership:.1%} ownership."
+        )
+    elif next_round_pre is None:
+        note_parts.append(
+            "No next priced round is modeled at Series A — conversion shown at the cap only."
+        )
     if discount > 0:
         note_parts.append(f"Includes {discount:.0%} discount on conversion price.")
-    if inp.fundraise.has_mfn_clause:
+    if f.has_mfn_clause:
         note_parts.append("MFN clause present — monitor any subsequent SAFE issuances.")
-    if inp.fundraise.existing_safe_stack > 0:
+    if f.existing_safe_stack > 0:
         note_parts.append(
-            f"${inp.fundraise.existing_safe_stack:.1f}M in existing SAFEs not yet converted — "
+            f"${f.existing_safe_stack:.1f}M in existing SAFEs not yet converted — "
             "cumulative dilution at next priced round will be higher than this single instrument."
         )
+    note_parts.append(
+        "Per-share conversion price not shown — it requires a share count, which is not modeled."
+    )
 
     return SAFEConversionSummary(
         safe_amount=raise_amount,
         valuation_cap=cap,
         discount_rate=discount,
-        conversion_price_at_cap=round(cap / 10.0, 4),  # illustrative; real calc needs share count
+        safe_type=safe_type,
+        conversion_price_at_cap=None,  # requires shares outstanding (not modeled)
         implied_ownership_pct=round(implied_ownership, 4),
+        next_round_pre_money=round(next_round_pre, 2) if next_round_pre is not None else None,
+        conversion_valuation=round(conversion_valuation, 2) if conversion_valuation is not None else None,
+        conversion_ownership_pct=round(conversion_ownership, 4) if conversion_ownership is not None else None,
+        governing_term=governing_term,
         note=" ".join(note_parts),
     )
 
@@ -947,7 +1293,7 @@ def _build_scorecard(inp: StartupInput, blended: float, vdata: dict) -> list[Sco
             vs_label = "Median range — market-rate terms"
         elif blended >= p25:
             vs_signal = ValuationSignal.WEAK
-            vs_label = "Bottom quartile — re-evaluate traction or team before raising"
+            vs_label = "Below median (P25–P50) — strengthen traction or team before raising"
         else:
             vs_signal = ValuationSignal.WARNING
             vs_label = "Below P25 — consider bridge round or additional milestones first"
@@ -956,7 +1302,7 @@ def _build_scorecard(inp: StartupInput, blended: float, vdata: dict) -> list[Sco
             metric="Valuation vs. Benchmark",
             value=f"${blended:.1f}M",
             signal=vs_signal,
-            benchmark=f"P25 ${p25:.0f}M | P50 ${p50:.0f}M | P75 ${p75:.0f}M ({inp.fundraise.vertical.value.replace('_', ' ')}, {stage.value.replace('_', ' ')})",
+            benchmark=f"{vs_label}. P25 ${p25:.0f}M | P50 ${p50:.0f}M | P75 ${p75:.0f}M ({inp.fundraise.vertical.value.replace('_', ' ')}, {stage.value.replace('_', ' ')})",
             commentary="Where your implied valuation sits within the Carta/PitchBook benchmark distribution for your vertical and stage.",
         ))
 
@@ -984,6 +1330,15 @@ def _assign_verdict(
     vdata: dict,
     warnings: list[str],
 ) -> tuple[ValuationVerdict, str, str]:
+    """
+    Map the blended valuation onto the vertical/stage benchmark distribution.
+    Exact mapping (relative to the ask — higher percentile = more aggressive):
+      blended >= P75        → STRETCHED (above-market; strong story required)
+      P50 <= blended < P75  → STRONG    (top half; pricing power)
+      P25 <= blended < P50  → FAIR      (below median; market-rate terms)
+      blended < P25         → AT_RISK   (below-market; milestone first)
+    Missing P50 → FAIR with a limited-benchmark note.
+    """
     p25 = vdata.get("valuation_p25", 0)
     p50 = vdata.get("valuation_p50", 0)
     p75 = vdata.get("valuation_p75", 0)
@@ -1022,6 +1377,95 @@ def _assign_verdict(
 
 
 # ---------------------------------------------------------------------------
+# Method blending
+# ---------------------------------------------------------------------------
+
+def _compute_method_blend(
+    inp: StartupInput,
+    vdata: dict,
+    ai_params: AIParameterSet,
+    warnings: Optional[list[str]] = None,
+    notes: Optional[list[str]] = None,
+) -> tuple[list[ValuationMethodResult], float, float, float]:
+    """
+    Run the four valuation methods under the given parameter set and blend
+    them. The blended valuation is STRICTLY the weighted average of the
+    applicable method results — there is no post-blend scalar. Any AI-native
+    premium emerges from the parameter-level calibration inside the methods.
+
+    Pass `warnings`/`notes` as None for counterfactual runs (e.g. the
+    standard-parameter blend used for reporting) to avoid duplicate messages.
+
+    Returns (method_results, blended, range_low, range_high).
+    """
+    notes_list = notes if notes is not None else []
+
+    berkus = _run_berkus(inp, vdata, ai_params.berkus_caps)
+    scorecard = _run_scorecard(inp, vdata, warnings, ai_params.scorecard_weights)
+    rfs = _run_rfs(inp, vdata, warnings, ai_params.rfs_step_values)
+    arr_mult = _run_arr_multiple(inp, vdata, ai_params.arr_multiple_uplift, notes_list)
+
+    method_results = [berkus, scorecard, rfs, arr_mult]
+    applicable = [m for m in method_results if m.applicable and m.indicated_value is not None]
+
+    # Determine weighting: the ARR multiple's weight ramps in with ARR magnitude
+    arr = inp.traction.annual_recurring_revenue or (inp.traction.monthly_recurring_revenue * 12)
+
+    if not applicable:
+        # Fallback to benchmark median
+        blended = vdata.get("valuation_p50") or _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
+        if warnings is not None:
+            warnings.append("Insufficient inputs for method-based valuation — using vertical median as fallback.")
+        notes_list.append("Increase input detail (team, traction, market size) for a more precise output.")
+    else:
+        if arr > 0 and arr_mult.applicable:
+            # ARR multiple is primary once revenue is meaningful; its weight
+            # ramps from 0 to the full 65% as ARR approaches the vertical's
+            # arr_required_min (fallback $1M), so a first few dollars of
+            # revenue can never crater a pre-revenue valuation.
+            pre_revenue_values = [
+                m.indicated_value for m in [berkus, scorecard, rfs]
+                if m.applicable and m.indicated_value is not None
+            ]
+            if pre_revenue_values:
+                pre_rev_avg = sum(pre_revenue_values) / len(pre_revenue_values)
+                ramp_denominator = max(float(vdata.get("arr_required_min") or 1.0), 1.0)
+                ramp = min(1.0, arr / ramp_denominator)
+                arr_weight = 0.65 * ramp
+                blended = arr_mult.indicated_value * arr_weight + pre_rev_avg * (1 - arr_weight)
+                if ramp < 1.0 and blended < pre_rev_avg:
+                    # Monotonicity floor: while ARR is still ramping in, early
+                    # revenue must not value the company below its otherwise
+                    # identical pre-revenue blend.
+                    blended = pre_rev_avg
+                    notes_list.append(
+                        "Early-revenue floor applied: ARR is below the vertical's threshold, so the "
+                        "blended value is floored at the pre-revenue blend."
+                    )
+                notes_list.append(
+                    f"ARR multiple weighted {arr_weight:.0%} (weight ramps with ARR toward the full "
+                    f"65% at ${ramp_denominator:.1f}M ARR); Berkus/Scorecard/RFS average weighted "
+                    f"{1 - arr_weight:.0%}."
+                )
+            else:
+                blended = arr_mult.indicated_value
+                notes_list.append("ARR multiple is sole applicable method.")
+        else:
+            # Pre-revenue: average of applicable pre-revenue methods
+            values = [m.indicated_value for m in [berkus, scorecard, rfs] if m.applicable and m.indicated_value is not None]
+            blended = sum(values) / len(values)
+            notes_list.append(f"Blended average of {len(values)} applicable pre-revenue methods.")
+
+    # Range from applicable methods
+    low_vals = [m.value_low for m in applicable if m.value_low is not None]
+    high_vals = [m.value_high for m in applicable if m.value_high is not None]
+    range_low = min(low_vals) if low_vals else blended * 0.7
+    range_high = max(high_vals) if high_vals else blended * 1.5
+
+    return method_results, blended, range_low, range_high
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -1037,72 +1481,116 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
     warnings: list[str] = []
     notes: list[str] = []
 
-    # Run all four methods
-    berkus = _run_berkus(inp, vdata)
-    scorecard = _run_scorecard(inp, vdata)
-    rfs = _run_rfs(inp, vdata)
-    arr_mult = _run_arr_multiple(inp, vdata)
+    # Input consistency checks
+    t = inp.traction
+    if t.monthly_recurring_revenue > 0 and t.annual_recurring_revenue > 0:
+        implied_arr = t.monthly_recurring_revenue * 12
+        if abs(implied_arr - t.annual_recurring_revenue) / t.annual_recurring_revenue > 0.20:
+            warnings.append(
+                f"MRR × 12 (${implied_arr:.2f}M) differs from reported ARR "
+                f"(${t.annual_recurring_revenue:.2f}M) by more than 20% — check for inconsistent "
+                "revenue inputs. The engine uses reported ARR."
+            )
+    if t.monthly_burn_rate == 0 and t.cash_on_hand == 0:
+        warnings.append(
+            "Burn rate and cash on hand not provided — runway-dependent scores were set to "
+            "neutral rather than best-case. Add burn and cash data for a more accurate valuation."
+        )
 
-    method_results = [berkus, scorecard, rfs, arr_mult]
+    # Resolve the AI-native parameter calibration (inputs-up matrix). For
+    # non-AI-native companies, zero scores, and frozen_on verticals this
+    # returns the standard parameter set (applied=False).
+    ai_params = get_ai_parameters(
+        inp.fundraise.is_ai_native,
+        inp.fundraise.ai_native_score,
+        vertical.value,
+    )
 
-    # Determine weighting: ARR multiple dominates once revenue exists
+    # Run all four methods and blend. The blended valuation is strictly the
+    # weighted average of the applicable method results — any AI-native
+    # premium is EMERGENT from the parameter-level calibration, never a
+    # post-blend scalar.
     arr = inp.traction.annual_recurring_revenue or (inp.traction.monthly_recurring_revenue * 12)
-    applicable = [m for m in method_results if m.applicable and m.indicated_value is not None]
+    if arr > 0 and not t.has_revenue:
+        warnings.append(
+            "Recurring revenue was provided but has_revenue is false — the ARR multiple method "
+            "was gated off. Set has_revenue=true to include it."
+        )
+    method_results, blended, range_low, range_high = _compute_method_blend(
+        inp, vdata, ai_params, warnings, notes,
+    )
 
-    if not applicable:
-        # Fallback to benchmark median
-        blended = vdata.get("valuation_p50") or _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
-        warnings.append("Insufficient inputs for method-based valuation — using vertical median as fallback.")
-        notes.append("Increase input detail (team, traction, market size) for a more precise output.")
-    else:
-        if arr > 0 and arr_mult.applicable:
-            # ARR multiple is primary; others are cross-checks
-            pre_revenue_values = [
-                m.indicated_value for m in [berkus, scorecard, rfs]
-                if m.applicable and m.indicated_value is not None
-            ]
-            if pre_revenue_values:
-                pre_rev_avg = sum(pre_revenue_values) / len(pre_revenue_values)
-                blended = arr_mult.indicated_value * 0.65 + pre_rev_avg * 0.35
-                notes.append("ARR multiple weighted 65%; Berkus/Scorecard/RFS average weighted 35%.")
-            else:
-                blended = arr_mult.indicated_value
-                notes.append("ARR multiple is sole applicable method.")
-        else:
-            # Pre-revenue: average of applicable pre-revenue methods
-            values = [m.indicated_value for m in [berkus, scorecard, rfs] if m.applicable and m.indicated_value is not None]
-            blended = sum(values) / len(values)
-            notes.append(f"Blended average of {len(values)} applicable pre-revenue methods.")
-
-    # --- AI Modifier: apply graduated premium for AI-native startups ---
+    # --- AI calibration reporting: counterfactual standard-parameter blend ---
+    # blended_before_ai is the SAME blend recomputed with standard parameters;
+    # the emergent premium is the ratio between the two blends minus one.
     blended_before_ai: Optional[float] = None
-    ai_mod_output: Optional[AIModifierOutput] = None
+    ai_premium_multiplier: Optional[float] = None
+    ai_premium_context: Optional[str] = None
 
-    if inp.fundraise.is_ai_native:
-        ai_mod_output = apply_ai_modifier(AIModifierInput(
-            is_ai_native=True,
-            ai_native_score=inp.fundraise.ai_native_score,
-            vertical=inp.fundraise.vertical.value,
-            blended_valuation=blended,
-        ))
-        if ai_mod_output.ai_modifier_applied:
-            blended_before_ai = blended
-            blended = ai_mod_output.blended_after_ai
+    if ai_params.applied:
+        _, standard_blended, _, _ = _compute_method_blend(inp, vdata, AIParameterSet())
+        blended_before_ai = standard_blended
+        if standard_blended > 0:
+            ai_premium_multiplier = blended / standard_blended - 1.0
+        ai_premium_context = ai_params.context
+        notes.append(ai_params.context)
+    elif inp.fundraise.is_ai_native and ai_params.context:
+        # Frozen-on verticals (and matrix errors): explain why no calibration applied
+        ai_premium_context = ai_params.context
+        notes.append(ai_params.context)
 
-    # Range from applicable methods
-    low_vals = [m.value_low for m in applicable if m.value_low is not None]
-    high_vals = [m.value_high for m in applicable if m.value_high is not None]
-    range_low = min(low_vals) if low_vals else blended * 0.7
-    range_high = max(high_vals) if high_vals else blended * 1.5
+    # Invariant: range_low <= blended <= range_high (clamp + warn as safety net)
+    if blended < range_low:
+        warnings.append(
+            f"Blended valuation ${blended:.1f}M fell below the computed range low "
+            f"${range_low:.1f}M — range widened to include it."
+        )
+        range_low = blended
+    if blended > range_high:
+        warnings.append(
+            f"Blended valuation ${blended:.1f}M exceeded the computed range high "
+            f"${range_high:.1f}M — range widened to include it."
+        )
+        range_high = blended
 
-    # Recommended SAFE cap (slight premium on blended; market convention is ~10–20% above)
+    # Recommended SAFE cap: anchor to the vertical's median cap where the
+    # benchmark provides one (floored at the blended value); otherwise fall
+    # back to the ~15% market-convention premium on blended.
     safe_cap = None
     if inp.fundraise.instrument == InstrumentType.SAFE:
-        safe_cap = round(blended * 1.15, 1)  # 15% premium on blended value is market convention
-        notes.append(f"Recommended SAFE cap of ${safe_cap:.1f}M = blended value × 1.15x (standard market premium).")
+        cap_median = vdata.get("safe_cap_median")
+        if cap_median:
+            safe_cap = round(max(float(cap_median), blended), 1)
+            notes.append(
+                f"Recommended SAFE cap of ${safe_cap:.1f}M anchored to the vertical's median cap "
+                f"(${cap_median:.1f}M), floored at the blended valuation."
+            )
+        else:
+            safe_cap = round(blended * 1.15, 1)
+            notes.append(
+                f"Recommended SAFE cap of ${safe_cap:.1f}M = blended value × 1.15x "
+                "(standard market premium; no vertical cap median available)."
+            )
+
+    # Deal-mechanics basis: the deal happens at the preparer's ask when one is
+    # provided — the model midpoint is only a fallback anchor. The blended
+    # valuation and calibrated range are never affected by the ask.
+    ask = inp.fundraise.pre_money_valuation_ask
+    basis_is_ask = ask is not None and ask > 0
+    basis_pre_money = float(ask) if basis_is_ask else blended
+    if basis_is_ask:
+        notes.append(
+            f"Deal mechanics (implied dilution, current-round dilution, SAFE cap fallback) are priced at "
+            f"the preparer's ask of ${basis_pre_money:.1f}M pre-money, not the model midpoint (${blended:.1f}M). "
+            "Projected future rounds remain anchored to market benchmarks."
+        )
+    else:
+        notes.append(
+            f"No preparer ask provided — deal mechanics are priced at the model midpoint (${blended:.1f}M pre-money)."
+        )
 
     # Implied dilution
-    post_money = blended + inp.fundraise.raise_amount
+    post_money = basis_pre_money + inp.fundraise.raise_amount
     implied_dilution = inp.fundraise.raise_amount / post_money if post_money > 0 else 0
 
     # Warnings
@@ -1116,16 +1604,37 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
             f"NRR of {inp.traction.net_revenue_retention:.0%} is below 100% — you are losing more from churn than you gain from expansion. "
             "This is a top-3 concern for institutional investors and will compress your ARR multiple."
         )
-    market_med_down_round_pct = _BENCHMARKS["market_wide_medians"]["seed"]["down_round_pct"]
     if blended > vdata.get("valuation_p75", 9999):
+        # Use the requested stage's down-round rate where the benchmark has
+        # one; otherwise fall back to the seed rate and say so.
+        stage_medians = _BENCHMARKS["market_wide_medians"].get(stage.value, {})
+        down_round_pct = stage_medians.get("down_round_pct")
+        down_round_proxy_note = ""
+        if down_round_pct is None:
+            down_round_pct = _BENCHMARKS["market_wide_medians"]["seed"]["down_round_pct"]
+            down_round_proxy_note = " (seed-stage rate used as proxy — no stage-specific data)"
         warnings.append(
-            f"Valuation is above P75 for your vertical. Note that {market_med_down_round_pct:.0%} of all 2023–2025 rounds were down rounds — "
+            f"Valuation is above P75 for your vertical. Note that {down_round_pct:.0%} of recent rounds "
+            f"were down rounds{down_round_proxy_note} — "
             "an aggressive cap today raises the next-round bar significantly."
         )
 
-    # Dilution modeling
-    dilution_scenarios = _build_dilution_scenarios(inp, blended)
-    safe_conversion = _build_safe_conversion(inp, blended)
+    # Dilution modeling — current round priced at the deal-mechanics basis
+    # (ask when provided); projected rounds anchored to the model midpoint.
+    dilution_scenarios = _build_dilution_scenarios(inp, basis_pre_money, blended)
+    safe_conversion = _build_safe_conversion(inp, basis_pre_money, blended)
+
+    # An ask above the market-projected next round means the projection is a
+    # down round relative to this deal price — flag it plainly.
+    if basis_is_ask and len(dilution_scenarios) > 1:
+        current, next_round = dilution_scenarios[0], dilution_scenarios[1]
+        if next_round.pre_money < current.post_money:
+            warnings.append(
+                f"The market-projected {next_round.round_label.replace(' (projected)', '')} pre-money "
+                f"(${next_round.pre_money:.1f}M) is below the current post-money at your ask "
+                f"(${current.post_money:.1f}M) — the next round would be a down round unless "
+                "performance outruns the benchmarks."
+            )
 
     # Investor scorecard
     investor_scorecard = _build_scorecard(inp, blended, vdata)
@@ -1158,6 +1667,8 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         valuation_range_high=round(range_high, 2),
         recommended_safe_cap=safe_cap,
         implied_dilution=round(implied_dilution, 4),
+        dilution_basis="preparer_ask" if basis_is_ask else "model_midpoint",
+        dilution_basis_pre_money=round(basis_pre_money, 2),
         method_results=method_results,
         benchmark_p25=vdata.get("valuation_p25", 0),
         benchmark_p50=vdata.get("valuation_p50", 0),
@@ -1174,10 +1685,10 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         warnings=warnings,
         computation_notes=notes,
         vertical_benchmarks=vdata,
-        ai_modifier_applied=ai_mod_output.ai_modifier_applied if ai_mod_output else False,
-        ai_premium_multiplier=ai_mod_output.ai_premium_multiplier if ai_mod_output else None,
-        ai_premium_context=ai_mod_output.ai_premium_context if ai_mod_output else None,
-        blended_before_ai=blended_before_ai,
+        ai_modifier_applied=ai_params.applied,
+        ai_premium_multiplier=round(ai_premium_multiplier, 6) if ai_premium_multiplier is not None else None,
+        ai_premium_context=ai_premium_context,
+        blended_before_ai=round(blended_before_ai, 2) if blended_before_ai is not None else None,
         ai_native_score=inp.fundraise.ai_native_score if inp.fundraise.is_ai_native else None,
         round_timing=round_timing,
     )

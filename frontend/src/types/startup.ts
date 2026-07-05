@@ -41,7 +41,18 @@ export type ProductStage = 'idea' | 'mvp' | 'beta' | 'paying_customers' | 'scali
 
 export type ValuationSignal = 'strong' | 'fair' | 'weak' | 'warning'
 
+/**
+ * Verdict vs. the vertical/stage benchmark distribution (see
+ * startup_engine._assign_verdict):
+ *   stretched: blended >= P75 — above-market; strong story required
+ *   strong:    P50–P75 — top half; founder has pricing power
+ *   fair:      P25–P50 — below median but market-rate terms
+ *   at_risk:   < P25 — below-market; hit milestones before raising
+ */
 export type ValuationVerdict = 'strong' | 'fair' | 'stretched' | 'at_risk'
+
+/** SAFE mechanics: post_money (YC 2018+ standard) = raise/cap; pre_money (legacy) = raise/(cap+raise) */
+export type SAFEType = 'post_money' | 'pre_money'
 
 export type RaiseSignal = 'raise_now' | 'raise_in_months' | 'focus_milestones'
 
@@ -96,6 +107,7 @@ export interface FundraisingProfile {
   raise_amount: number
   instrument: InstrumentType
   pre_money_valuation_ask: number | null
+  safe_type: SAFEType
   safe_discount: number
   has_mfn_clause: boolean
   existing_safe_stack: number
@@ -145,8 +157,19 @@ export interface SAFEConversionSummary {
   safe_amount: number
   valuation_cap: number
   discount_rate: number
-  conversion_price_at_cap: number
+  safe_type: string
+  /** null unless shares outstanding are known — per-share price is not modeled */
+  conversion_price_at_cap: number | null
+  /** ownership implied by the cap alone */
   implied_ownership_pct: number
+  /** projected next priced round pre-money */
+  next_round_pre_money: number | null
+  /** min(cap, next_round_pre × (1 − discount)) */
+  conversion_valuation: number | null
+  /** ownership at the projected conversion */
+  conversion_ownership_pct: number | null
+  /** which term set the conversion price: 'cap' | 'discount' */
+  governing_term: string | null
   note: string
 }
 
@@ -184,6 +207,14 @@ export interface StartupValuationOutput {
   recommended_safe_cap: number | null
   implied_dilution: number
 
+  /**
+   * Basis the deal mechanics (implied dilution, current-round dilution, SAFE
+   * cap fallback) are priced at: the preparer's ask when one was provided,
+   * else the model midpoint. The blend/range never depend on the ask.
+   */
+  dilution_basis: 'preparer_ask' | 'model_midpoint'
+  dilution_basis_pre_money: number
+
   method_results: ValuationMethodResult[]
 
   benchmark_p25: number
@@ -207,13 +238,64 @@ export interface StartupValuationOutput {
 
   vertical_benchmarks: Record<string, unknown>
 
-  // AI modifier outputs (all null/false when modifier not applied)
+  // AI calibration outputs (all null/false when calibration not applied).
+  // The premium is EMERGENT from parameter-level calibration applied inside
+  // the methods before blending — never a post-blend scalar.
   ai_modifier_applied: boolean
-  ai_premium_multiplier: number | null
+  ai_premium_multiplier: number | null // blended / standard-parameter blend − 1
   ai_premium_context: string | null
-  blended_before_ai: number | null
+  blended_before_ai: number | null // counterfactual blend under standard parameters
   ai_native_score: number | null
   round_timing: RoundTimingSignal
+}
+
+// ---------------------------------------------------------------------------
+// Report context (presentation-layer only)
+//
+// INVARIANCE GUARANTEE: everything in this section lives ONLY in frontend
+// state and is NEVER sent to the valuation API. Computed results are
+// bit-identical regardless of perspective, preparer, or notes.
+// ---------------------------------------------------------------------------
+
+export type ReportPerspective = 'founder' | 'investor' | 'advisor'
+
+export interface PreparerNote {
+  id: string
+  anchor: 'team' | 'traction' | 'product' | 'market' | 'method' | 'benchmark_placement'
+  claim: string
+  evidence?: string // contract #, award, LOI, link — how a reader can verify
+}
+
+export interface ReportContext {
+  perspective: ReportPerspective
+  prepared_by?: string // display name, optional
+  contended_placement?: 'p25_p50' | 'p50_p75' | 'above_p75' | 'above_p95' | null
+  notes: PreparerNote[]
+}
+
+export type NoteAnchor = PreparerNote['anchor']
+export type ContendedPlacement = NonNullable<ReportContext['contended_placement']>
+
+export const PERSPECTIVE_LABELS: Record<ReportPerspective, string> = {
+  founder: 'Founder',
+  investor: 'Investor',
+  advisor: 'Advisor',
+}
+
+export const NOTE_ANCHOR_LABELS: Record<NoteAnchor, string> = {
+  team: 'Team',
+  traction: 'Traction',
+  product: 'Product',
+  market: 'Market',
+  method: 'Methodology',
+  benchmark_placement: 'Benchmark Placement',
+}
+
+export const CONTENDED_PLACEMENT_LABELS: Record<ContendedPlacement, string> = {
+  p25_p50: 'In line with median (P25–P50)',
+  p50_p75: 'P50–P75',
+  above_p75: 'Above P75',
+  above_p95: 'Above P95',
 }
 
 // ---------------------------------------------------------------------------

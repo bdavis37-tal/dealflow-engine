@@ -27,6 +27,7 @@ function ScenarioCard({ scenario, isBase }: { scenario: VCScenario; isBase?: boo
     Bull: { bg: 'bg-blue-950/30', border: 'border-blue-800/30', accent: 'text-blue-400', probBg: 'bg-blue-900/20' },
   }
   const colors = colorMap[scenario.label as keyof typeof colorMap] ?? colorMap.Base
+  const isWriteOff = scenario.label === 'Bear' && scenario.exit_enterprise_value <= 0
 
   return (
     <div className={`${colors.bg} border ${colors.border} rounded-xl p-5 ${isBase ? 'ring-1 ring-emerald-600/40' : ''}`}>
@@ -39,6 +40,11 @@ function ScenarioCard({ scenario, isBase }: { scenario: VCScenario; isBase?: boo
               base
             </span>
           )}
+          {isWriteOff && (
+            <span className="text-xs bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded">
+              write-off
+            </span>
+          )}
         </div>
         <div className={`${colors.probBg} px-2 py-1 rounded text-xs font-medium ${colors.accent}`}>
           {pct(scenario.probability)} probability
@@ -47,8 +53,8 @@ function ScenarioCard({ scenario, isBase }: { scenario: VCScenario; isBase?: boo
 
       {/* Key metrics */}
       <div className="grid grid-cols-2 gap-3 mb-4">
-        <Metric label="Exit EV" value={fmtEV(scenario.exit_enterprise_value)} accent={colors.accent} large />
-        <Metric label="ARR Multiple" value={`${scenario.exit_multiple_arr.toFixed(0)}x ARR`} accent={colors.accent} />
+        <Metric label="Exit EV" value={isWriteOff ? '$0M' : fmtEV(scenario.exit_enterprise_value)} accent={colors.accent} large />
+        <Metric label="ARR Multiple" value={isWriteOff ? 'Total loss' : `${scenario.exit_multiple_arr.toFixed(0)}x ARR`} accent={colors.accent} />
         <Metric label="Gross MOIC" value={`${fmt(scenario.gross_moic)}x`} accent={colors.accent} large />
         <Metric label="Net MOIC" value={`${fmt(scenario.net_moic)}x`} accent="text-slate-400" />
         <Metric label="Gross IRR" value={pct(scenario.gross_irr)} accent={colors.accent} />
@@ -105,7 +111,7 @@ export default function VCReturnScenarios({ output }: Props) {
           <EVMetric
             label="Expected MOIC"
             value={`${expected_moic.toFixed(1)}x`}
-            sub="On total invested"
+            sub="Probability-weighted (incl. failure)"
             highlight={expected_moic >= 3 ? 'green' : expected_moic >= 1.5 ? 'yellow' : 'red'}
           />
           <EVMetric
@@ -136,7 +142,9 @@ export default function VCReturnScenarios({ output }: Props) {
             />
           </div>
           <div className="flex justify-between mt-1 text-xs text-slate-500">
-            <span>Bear {(bear_scenario.probability * 100).toFixed(0)}%</span>
+            <span>
+              Bear{bear_scenario.exit_enterprise_value <= 0 ? ' (write-off)' : ''} {(bear_scenario.probability * 100).toFixed(0)}%
+            </span>
             <span>Base {(base_scenario.probability * 100).toFixed(0)}%</span>
             <span>Bull {(bull_scenario.probability * 100).toFixed(0)}%</span>
           </div>
