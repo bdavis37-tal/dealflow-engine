@@ -551,7 +551,6 @@ function MethodsPage({ output, input, reportContext }: {
   reportContext: ReportContext
 }) {
   const applicable = output.method_results.filter(m => m.applicable && m.indicated_value != null)
-  const notApplicable = output.method_results.filter(m => !m.applicable)
 
   return (
     <Page size="A4" style={s.page}>
@@ -583,19 +582,6 @@ function MethodsPage({ output, input, reportContext }: {
           )}
         </View>
       ))}
-
-      {notApplicable.length > 0 && (
-        <>
-          <Text style={[s.sectionHead, { marginTop: 16 }]}>Methods Not Applied</Text>
-          <View style={s.rule} />
-          {notApplicable.map(m => (
-            <View key={m.method_name} style={s.row}>
-              <Text style={s.rowLabel}>{m.method_label}</Text>
-              <Text style={[s.rowValue, { color: C.mid, fontFamily: 'Helvetica' }]}>{m.rationale}</Text>
-            </View>
-          ))}
-        </>
-      )}
 
       {/* AI modifier note — factual, no opinion */}
       {output.ai_modifier_applied && output.ai_premium_multiplier != null && (
