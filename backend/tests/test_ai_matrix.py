@@ -139,7 +139,7 @@ class TestGetAIParameters:
         for v in FROZEN_ON:
             p = get_ai_parameters(True, 1.0, v)
             assert p.applied is False
-            assert "already reflected in benchmarks" in p.context
+            assert "reference assumptions already include" in p.context
 
     def test_score_one_matches_matrix_endpoints(self):
         p = get_ai_parameters(True, 1.0, "b2b_saas")
@@ -211,7 +211,7 @@ class TestEmergentPremium:
     def test_context_describes_parameter_calibration(self):
         out = run_startup_valuation(_mk(is_ai_native=True, score=1.0))
         assert out.ai_premium_context is not None
-        assert "parameter-level calibration" in out.ai_premium_context
+        assert "not empirically calibrated" in out.ai_premium_context
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ class TestFrozenVerticals:
     @pytest.mark.parametrize("vertical", FROZEN_ON)
     def test_context_says_benchmarks_already_price_ai(self, vertical):
         on = run_startup_valuation(_mk(vertical=vertical, is_ai_native=True, score=1.0))
-        assert "already reflected in benchmarks" in (on.ai_premium_context or "")
+        assert "reference assumptions already include" in (on.ai_premium_context or "")
 
 
 # ---------------------------------------------------------------------------
@@ -255,12 +255,10 @@ def _expected_blend(out, inp: StartupInput) -> float:
     if arr > 0 and arr_m.applicable and pre_values:
         vdata = _get_vertical_data(inp.fundraise.vertical, inp.fundraise.stage)
         ramp_denominator = max(float(vdata.get("arr_required_min") or 1.0), 1.0)
-        ramp = min(1.0, arr / ramp_denominator)
+        ramp = arr / (arr + ramp_denominator)
         arr_weight = 0.65 * ramp
         pre_avg = sum(pre_values) / len(pre_values)
         blended = arr_m.indicated_value * arr_weight + pre_avg * (1 - arr_weight)
-        if ramp < 1.0 and blended < pre_avg:
-            blended = pre_avg
         return blended
     if arr > 0 and arr_m.applicable:
         return arr_m.indicated_value

@@ -1,3 +1,4 @@
+import EvidencePanel from '../shared/EvidencePanel'
 /**
  * VCDashboard — Full VC deal results dashboard.
  * Renders after deal evaluation completes (Step 3 of VC flow).
@@ -5,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import type { VCDealOutput, FundProfile } from '../../types/vc'
+import type { VCDealOutput, FundProfile, VCDealInput } from '../../types/vc'
 import ShareButton from '../shared/ShareButton'
 import type { VCInputState } from '../../lib/shareUtils'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
@@ -18,6 +19,7 @@ import VCGovernanceTools from './VCGovernanceTools'
 
 interface Props {
   output: VCDealOutput
+  deal: Partial<VCDealInput>
   fund: FundProfile
   onNewDeal: () => void
   onReset: () => void
@@ -35,20 +37,22 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'governance', label: 'QSBS / Legal' },
 ]
 
-function fmt(n: number, dec = 1) {
+function fmt(n: number | null, dec = 1) {
+  if (n == null) return "Unavailable"
   return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })
 }
-function pct(n: number) { return `${(n * 100).toFixed(1)}%` }
+function pct(n: number | null) { if (n == null) return "Unavailable"; return `${(n * 100).toFixed(1)}%` }
 function fmtEV(ev: number) {
   if (ev >= 1000) return `$${(ev / 1000).toFixed(1)}B`
   return `$${ev.toFixed(0)}M`
 }
 
-export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props) {
+export default function VCDashboard({ output, deal, fund, onNewDeal, onReset }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
 
   const rec = output.quick_screen.recommendation
   const recColors = {
+    insufficient_inputs: { bg: 'bg-slate-900', border: 'border-slate-600', text: 'text-slate-200', icon: '○' },
     strong_interest: { bg: 'bg-emerald-900/40', border: 'border-emerald-600/40', text: 'text-emerald-400', icon: '🟢' },
     look_deeper: { bg: 'bg-amber-900/40', border: 'border-amber-600/40', text: 'text-amber-400', icon: '🟡' },
     pass: { bg: 'bg-red-900/40', border: 'border-red-600/40', text: 'text-red-400', icon: '🔴' },
@@ -57,6 +61,7 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
 
   return (
     <div className="max-w-5xl mx-auto">
+      <EvidencePanel evidence={output.evidence} analysis={{input: {...deal, fund}, output}} />
       {/* Hero — Verdict + Quick screen */}
       <div className={`${rc.bg} border ${rc.border} rounded-2xl p-6 mb-6`}>
         <div className="flex items-start justify-between mb-4">
@@ -66,7 +71,7 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
               <h1 className={`text-2xl font-bold ${rc.text}`}>
                 {rec === 'strong_interest' ? 'Strong Interest'
                  : rec === 'look_deeper' ? 'Look Deeper'
-                 : 'Pass'}
+                 : rec === 'insufficient_inputs' ? 'Inputs Needed' : 'Pass'}
               </h1>
             </div>
             <p className="text-slate-300 text-sm leading-relaxed max-w-xl">
@@ -74,11 +79,11 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
             </p>
           </div>
           <div className="flex gap-2 items-center">
-            <ShareButton
+            <ShareButton evidence={output.evidence}
               module="vc"
               inputState={{
                 fund,
-                deal: output.ic_memo as unknown as VCInputState['deal'],
+                deal: {...deal, benchmark_version: output.evidence?.dataset_version},
               } satisfies VCInputState}
               colorScheme="emerald"
             />
@@ -100,10 +105,10 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
         {/* Key numbers at a glance */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <HeroMetric label="Entry Ownership" value={pct(output.ownership.entry_ownership_pct)} />
-          <HeroMetric label="Base Case MOIC" value={`${fmt(output.base_scenario.gross_moic)}x`} highlight />
+          <HeroMetric label="Base Case MOIC" value={output.base_scenario.available === false ? "Unavailable" : `${fmt(output.base_scenario.gross_moic)}x`} highlight />
           <HeroMetric label="Expected IRR" value={pct(output.expected_irr)} />
           <HeroMetric label="Fund Returner (gross)" value={fmtEV(output.ownership.fund_returner_1x_exit)} />
-          <HeroMetric label="Base Contribution" value={`${fmt(output.base_scenario.fund_contribution_x, 2)}x fund`} />
+          <HeroMetric label="Base Contribution" value={output.base_scenario.available === false ? "Unavailable" : `${fmt(output.base_scenario.fund_contribution_x, 2)}x fund`} />
         </div>
 
         {/* Company + deal context */}
@@ -162,7 +167,7 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
       )}
       {tab === 'returns' && <VCReturnScenarios output={output} />}
       {tab === 'waterfall' && <WaterfallAnalyzer output={output} />}
-      {tab === 'memo' && <ICMemoExport memo={output.ic_memo} fundName={fund.fund_name} />}
+      {tab === 'memo' && <ICMemoExport memo={output.ic_memo} fundName={fund.fund_name} evidence={output.evidence} />}
       {tab === 'portfolio' && <VCPortfolioDash fund={fund} />}
       {tab === 'governance' && <VCGovernanceTools fund={fund} />}
     </div>
@@ -173,6 +178,7 @@ export default function VCDashboard({ output, fund, onNewDeal, onReset }: Props)
 // Overview Tab — Summary of all key outputs
 // ---------------------------------------------------------------------------
 function OverviewTab({ output, fund }: { output: VCDealOutput; fund: FundProfile }) {
+  if (output.quick_screen.recommendation === 'insufficient_inputs') return <p className="text-slate-300 p-5">{output.quick_screen.recommendation_rationale}</p>
   return (
     <div className="space-y-5">
       {/* 3-scenario summary table */}
@@ -216,7 +222,7 @@ function OverviewTab({ output, fund }: { output: VCDealOutput; fund: FundProfile
                 <td className="py-2.5 text-right text-slate-400">—</td>
                 <td className="py-2.5 text-right text-slate-200 font-bold">{fmt(output.expected_moic)}x</td>
                 <td className="py-2.5 text-right text-slate-300">{pct(output.expected_irr)}</td>
-                <td className="py-2.5 text-right text-slate-400">{fmt(output.expected_value / fund.fund_size, 2)}x</td>
+                <td className="py-2.5 text-right text-slate-400">{fmt((output.expected_value ?? 0) / fund.fund_size, 2)}x</td>
               </tr>
             </tfoot>
           </table>

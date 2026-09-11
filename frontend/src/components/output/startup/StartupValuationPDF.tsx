@@ -202,10 +202,10 @@ function BenchmarkTable({ output, ask, contended }: {
 
   type Row = { key: string; label: string; val: number | null; isAsk?: boolean }
   const rows: Row[] = [
-    { key: 'P25', label: 'P25 (Bottom Quartile)', val: output.benchmark_p25 },
-    { key: 'P50', label: 'P50 (Median)',          val: output.benchmark_p50 },
-    { key: 'P75', label: 'P75 (Top Quartile)',    val: output.benchmark_p75 },
-    { key: 'P95', label: 'P95 (Top 5%)',          val: output.benchmark_p95 },
+    { key: 'P25', label: 'Lower reference assumption', val: output.benchmark_p25 },
+    { key: 'P50', label: 'Central reference assumption',          val: output.benchmark_p50 },
+    { key: 'P75', label: 'Upper reference assumption',    val: output.benchmark_p75 },
+    { key: 'P95', label: 'High reference assumption',          val: output.benchmark_p95 },
   ]
   // The ask slots into the distribution where it actually sits.
   if (ask != null) {
@@ -221,7 +221,7 @@ function BenchmarkTable({ output, ask, contended }: {
   return (
     <>
       <View style={s.tableHead}>
-        <Text style={s.tableCellHd}>Percentile</Text>
+        <Text style={s.tableCellHd}>Reference</Text>
         <Text style={[s.tableCellHd, s.tableRight]}>Pre-Money Valuation</Text>
       </View>
       {rows.map(r => {
@@ -300,10 +300,10 @@ function FootballField({ output, input }: { output: StartupValuationOutput; inpu
     }))
 
   const benchmarks = [
-    { pct: 'P25', val: output.benchmark_p25 },
-    { pct: 'P50', val: output.benchmark_p50 },
-    { pct: 'P75', val: output.benchmark_p75 },
-    { pct: 'P95', val: output.benchmark_p95 },
+    { pct: 'Lower', val: output.benchmark_p25 },
+    { pct: 'Central', val: output.benchmark_p50 },
+    { pct: 'Upper', val: output.benchmark_p75 },
+    { pct: 'High', val: output.benchmark_p95 },
   ].filter(b => b.val > 0)
 
   const ask = input.fundraise.pre_money_valuation_ask
@@ -427,7 +427,7 @@ function FootballField({ output, input }: { output: StartupValuationOutput; inpu
         </View>
       </View>
       <Text style={{ fontSize: 6.5, color: C.light, marginTop: 3 }}>
-        Vertical gridlines: P25 / P50 / P75 / P95 — {VERTICAL_LABELS[output.vertical]} {STAGE_LABELS[output.stage]} cohort.
+        Vertical gridlines: inherited lower / central / upper / high references — {VERTICAL_LABELS[output.vertical]} {STAGE_LABELS[output.stage]} cohort.
         Values in USD millions, pre-money.
       </Text>
     </View>
@@ -435,7 +435,7 @@ function FootballField({ output, input }: { output: StartupValuationOutput; inpu
 }
 
 // ---------------------------------------------------------------------------
-// Page 1: Cover + Calibrated Valuation Range (football field)
+// Page 1: Cover + Model-Indicated Range (football field)
 // ---------------------------------------------------------------------------
 
 function CoverPage({ output, input, reportContext }: {
@@ -480,7 +480,7 @@ function CoverPage({ output, input, reportContext }: {
       {ask != null ? (
         <View style={[s.hlGrid, { marginTop: 22 }]}>
           <View style={s.hlCellRange}>
-            <Text style={[s.hlLabel, { color: C.slate }]}>CALIBRATED VALUATION RANGE</Text>
+            <Text style={[s.hlLabel, { color: C.slate }]}>MODEL-INDICATED RANGE</Text>
             <Text style={s.hlValueSm}>
               {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
             </Text>
@@ -502,7 +502,7 @@ function CoverPage({ output, input, reportContext }: {
         </View>
       ) : (
         <View style={[s.hlBox, { marginTop: 22 }]}>
-          <Text style={s.hlLabel}>CALIBRATED VALUATION RANGE</Text>
+          <Text style={s.hlLabel}>MODEL-INDICATED RANGE</Text>
           <Text style={s.hlValue}>
             {fmtM(output.valuation_range_low)} – {fmtM(output.valuation_range_high)}
             <Text style={s.hlUnit}>  pre-money</Text>
@@ -533,7 +533,7 @@ function CoverPage({ output, input, reportContext }: {
         value={fmtPct(output.implied_dilution)}
       />
       {output.recommended_safe_cap != null && (
-        <KVRow label="Suggested SAFE Cap" value={fmtM(output.recommended_safe_cap)} />
+        <KVRow label="Specified SAFE Cap" value={fmtM(output.recommended_safe_cap)} />
       )}
 
       <PageFooter company={output.company_name} />
@@ -556,7 +556,7 @@ function MethodsPage({ output, input, reportContext }: {
     <Page size="A4" style={s.page}>
       {/* Market benchmarks — the distribution the range is calibrated against,
           with the preparer's ask slotted in where it sits */}
-      <SectionHead title={`Market Benchmarks — ${VERTICAL_LABELS[output.vertical]} ${STAGE_LABELS[output.stage]} cohort`} />
+      <SectionHead title={`Reference Assumptions — ${VERTICAL_LABELS[output.vertical]} ${STAGE_LABELS[output.stage]} cohort`} />
       <BenchmarkTable
         output={output}
         ask={input.fundraise.pre_money_valuation_ask}
@@ -565,9 +565,9 @@ function MethodsPage({ output, input, reportContext }: {
 
       <SectionHead title="Valuation Methods" />
       <Text style={{ fontSize: 8.5, color: C.slate, marginBottom: 12, lineHeight: 1.45 }}>
-        The calibrated range on page 1 is derived from the applicable methods below; their weighted blend
+        The method-dispersion range on page 1 is derived from the applicable methods below; their weighted blend
         is the model midpoint of {fmtM(output.blended_valuation)} ({output.percentile_in_market}).
-        Model verdict: {output.verdict_headline}. Each method is independently computed from the inputs provided.
+        Price assessment: {output.verdict_headline}. SAFE caps use a separate compatible SAFE reference when available. Each method is independently computed from the inputs provided.
       </Text>
 
       {applicable.map(m => (
@@ -618,11 +618,12 @@ function InputsPage({ output, input }: { output: StartupValuationOutput; input: 
       <SectionHead title="Founder Dilution Model" />
       <Text style={{ fontSize: 8.5, color: C.slate, marginBottom: 10, lineHeight: 1.4 }}>
         Projected founder ownership across current and modeled future rounds.
-        {output.dilution_basis === 'preparer_ask'
-          ? ` The current round is priced at the preparer's ask of ${fmtM(output.dilution_basis_pre_money)} pre-money — the deal actually on the table — not the model midpoint.`
+        {input.fundraise.instrument !== 'priced_equity' && input.fundraise.safe_valuation_cap
+          ? ` The specified SAFE cap is ${fmtM(input.fundraise.safe_valuation_cap)}; ${fmtM(output.dilution_basis_pre_money)} is its simplified pre-money equivalent for this ownership illustration.`
+          : output.dilution_basis === 'preparer_ask'
+          ? ` The current round uses the preparer's ask of ${fmtM(output.dilution_basis_pre_money)} pre-money.`
           : ` The current round is priced at the model midpoint of ${fmtM(output.dilution_basis_pre_money)} pre-money (no preparer ask was stated).`}
-        {' '}Future rounds are market projections from cohort benchmarks.
-        Standard 10% option pool refresh assumed at each priced round.
+        {' '}Future rounds use reference assumptions, not forecasts. A 10% option pool refresh is assumed at each projected priced round.
       </Text>
       <View style={s.tableHead}>
         <Text style={[s.tableCellHd, { flex: 1.4 }]}>Round</Text>
@@ -725,10 +726,8 @@ function InputsPage2({ output, input }: { output: StartupValuationOutput; input:
         <Text style={[s.sectionHead, { marginBottom: 6 }]}>Provenance</Text>
         <View style={s.rule} />
         <Text style={{ fontSize: 7.5, color: C.mid, lineHeight: 1.5 }}>
-          Benchmark data: Carta State of Private Markets Q4 2025 / Q1 2026, Carta State of Pre-Seed Q1 2026,
-          PitchBook-NVCA Venture Monitor FY2025, Aventis Advisors SaaS Multiples 2026, SaaS Capital Index
-          Q1 2026 (2026-Q2 vintage). Valuation methods: weighted blend of the methods on page 2; weights and
-          applicability as shown. Engine: Dealflow Engine startup valuation module.
+          Dataset {output.evidence?.dataset_version ?? 'unknown'}; engine {output.evidence?.engine_version ?? 'unknown'}.
+          See the evidence page for observed sources and remaining assumptions. Range reflects method dispersion.
           Vertical: {VERTICAL_LABELS[output.vertical]} · Stage: {STAGE_LABELS[output.stage]}.
         </Text>
       </View>
@@ -825,7 +824,7 @@ function RepresentationsPage({ output, input, reportContext }: {
           <Text style={{ fontSize: 8.5, color: C.slate, lineHeight: 1.55 }}>
             Model placement: {placement.label} of {cohort} cohort.
             {ask != null && askPlacement != null
-              ? ` Preparer's ask: ${fmtM(ask)} (${askPlacement.label} of cohort).`
+              ? ` Deal-mechanics pre-money equivalent: ${fmtM(ask)} (${askPlacement.label} of cohort).`
               : ''}
             {' '}Preparer contends: {CONTENDED_PLACEMENT_LABELS[contended]}.
             {' '}Basis: {basis}.
@@ -861,6 +860,16 @@ function ValuationDocument({ output, input, reportContext }: {
     >
       <CoverPage    output={output} input={input} reportContext={reportContext} />
       <MethodsPage  output={output} input={input} reportContext={reportContext} />
+      {output.evidence && <Page size="A4" style={s.page}>
+        <Text style={{fontSize:18, marginBottom:16}}>Valuation assumptions and evidence</Text>
+        <Text style={{fontSize:10, marginBottom:10}}>Dataset {output.evidence.dataset_version} · Engine {output.evidence.engine_version}</Text>
+        <Text style={{fontSize:10, marginBottom:10}}>The valuation range is method dispersion, not a statistical confidence interval. Reference bands include inherited assumptions. A SAFE cap is distinct from a pre-money valuation.</Text>
+        <Text style={{fontSize:10, marginBottom:10}}>{output.evidence.observed_count} observed records; {output.evidence.assumed_count} assumed records used.</Text>
+        {output.method_results.filter(m => m.applicable).map(m => <Text key={m.method_name} style={{fontSize:10, marginBottom:6}}>{m.method_label}: {((m.blend_weight ?? 0)*100).toFixed(1)}% weight; ${(m.weighted_contribution ?? 0).toFixed(2)}M contribution</Text>)}
+        {output.evidence.records.filter(r => r.source_url).map(r => <Text key={r.id} style={{fontSize:8, marginBottom:6}}>{r.metric}: {r.value} {r.unit} ({r.statistic}; {r.observation_period ?? 'period unknown'}; {r.basis}). {r.source_url}</Text>)}
+        <Text style={{fontSize:8, marginTop:12}}>Fingerprint: {output.evidence.dataset_hash}</Text>
+        <PageFooter company={output.company_name} />
+      </Page>}
       <InputsPage   output={output} input={input} />
       <InputsPage2  output={output} input={input} />
       {showRepresentations && (

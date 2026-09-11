@@ -64,6 +64,9 @@ const MODE_STEPS: Record<AppMode, Array<{ label: string; short: string }>> = {
 // Props
 // ---------------------------------------------------------------------------
 interface AppShellProps {
+  benchmarkVersion?: string
+  onBenchmarkChange?: (version: string) => void
+  replayNotice?: string
   children: React.ReactNode
   appMode: AppMode
   onAppModeChange: (mode: AppMode) => void
@@ -85,6 +88,7 @@ interface AppShellProps {
 // ---------------------------------------------------------------------------
 export default function AppShell({
   children,
+  benchmarkVersion, onBenchmarkChange, replayNotice,
   appMode,
   onAppModeChange,
   onHome,
@@ -197,7 +201,14 @@ export default function AppShell({
 
       {/* Main content */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        {children}
+        {onBenchmarkChange && <div className="mb-5 text-xs text-slate-400">
+            <label>Benchmark dataset <select aria-label="Benchmark dataset" className="ml-2 rounded border border-slate-700 bg-slate-900 p-2" value={benchmarkVersion} onChange={e => onBenchmarkChange(e.target.value)}>
+              <option value="2026-09-11">September 11, 2026</option>
+              <option value="2026-07-legacy">Legacy July 2026</option>
+            </select></label>
+            {replayNotice && <p className="mt-2 text-amber-200">{replayNotice}</p>}
+          </div>}
+          {children}
       </main>
 
       {/* Footer */}

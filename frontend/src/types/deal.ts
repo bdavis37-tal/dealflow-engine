@@ -1,3 +1,4 @@
+import type { AnalysisEvidence } from './evidence'
 /**
  * TypeScript interfaces mirroring the backend Pydantic models.
  * Keep in sync with backend/app/engine/models.py
@@ -162,6 +163,7 @@ export interface SynergyAssumptions {
 }
 
 export interface DealInput {
+  benchmark_version?: string
   acquirer: AcquirerProfile
   target: TargetProfile
   structure: DealStructure
@@ -342,6 +344,10 @@ export interface ImpliedValuation {
 }
 
 export interface DealOutput {
+  decision_basis?: string
+  valuation_comparison?: {metric: string; entry_multiple: number | null; reference: import('./evidence').BenchmarkRecord | null; fallback_reason: string | null; limitations: string[]}
+  downside_scenarios?: {label: string; year1_eps: number; year1_accretion: number; verdict: string}[]
+  evidence?: AnalysisEvidence | null
   pro_forma_income_statement: IncomeStatementYear[]
   balance_sheet_at_close: BalanceSheetAtClose
   accretion_dilution_bridge: AccretionDilutionBridge[]
@@ -371,6 +377,7 @@ export interface DealOutput {
 export type FlowStep = 1 | 2 | 3 | 4 | 5 | 6
 
 export interface DealState {
+  benchmark_version?: string
   step: FlowStep
   mode: ModelMode
   acquirer: Partial<AcquirerProfile>

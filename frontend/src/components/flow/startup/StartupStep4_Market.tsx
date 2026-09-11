@@ -186,14 +186,14 @@ export default function StartupStep4_Market({
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <label className="text-sm text-slate-400">Your valuation cap ask (optional)</label>
-                <Tooltip text="The pre-money valuation cap on your SAFE. The engine will calculate the recommended cap from the blended valuation if you leave this blank." />
+                <Tooltip text="Your explicitly negotiated SAFE valuation cap. The engine does not recommend a cap when this is blank." />
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span>
                 <MarketNumInput
-                  value={fundraise.pre_money_valuation_ask ?? ''}
-                  onChange={v => onUpdateFundraise({ pre_money_valuation_ask: v.trim() ? parseFloat(v) || null : null })}
-                  placeholder="Leave blank to use engine output"
+                  value={fundraise.safe_valuation_cap ?? ''}
+                  onChange={v => onUpdateFundraise({ safe_valuation_cap: v.trim() ? parseFloat(v) || undefined : undefined })}
+                  placeholder="Leave blank if no negotiated cap"
                   className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-8 pr-12 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm">M</span>

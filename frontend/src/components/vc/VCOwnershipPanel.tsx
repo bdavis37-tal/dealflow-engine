@@ -51,6 +51,7 @@ export default function VCOwnershipPanel({ ownership, fund, checkSize, postMoney
 
   return (
     <div className="space-y-5">
+      <p className="text-xs text-slate-400">Ownership and fund-returner thresholds below assume pro-rata equity proceeds. Scenario returns separately account for net debt and the selected preferred class.</p>
       {/* Ownership headline */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
         <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Ownership Math</h3>

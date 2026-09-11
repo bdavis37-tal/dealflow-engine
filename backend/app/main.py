@@ -15,6 +15,7 @@ from .api.routes import router
 from .api.ai_routes import router as ai_router
 from .api.startup_routes import router as startup_router
 from .api.vc_routes import router as vc_router
+from .api.benchmark_routes import router as benchmark_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ app.include_router(router)
 app.include_router(ai_router)
 app.include_router(startup_router)
 app.include_router(vc_router)
+app.include_router(benchmark_router)
 
 
 @app.get("/")

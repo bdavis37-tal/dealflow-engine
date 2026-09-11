@@ -89,8 +89,7 @@ export default function StartupStep2_Team({ team, onUpdate, onNext, onBack }: St
         <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
           <label className="block text-sm font-medium text-slate-300 mb-1">Prior successful exits</label>
           <p className="text-slate-500 text-xs mb-3">
-            Even one prior exit immediately adds $1–5M to your valuation in angel and VC conversations — it's the
-            highest-signal credential you can have.
+            Prior exits are a qualitative input. Their effect on this model is an assumption, not an established dollar premium.
           </p>
           <div className="flex gap-3">
             {[0, 1, 2, 3].map(n => (

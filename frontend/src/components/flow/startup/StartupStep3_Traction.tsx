@@ -130,8 +130,7 @@ export default function StartupStep3_Traction({
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-slate-100 mb-2">Traction & product stage</h2>
         <p className="text-slate-400">
-          Once you have ARR, the ARR multiple becomes your primary valuation method.
-          NRR is the single most powerful driver — above 120% can double your multiple.
+          For recurring software, ARR gradually increases the revenue method’s weight. Growth, retention and margins affect assumed multiples.
         </p>
       </div>
 
@@ -164,7 +163,7 @@ export default function StartupStep3_Traction({
             <div>
               <p className="text-sm font-medium text-slate-200">Do you have any revenue?</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Even $1K MRR switches your primary valuation method from pre-revenue to ARR multiple
+                Small recurring revenue introduces a small ARR-method weight; applicability depends on business model.
               </p>
             </div>
             <button

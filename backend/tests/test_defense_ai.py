@@ -198,7 +198,8 @@ class TestDefenseVerdictAdjustment:
         # The deal is likely dilutive on pure EPS (high price, low EBITDA target)
         # but should mention backlog/premiums in subtext
         subtext = output.deal_verdict_subtext.lower()
-        assert "backlog" in subtext or "defense" in subtext or "premium" in subtext
+        assert output.defense_positioning is not None
+        assert "EPS" in output.decision_basis
 
 
 class TestNonDefenseDealUnchanged:

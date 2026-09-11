@@ -12,6 +12,7 @@ Takes a DealInput and returns a DealOutput by:
   7. Assembling the deal scorecard and verdict
 """
 from __future__ import annotations
+from .benchmark_registry import BenchmarkView, evidence_analysis, resolve, policy, dilution_defaults
 
 import json
 import math
@@ -38,6 +39,7 @@ from .models import (
     SynergyItem,
 )
 from .circularity_solver import build_debt_schedule, DebtTranche
+from .ma_context import comparison, downside
 from .purchase_price import compute_ppa, get_transaction_costs
 from .returns import compute_returns
 from .risk_analyzer import analyze_risks
@@ -48,11 +50,8 @@ from .sensitivity import generate_all_sensitivity_matrices
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_benchmarks() -> dict:
-    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    path = os.path.join(data_dir, "industry_benchmarks.json")
-    with open(path) as f:
-        return json.load(f)
+def _load_benchmarks():
+    return BenchmarkView("ma")
 
 
 def _synergy_year_value(items: list[SynergyItem], year: int) -> float:
@@ -237,6 +236,7 @@ def _compute_defense_positioning(deal: DealInput, benchmarks: dict) -> DefensePo
 # Main engine
 # ---------------------------------------------------------------------------
 
+@evidence_analysis
 def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
     """
     Execute the full deal model computation.
@@ -953,12 +953,12 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
         ScorecardMetric(
             name="Entry EV/EBITDA Multiple",
             value=entry_multiple,
-            formatted_value=_format_multiple(entry_multiple),
+            formatted_value=_format_multiple(entry_multiple) if tgt.ebitda > 0 else "N/M",
             benchmark_low=ev_range["low"],
             benchmark_median=ev_range["median"],
             benchmark_high=ev_range["high"],
-            health_status=_health(entry_multiple, ev_range["low"], ev_range["median"], ev_range["high"], higher_is_better=False),
-            description=f"You're paying {entry_multiple:.1f}× EBITDA. Typical range for {ind_key}: {ev_range['low']}–{ev_range['high']}×",
+            health_status=_health(entry_multiple, ev_range["low"], ev_range["median"], ev_range["high"], higher_is_better=False) if tgt.ebitda > 0 else HealthStatus.FAIR,
+            description=f"You're paying {entry_multiple:.1f}× EBITDA. Assumed sector range for {ind_key}: {ev_range['low']}–{ev_range['high']}×",
         ),
         ScorecardMetric(
             name="Year 1 Accretion / Dilution",
@@ -1080,7 +1080,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
                 benchmark_median=1.0,
                 benchmark_high=3.0,
                 health_status=HealthStatus.GOOD if dp.programs_of_record >= 1 else HealthStatus.FAIR,
-                description="Software embedded in DoD programs of record — multi-year guaranteed funding",
+                description="Software embedded in DoD programs of record — program association; future funding is not guaranteed",
             ))
 
     # -----------------------------------------------------------------------
@@ -1101,12 +1101,7 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             return f"${y1_eps_delta:+.2f} EPS vs a negative standalone base"
         return f"{y1_ad:+.1f}%"
 
-    # Defense deals get adjusted verdict logic — backlog and certifications
-    # can justify a higher price that would look dilutive on pure EPS math
     is_defense_deal = defense_positioning is not None
-    defense_uplift = False
-    if is_defense_deal and defense_positioning.backlog_coverage_ratio >= 2.0:
-        defense_uplift = True
 
     if y1_ad > 2.0:
         verdict = DealVerdict.GREEN
@@ -1127,35 +1122,26 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             )
         if is_defense_deal:
             subtext += (
-                f" Defense positioning adds {defense_positioning.total_defense_premium_pct:.0%} "
-                f"certification/clearance premium with {defense_positioning.backlog_coverage_ratio:.1f}× backlog coverage."
+                f" Illustrative defense assumptions show {defense_positioning.total_defense_premium_pct:.0%} "
+                f"certification/clearance adjustment with {defense_positioning.backlog_coverage_ratio:.1f}× backlog coverage."
             )
-    elif y1_ad >= -2.0 or (defense_uplift and y1_ad >= -8.0):
+    elif y1_ad >= -2.0:
         verdict = DealVerdict.YELLOW
-        if defense_uplift and y1_ad < -2.0:
-            headline = f"Near-term dilutive ({y1_ad:+.1f}%) but justified by defense backlog"
-            subtext = (
-                f"Traditional EPS math shows dilution, but ${defense_positioning.combined_backlog:.0f}M "
-                f"of contracted backlog ({defense_positioning.backlog_coverage_ratio:.1f}× revenue) and "
-                f"{defense_positioning.total_defense_premium_pct:.0%} defense premiums provide downside protection. "
-                f"Revenue visibility of {defense_positioning.revenue_visibility_years:.1f} years from funded backlog."
+        headline = f"This deal is marginally neutral ({_ad_text()} in Year 1)"
+        subtext = (
+            "At this price, the deal has minimal EPS impact in Year 1. "
+            "It becomes more meaningful as synergies phase in and debt is repaid."
+        )
+        if y1_is_nm:
+            subtext += (
+                " Standalone EPS is negative, so percentage accretion is not "
+                "meaningful — judge the dollar EPS delta."
             )
-        else:
-            headline = f"This deal is marginally neutral ({_ad_text()} in Year 1)"
-            subtext = (
-                "At this price, the deal has minimal EPS impact in Year 1. "
-                "It becomes more meaningful as synergies phase in and debt is repaid."
+        if is_defense_deal:
+            subtext += (
+                f" Defense backlog of ${defense_positioning.combined_backlog:.0f}M "
+                f"provides additional revenue visibility not captured in EPS."
             )
-            if y1_is_nm:
-                subtext += (
-                    " Standalone EPS is negative, so percentage accretion is not "
-                    "meaningful — judge the dollar EPS delta."
-                )
-            if is_defense_deal:
-                subtext += (
-                    f" Defense backlog of ${defense_positioning.combined_backlog:.0f}M "
-                    f"provides additional revenue visibility not captured in EPS."
-                )
     else:
         verdict = DealVerdict.RED
         # Pre-tax annual synergies needed to close the Year-1 EPS gap
@@ -1169,14 +1155,11 @@ def run_deal(deal: DealInput, include_sensitivity: bool = True) -> DealOutput:
             f"{_format_currency(min_syn)}/year to break even. "
             "Consider renegotiating price or increasing synergy capture."
         )
-        if is_defense_deal:
-            subtext += (
-                f" Even accounting for defense premiums ({defense_positioning.total_defense_premium_pct:.0%}) "
-                f"and backlog ({defense_positioning.backlog_coverage_ratio:.1f}× coverage), the price "
-                f"appears stretched."
-            )
+
 
     return DealOutput(
+        valuation_comparison=comparison(deal),
+        downside_scenarios=downside(deal) if include_sensitivity else [],
         pro_forma_income_statement=income_statement,
         balance_sheet_at_close=balance_sheet,
         accretion_dilution_bridge=ad_bridge,

@@ -1,0 +1,2 @@
+# Preserve exact bytes used by immutable benchmark fingerprints.
+backend/app/data/benchmarks/*.json -text whitespace=trailing-space,space-before-tab,cr-at-eol

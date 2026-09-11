@@ -314,11 +314,13 @@ async def generate_narrative(request: NarrativeRequest) -> NarrativeResponse:
     deal_fingerprint = _cache_key(
         request.deal_input.model_dump_json(),
         request.deal_input.mode.value,
+        request.deal_output.model_dump_json(),
     )
     ck = f"narrative:{deal_fingerprint}"
 
     system = narrative_system_prompt(request.deal_input.mode.value)
     context = _deal_context_dict(request.deal_input, request.deal_output)
+    context["evidence"] = request.deal_output.evidence.model_dump(mode="json") if request.deal_output.evidence else None
 
     user_msg = f"""Generate a deal assessment for this transaction:
 
@@ -438,6 +440,7 @@ async def chat(request: ChatRequest) -> StreamingResponse:
         context = {}
         if request.deal_input and request.deal_output:
             context = _deal_context_dict(request.deal_input, request.deal_output)
+            context["evidence"] = request.deal_output.evidence.model_dump(mode="json") if request.deal_output.evidence else None
 
         system = chat_system_prompt(context)
 
@@ -535,13 +538,7 @@ async def startup_narrative(request: StartupNarrativeRequest) -> StartupNarrativ
     inp = request.startup_input
     out = request.startup_output
 
-    fingerprint = _cache_key(
-        inp.fundraise.vertical,
-        inp.fundraise.stage,
-        str(round(out.blended_valuation, 1)),
-        str(round(out.benchmark_p50, 1)),
-        out.verdict,
-    )
+    fingerprint = _cache_key(inp.model_dump_json(), out.model_dump_json())
     ck = f"startup_narrative:{fingerprint}"
 
     from ..services.ai_service import _get_cached, _set_cached
@@ -566,6 +563,10 @@ async def startup_narrative(request: StartupNarrativeRequest) -> StartupNarrativ
         "stage": inp.fundraise.stage,
         "geography": inp.fundraise.geography,
         "blended_valuation_m": round(out.blended_valuation, 2),
+        "evidence": out.evidence.model_dump(mode='json') if out.evidence else None,
+        "range_basis": out.range_basis,
+        "price_assessment": out.price_assessment,
+        "safe_valuation_cap": inp.fundraise.safe_valuation_cap,
         "valuation_range": f"{round(out.valuation_range_low, 2)}M – {round(out.valuation_range_high, 2)}M",
         "benchmark_p50_m": round(out.benchmark_p50, 2),
         "percentile_in_market": out.percentile_in_market,
@@ -690,14 +691,7 @@ async def generate_vc_narrative(request: VCNarrativeRequest) -> VCNarrativeRespo
     fund = request.fund_profile
 
     # Cache key based on deal fingerprint
-    ck = _cache_key(
-        "vc_narrative",
-        inp.company_name,
-        str(inp.post_money_valuation),
-        str(inp.check_size),
-        str(out.expected_moic),
-        out.quick_screen.recommendation,
-    )
+    ck = _cache_key('vc_narrative', inp.model_dump_json(), out.model_dump_json(), fund.model_dump_json())
     cached = _get_cached(ck)
     if cached:
         try:
@@ -721,6 +715,9 @@ async def generate_vc_narrative(request: VCNarrativeRequest) -> VCNarrativeRespo
         "company": inp.company_name,
         "vertical": inp.vertical.value,
         "stage": inp.stage.value,
+        "evidence": out.evidence.model_dump(mode="json") if out.evidence else None,
+        "scenario_availability": {s.label: s.available for s in [out.bear_scenario, out.base_scenario, out.bull_scenario]},
+        "scenario_inputs": {k: v.model_dump(mode="json") for k, v in inp.scenario_assumptions.items()},
         "post_money_m": inp.post_money_valuation,
         "check_size_m": inp.check_size,
         "arr_m": inp.arr,
@@ -751,7 +748,7 @@ async def generate_vc_narrative(request: VCNarrativeRequest) -> VCNarrativeRespo
             "fund_contribution_x": out.bull_scenario.fund_contribution_x,
         },
         "expected_moic": out.expected_moic,
-        "expected_irr": f"{out.expected_irr:.0%}",
+        "expected_irr": f"{out.expected_irr:.0%}" if out.expected_irr is not None else "Unavailable",
         "recommendation": out.quick_screen.recommendation,
         "recommendation_rationale": out.quick_screen.recommendation_rationale,
         "ownership_adequacy": out.ownership_adequacy,
@@ -838,13 +835,16 @@ async def vc_chat(request: VCChatRequest):
             "company": inp.company_name,
             "vertical": inp.vertical.value,
             "stage": inp.stage.value,
-            "post_money_m": inp.post_money_valuation,
+            "evidence": out.evidence.model_dump(mode="json") if out.evidence else None,
+        "scenario_availability": {s.label: s.available for s in [out.bear_scenario, out.base_scenario, out.bull_scenario]},
+        "scenario_inputs": {k: v.model_dump(mode="json") for k, v in inp.scenario_assumptions.items()},
+        "post_money_m": inp.post_money_valuation,
             "check_size_m": inp.check_size,
             "arr_m": inp.arr,
             "revenue_growth": f"{inp.revenue_growth_rate:.0%}",
             "entry_ownership": f"{out.ownership.entry_ownership_pct:.1%}",
             "exit_ownership": f"{out.ownership.exit_ownership_pct:.1%}",
-            "expected_moic": f"{out.expected_moic:.1f}x",
+            "expected_moic": f"{out.expected_moic:.1f}x" if out.expected_moic is not None else "Unavailable",
             "recommendation": out.quick_screen.recommendation,
             "fund_size_m": request.fund_profile.fund_size if request.fund_profile else "unknown",
             "flags": out.flags,

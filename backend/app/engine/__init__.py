@@ -15,7 +15,7 @@ def round_financial_output(obj, decimals=6):
     if isinstance(obj, float):
         return round(obj, decimals)
     if isinstance(obj, dict):
-        return {k: round_financial_output(v, decimals) for k, v in obj.items()}
+        return {k: v if k == "evidence" else round_financial_output(v, decimals) for k, v in obj.items()}
     if isinstance(obj, list):
         return [round_financial_output(item, decimals) for item in obj]
     if hasattr(obj, "model_dump"):

@@ -1,3 +1,4 @@
+import type { AnalysisEvidence } from './evidence'
 /**
  * TypeScript interfaces mirroring backend/app/engine/startup_models.py
  * Keep in sync with the Python models.
@@ -49,7 +50,7 @@ export type ValuationSignal = 'strong' | 'fair' | 'weak' | 'warning'
  *   fair:      P25–P50 — below median but market-rate terms
  *   at_risk:   < P25 — below-market; hit milestones before raising
  */
-export type ValuationVerdict = 'strong' | 'fair' | 'stretched' | 'at_risk'
+export type ValuationVerdict = 'strong' | 'fair' | 'stretched' | 'at_risk' | 'not_assessed'
 
 /** SAFE mechanics: post_money (YC 2018+ standard) = raise/cap; pre_money (legacy) = raise/(cap+raise) */
 export type SAFEType = 'post_money' | 'pre_money'
@@ -101,6 +102,8 @@ export interface MarketProfile {
 }
 
 export interface FundraisingProfile {
+  safe_valuation_cap?: number
+  business_model?: "auto" | "recurring_software" | "hardware" | "services" | "biotech" | "mixed"
   stage: StartupStage
   vertical: StartupVertical
   geography: Geography
@@ -116,6 +119,7 @@ export interface FundraisingProfile {
 }
 
 export interface StartupInput {
+  benchmark_version?: string
   company_name: string
   team: TeamProfile
   traction: TractionMetrics
@@ -132,6 +136,8 @@ export interface StartupInput {
 // ---------------------------------------------------------------------------
 
 export interface ValuationMethodResult {
+  blend_weight?: number
+  weighted_contribution?: number
   method_name: string
   method_label: string
   indicated_value: number | null
@@ -197,6 +203,11 @@ export interface ScorecardFlag {
 }
 
 export interface StartupValuationOutput {
+  range_basis: string
+  blend_adjustment: number
+  price_assessment: { basis?: string; reference_record_id?: string; [key: string]: unknown }
+  company_evidence: string[]
+  evidence?: AnalysisEvidence | null
   company_name: string
   stage: StartupStage
   vertical: StartupVertical
@@ -305,6 +316,7 @@ export const CONTENDED_PLACEMENT_LABELS: Record<ContendedPlacement, string> = {
 export type StartupFlowStep = 1 | 2 | 3 | 4 | 5
 
 export interface StartupState {
+  benchmark_version?: string
   step: StartupFlowStep
   company_name: string
   team: Partial<TeamProfile>

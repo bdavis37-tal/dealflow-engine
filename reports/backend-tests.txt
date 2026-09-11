@@ -1,0 +1,21 @@
+........................................................................ [ 10%]
+........................................................................ [ 21%]
+........................................................................ [ 31%]
+........................................................................ [ 42%]
+........................................................................ [ 53%]
+........................................................................ [ 63%]
+........................................................................ [ 74%]
+........................................................................ [ 84%]
+........................................................................ [ 95%]
+..............................                                           [100%]
+============================== warnings summary ===============================
+..\..\.venv312\Lib\site-packages\starlette\formparsers.py:12
+  C:\Users\b_dav\OneDrive\Documents\ChatGPT\DealFlow Engine\.venv312\Lib\site-packages\starlette\formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+..\..\.venv312\Lib\site-packages\starlette\testclient.py:41
+  C:\Users\b_dav\OneDrive\Documents\ChatGPT\DealFlow Engine\.venv312\Lib\site-packages\starlette\testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+678 passed, 2 warnings in 49.25s

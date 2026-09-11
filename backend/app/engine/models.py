@@ -3,6 +3,7 @@ Pydantic data models for all deal inputs and outputs.
 These models are the single source of truth for data shapes across the engine.
 """
 from __future__ import annotations
+from .benchmark_registry import AnalysisEvidence, VersionedInput
 
 from enum import Enum
 from typing import Optional
@@ -257,7 +258,7 @@ class SynergyAssumptions(BaseModel):
     revenue_synergies: list[SynergyItem] = Field(default_factory=list)
 
 
-class DealInput(BaseModel):
+class DealInput(VersionedInput):
     """Complete deal model input — passed to the financial engine."""
     acquirer: AcquirerProfile
     target: TargetProfile
@@ -439,6 +440,10 @@ class ImpliedValuation(BaseModel):
     price_to_earnings: float          # Price / LTM Net Income
 
 class DealOutput(BaseModel):
+    valuation_comparison: dict = Field(default_factory=dict)
+    downside_scenarios: list[dict] = Field(default_factory=list)
+    decision_basis: str = "Year 1 EPS impact only; review credit, price and execution evidence separately"
+    evidence: AnalysisEvidence | None = None
     """Complete deal analysis output from the financial engine."""
     pro_forma_income_statement: list[IncomeStatementYear]
     balance_sheet_at_close: BalanceSheetAtClose

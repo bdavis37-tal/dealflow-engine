@@ -28,39 +28,9 @@ export function computeModelPlacement(
   p75: number,
   p95: number | null | undefined,
 ): ModelPlacement {
-  const anchors: Array<[number, number]> = []
-  if (p25 > 0) anchors.push([25, p25])
-  if (p50 > 0) anchors.push([50, p50])
-  if (p75 > 0) anchors.push([75, p75])
-  const p95Valid = p95 != null && p95 > 0 && p75 > 0 && p95 > p75
-  if (p95Valid) anchors.push([95, p95 as number])
-
-  if (anchors.length < 2 || blended <= 0) {
-    return { approx_percentile: null, label: 'not determinable from available benchmarks' }
-  }
-
-  const [loPct, loVal] = anchors[0]
-  const [hiPct, hiVal] = anchors[anchors.length - 1]
-
-  if (blended < loVal) {
-    return { approx_percentile: null, label: `below P${loPct}` }
-  }
-  if (blended > hiVal) {
-    // When P95 is unavailable we can only assert "above P75" — never extrapolate.
-    return { approx_percentile: null, label: `above P${hiPct}` }
-  }
-
-  for (let i = 0; i < anchors.length - 1; i++) {
-    const [aPct, aVal] = anchors[i]
-    const [bPct, bVal] = anchors[i + 1]
-    if (blended >= aVal && blended <= bVal) {
-      const frac = bVal === aVal ? 0 : (blended - aVal) / (bVal - aVal)
-      const pct = Math.round(aPct + frac * (bPct - aPct))
-      return { approx_percentile: pct, label: `~P${pct}` }
-    }
-  }
-  // Unreachable given the range checks above; keep a safe fallback.
-  return { approx_percentile: null, label: 'not determinable from available benchmarks' }
+  // Inherited percentile-shaped assumptions do not establish a distribution.
+  void blended; void p25; void p50; void p75; void p95
+  return {approx_percentile: null, label: 'Observed market percentile unavailable'}
 }
 
 /** Lower bound of the percentile band a contended placement asserts. */

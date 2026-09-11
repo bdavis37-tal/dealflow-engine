@@ -11,8 +11,8 @@ The blended output represents a weighted average of applicable methods with
 explicit low/high ranges tied to market benchmarks (Carta, PitchBook, Equidam Q3 2025).
 """
 from __future__ import annotations
+from .benchmark_registry import BenchmarkView, evidence_analysis, resolve, policy
 
-import json
 import logging
 import os
 from typing import Optional
@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 
 _DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "startup_valuation_benchmarks.json")
 
-def _load_benchmarks() -> dict:
-    with open(_DATA_PATH, "r") as f:
-        return json.load(f)
+def _load_benchmarks():
+    return BenchmarkView("startup")
+
 
 _BENCHMARKS = _load_benchmarks()
 
@@ -64,15 +64,18 @@ def _get_regional_premium(geography: str) -> float:
 def _get_vertical_baseline(vdata: dict, stage: StartupStage) -> float:
     """
     Return the vertical-specific valuation baseline for pre-revenue methods.
-    Uses vertical p50 when available; falls back to market-wide pre-seed median.
+    Uses the vertical assumption when available, then a same-stage market assumption.
     This ensures defense tech, AI infra, etc. are anchored to their own comps
     rather than the generic $7.7M market median.
     """
-    market_median = _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
-    vertical_p50 = vdata.get("valuation_p50")
+    vertical_p50 = vdata.get('valuation_p50')
     if vertical_p50 and vertical_p50 > 0:
         return float(vertical_p50)
-    return market_median
+    market = _BENCHMARKS['market_wide_medians'].get(stage.value, {})
+    median = market.get('valuation_median') or market.get('valuation_pre_money_median')
+    if median is None:
+        raise ValueError('No compatible stage baseline is configured')
+    return float(median)
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +599,12 @@ def _run_arr_multiple(
     t = inp.traction
     arr = t.annual_recurring_revenue or (t.monthly_recurring_revenue * 12)
 
+    business = inp.fundraise.business_model
+    nonsoftware = business in {'hardware', 'services', 'biotech', 'mixed'} or (business == 'auto' and inp.fundraise.vertical.value in {'deep_tech_hardware', 'biotech_pharma', 'climate_energy', 'consumer', 'marketplace'})
+    if nonsoftware:
+        return ValuationMethodResult(method_name='arr_multiple', method_label='ARR Multiple',
+            applicable=False, indicated_value=None, value_low=None, value_high=None, inputs_used={},
+            rationale='Recurring-software method excluded for this business model. Use milestone evidence and specialist valuation inputs.')
     if arr <= 0 or not t.has_revenue:
         if arr > 0 and not t.has_revenue:
             rationale = (
@@ -912,6 +921,10 @@ def _compute_round_timing(inp: StartupInput, vdata: dict) -> RoundTimingSignal:
             "Add cash on hand and monthly burn for an accurate timing signal."
         )
 
+    if t.monthly_burn_rate <= 0:
+        signal_label = 'Runway Not Quantified'
+        signal_detail = 'No positive monthly cash burn was supplied. A dated fundraising recommendation requires cash and burn inputs; milestone guidance remains illustrative.'
+
     # Populate raise_in_months field for the raise_in_months signal
     raise_in_months_val: Optional[float] = None
     if signal == RaiseSignal.RAISE_IN_MONTHS:
@@ -1098,8 +1111,10 @@ def _build_safe_conversion(
         return None
 
     f = inp.fundraise
-    capless = f.pre_money_valuation_ask is None
-    cap = f.pre_money_valuation_ask or basis_pre_money
+    if f.safe_valuation_cap is None:
+        return None
+    capless = False
+    cap = f.safe_valuation_cap
     discount = f.safe_discount
     raise_amount = f.raise_amount
     safe_type = f.safe_type
@@ -1126,9 +1141,10 @@ def _build_safe_conversion(
     conversion_valuation: Optional[float] = None
     conversion_ownership: Optional[float] = None
     if next_round_pre is not None and cap > 0:
-        discounted_valuation = next_round_pre * (1 - discount) if discount > 0 else None
-        if discounted_valuation is not None and discounted_valuation < cap:
-            governing_term = "discount"
+        discounted_valuation = next_round_pre * (1 - discount)
+        cap_equivalent_pre = cap - raise_amount if safe_type == "post_money" else cap
+        if discounted_valuation < cap_equivalent_pre:
+            governing_term = "discount" if discount > 0 else "round_price"
             conversion_valuation = discounted_valuation
             # Discount conversion prices off the round itself (pre-money mechanics)
             conversion_ownership = raise_amount / (conversion_valuation + raise_amount)
@@ -1152,7 +1168,7 @@ def _build_safe_conversion(
     if next_round_pre is not None and governing_term is not None:
         note_parts.append(
             f"At the projected {next_round_label} round (~${next_round_pre:.1f}M pre-money), "
-            f"the {'discount' if governing_term == 'discount' else 'valuation cap'} governs: "
+            f"the {dict(discount='discount', round_price='round price', cap='valuation cap')[governing_term]} governs in this simplified illustration: "
             f"conversion at ${conversion_valuation:.1f}M for ~{conversion_ownership:.1%} ownership."
         )
     elif next_round_pre is None:
@@ -1169,7 +1185,7 @@ def _build_safe_conversion(
             "cumulative dilution at next priced round will be higher than this single instrument."
         )
     note_parts.append(
-        "Per-share conversion price not shown — it requires a share count, which is not modeled."
+        "Exact conversion requires fully diluted share counts, option pool and other converting securities; the illustration is not a final cap table."
     )
 
     return SAFEConversionSummary(
@@ -1217,11 +1233,11 @@ def _build_scorecard(inp: StartupInput, blended: float, vdata: dict) -> list[Sco
             bm_label = bands["red_flag"]["label"]
 
         flags.append(ScorecardFlag(
-            metric="Burn Multiple",
+            metric="Burn / Current ARR (proxy)",
             value=f"{burn_mult:.1f}x",
             signal=signal,
             benchmark=bm_label,
-            commentary="Net ARR added per dollar burned. Below 1.5x is strong; above 2.5x is a Series A red flag.",
+            commentary="Annualized burn divided by current ARR. Net new ARR was not supplied, so this is not a true burn multiple.",
         ))
 
     # --- NRR ---
@@ -1265,7 +1281,7 @@ def _build_scorecard(inp: StartupInput, blended: float, vdata: dict) -> list[Sco
         metric="Team Quality",
         value="Prior exit" if team.prior_exits >= 1 else ("Domain expert" if team.domain_experts else "Standard"),
         signal=team_signal,
-        benchmark="30% of Berkus/Scorecard weight; prior exit = immediate $1–5M premium",
+        benchmark="Qualitative team assumptions; no independently established valuation premium",
         commentary="Team is the dominant variable at pre-seed. Prior exits, domain expertise, and technical depth matter most.",
     ))
 
@@ -1280,31 +1296,12 @@ def _build_scorecard(inp: StartupInput, blended: float, vdata: dict) -> list[Sco
         commentary="Market ceiling limits valuation upside. Even with 100% capture, the math needs to support 10x fund returns.",
     ))
 
-    # --- Valuation vs. benchmark ---
-    p25 = vdata.get("valuation_p25", 0)
-    p75 = vdata.get("valuation_p75", 0)
-    p50 = vdata.get("valuation_p50", 0)
-    if blended and p50:
-        if blended >= p75:
-            vs_signal = ValuationSignal.WARNING
-            vs_label = "Top quartile — above-average growth required to sustain at next round"
-        elif blended >= p50:
-            vs_signal = ValuationSignal.FAIR
-            vs_label = "Median range — market-rate terms"
-        elif blended >= p25:
-            vs_signal = ValuationSignal.WEAK
-            vs_label = "Below median (P25–P50) — strengthen traction or team before raising"
-        else:
-            vs_signal = ValuationSignal.WARNING
-            vs_label = "Below P25 — consider bridge round or additional milestones first"
-
-        flags.append(ScorecardFlag(
-            metric="Valuation vs. Benchmark",
-            value=f"${blended:.1f}M",
-            signal=vs_signal,
-            benchmark=f"{vs_label}. P25 ${p25:.0f}M | P50 ${p50:.0f}M | P75 ${p75:.0f}M ({inp.fundraise.vertical.value.replace('_', ' ')}, {stage.value.replace('_', ' ')})",
-            commentary="Where your implied valuation sits within the Carta/PitchBook benchmark distribution for your vertical and stage.",
-        ))
+    # Reference context does not imply company quality or pricing power.
+    p50 = vdata.get('valuation_p50')
+    if p50:
+        flags.append(ScorecardFlag(metric='Model reference', value=f'${blended:.1f}M',
+            signal=ValuationSignal.FAIR, benchmark=f'Assumed stage/sector midpoint ${p50:.1f}M',
+            commentary='Reference assumptions are not observed market percentiles. Evaluate the actual ask separately.'))
 
     # --- Runway ---
     if t.monthly_burn_rate > 0:
@@ -1325,55 +1322,21 @@ def _build_scorecard(inp: StartupInput, blended: float, vdata: dict) -> list[Sco
 # Verdict assignment
 # ---------------------------------------------------------------------------
 
-def _assign_verdict(
-    blended: float,
-    vdata: dict,
-    warnings: list[str],
-) -> tuple[ValuationVerdict, str, str]:
-    """
-    Map the blended valuation onto the vertical/stage benchmark distribution.
-    Exact mapping (relative to the ask — higher percentile = more aggressive):
-      blended >= P75        → STRETCHED (above-market; strong story required)
-      P50 <= blended < P75  → STRONG    (top half; pricing power)
-      P25 <= blended < P50  → FAIR      (below median; market-rate terms)
-      blended < P25         → AT_RISK   (below-market; milestone first)
-    Missing P50 → FAIR with a limited-benchmark note.
-    """
-    p25 = vdata.get("valuation_p25", 0)
-    p50 = vdata.get("valuation_p50", 0)
-    p75 = vdata.get("valuation_p75", 0)
-
-    if not p50:
-        return ValuationVerdict.FAIR, "Indicative range computed", "Limited benchmarks available for this vertical/stage combination."
-
-    if blended >= p75:
-        return (
-            ValuationVerdict.STRETCHED,
-            "Above-market valuation — strong story required",
-            f"Your indicated ${blended:.1f}M is in the top quartile for this vertical/stage (P75 = ${p75:.0f}M). "
-            "This is achievable with an exceptional team or breakout traction, but requires ~3x ARR growth before the next round to avoid a flat or down round.",
-        )
-    elif blended >= p50:
-        return (
-            ValuationVerdict.STRONG,
-            "Well-positioned at median to top-half range",
-            f"Your indicated ${blended:.1f}M sits between the P50 (${p50:.0f}M) and P75 (${p75:.0f}M) for your vertical. "
-            "You have pricing power. Standard terms apply.",
-        )
-    elif blended >= p25:
-        return (
-            ValuationVerdict.FAIR,
-            "Market-rate — room to grow before raising",
-            f"Your indicated ${blended:.1f}M is in the P25–P50 range (${p25:.0f}M–${p50:.0f}M). "
-            "Consider adding 1–2 additional milestones to strengthen your position before committing to a cap.",
-        )
+def _assign_verdict(blended: float, vdata: dict, warnings: list[str], ask=None, basis='pre_money'):
+    if ask is None:
+        return ValuationVerdict.NOT_ASSESSED, 'Price not assessed — enter an ask or SAFE cap', 'Company evidence and indicated value are shown separately. No conclusion about fundraising price is implied.'
+    if basis == 'safe_cap':
+        median = vdata.get('safe_cap_median')
+        if not median:
+            return ValuationVerdict.NOT_ASSESSED, 'No compatible SAFE cap reference', 'A SAFE cap cannot be compared directly with priced-round pre-money valuations.'
+        high = median * 1.5
     else:
-        return (
-            ValuationVerdict.AT_RISK,
-            "Below-market — milestone first, then raise",
-            f"Your indicated ${blended:.1f}M is below the P25 (${p25:.0f}M) for your vertical/stage. "
-            "Focus on reaching a clear product or traction milestone before formalizing the round.",
-        )
+        median, high = vdata.get('valuation_p50'), vdata.get('valuation_p75')
+    if not median or not high:
+        return ValuationVerdict.NOT_ASSESSED, 'Insufficient comparable evidence', 'No compatible reference is available for this price basis.'
+    if ask > high:
+        return ValuationVerdict.STRETCHED, 'Ask exceeds the reference range', f'Your ${ask:.1f}M ask exceeds the ${high:.1f}M reference. This is an assumption-based comparison, not an observed market percentile.'
+    return ValuationVerdict.FAIR, 'Ask is within or below the reference range', 'Price positioning is separate from company quality and financing feasibility. References may be inherited assumptions.'
 
 
 # ---------------------------------------------------------------------------
@@ -1413,7 +1376,7 @@ def _compute_method_blend(
 
     if not applicable:
         # Fallback to benchmark median
-        blended = vdata.get("valuation_p50") or _BENCHMARKS["market_wide_medians"]["pre_seed"]["valuation_median"]
+        blended = _get_vertical_baseline(vdata, inp.fundraise.stage)
         if warnings is not None:
             warnings.append("Insufficient inputs for method-based valuation — using vertical median as fallback.")
         notes_list.append("Increase input detail (team, traction, market size) for a more precise output.")
@@ -1430,21 +1393,12 @@ def _compute_method_blend(
             if pre_revenue_values:
                 pre_rev_avg = sum(pre_revenue_values) / len(pre_revenue_values)
                 ramp_denominator = max(float(vdata.get("arr_required_min") or 1.0), 1.0)
-                ramp = min(1.0, arr / ramp_denominator)
-                arr_weight = 0.65 * ramp
+                ramp = arr / (arr + ramp_denominator)
+                arr_weight = policy('arr_weight_max') * ramp
                 blended = arr_mult.indicated_value * arr_weight + pre_rev_avg * (1 - arr_weight)
-                if ramp < 1.0 and blended < pre_rev_avg:
-                    # Monotonicity floor: while ARR is still ramping in, early
-                    # revenue must not value the company below its otherwise
-                    # identical pre-revenue blend.
-                    blended = pre_rev_avg
-                    notes_list.append(
-                        "Early-revenue floor applied: ARR is below the vertical's threshold, so the "
-                        "blended value is floored at the pre-revenue blend."
-                    )
                 notes_list.append(
                     f"ARR multiple weighted {arr_weight:.0%} (weight ramps with ARR toward the full "
-                    f"65% at ${ramp_denominator:.1f}M ARR); Berkus/Scorecard/RFS average weighted "
+                    f"65% asymptotically; half that weight at ${ramp_denominator:.1f}M ARR); Berkus/Scorecard/RFS average weighted "
                     f"{1 - arr_weight:.0%}."
                 )
             else:
@@ -1455,6 +1409,15 @@ def _compute_method_blend(
             values = [m.indicated_value for m in [berkus, scorecard, rfs] if m.applicable and m.indicated_value is not None]
             blended = sum(values) / len(values)
             notes_list.append(f"Blended average of {len(values)} applicable pre-revenue methods.")
+
+    if applicable:
+        arr_result = next((m for m in applicable if m.method_name == 'arr_multiple'), None)
+        qualitative = [m for m in applicable if m.method_name != 'arr_multiple']
+        aw = (policy('arr_weight_max') * arr / (arr + max(float(vdata.get('arr_required_min') or 1), 1))
+              if arr_result and qualitative else 1.0 if arr_result else 0.0)
+        for m in applicable:
+            m.blend_weight = aw if m is arr_result else (1-aw) / len(qualitative)
+            m.weighted_contribution = m.blend_weight * m.indicated_value
 
     # Range from applicable methods
     low_vals = [m.value_low for m in applicable if m.value_low is not None]
@@ -1469,6 +1432,7 @@ def _compute_method_blend(
 # Main entry point
 # ---------------------------------------------------------------------------
 
+@evidence_analysis
 def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
     """
     Full startup valuation pipeline.
@@ -1553,24 +1517,9 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         )
         range_high = blended
 
-    # Recommended SAFE cap: anchor to the vertical's median cap where the
-    # benchmark provides one (floored at the blended value); otherwise fall
-    # back to the ~15% market-convention premium on blended.
-    safe_cap = None
-    if inp.fundraise.instrument == InstrumentType.SAFE:
-        cap_median = vdata.get("safe_cap_median")
-        if cap_median:
-            safe_cap = round(max(float(cap_median), blended), 1)
-            notes.append(
-                f"Recommended SAFE cap of ${safe_cap:.1f}M anchored to the vertical's median cap "
-                f"(${cap_median:.1f}M), floored at the blended valuation."
-            )
-        else:
-            safe_cap = round(blended * 1.15, 1)
-            notes.append(
-                f"Recommended SAFE cap of ${safe_cap:.1f}M = blended value × 1.15x "
-                "(standard market premium; no vertical cap median available)."
-            )
+    safe_cap = inp.fundraise.safe_valuation_cap if inp.fundraise.instrument == InstrumentType.SAFE else None
+    if inp.fundraise.instrument == InstrumentType.SAFE and safe_cap is None:
+        notes.append('No explicit SAFE cap supplied. A model pre-money estimate is not a recommended SAFE cap.')
 
     # Deal-mechanics basis: the deal happens at the preparer's ask when one is
     # provided — the model midpoint is only a fallback anchor. The blended
@@ -1578,11 +1527,13 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
     ask = inp.fundraise.pre_money_valuation_ask
     basis_is_ask = ask is not None and ask > 0
     basis_pre_money = float(ask) if basis_is_ask else blended
-    if basis_is_ask:
+    if safe_cap is not None:
+        notes.append(f'Dilution is illustrated at the explicitly supplied ${safe_cap:.1f}M {inp.fundraise.safe_type.replace("_", "-")} SAFE cap. It is separate from the pre-money model indication.')
+    elif basis_is_ask:
         notes.append(
-            f"Deal mechanics (implied dilution, current-round dilution, SAFE cap fallback) are priced at "
+            f"Deal mechanics (implied dilution, current-round dilution, financing feasibility) are priced at "
             f"the preparer's ask of ${basis_pre_money:.1f}M pre-money, not the model midpoint (${blended:.1f}M). "
-            "Projected future rounds remain anchored to market benchmarks."
+            "Projected future rounds remain anchored to reference assumptions."
         )
     else:
         notes.append(
@@ -1590,6 +1541,9 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         )
 
     # Implied dilution
+    if safe_cap is not None:
+        basis_is_ask = True
+        basis_pre_money = max(0, safe_cap - inp.fundraise.raise_amount) if inp.fundraise.safe_type == 'post_money' else safe_cap
     post_money = basis_pre_money + inp.fundraise.raise_amount
     implied_dilution = inp.fundraise.raise_amount / post_money if post_money > 0 else 0
 
@@ -1614,15 +1568,16 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
             down_round_pct = _BENCHMARKS["market_wide_medians"]["seed"]["down_round_pct"]
             down_round_proxy_note = " (seed-stage rate used as proxy — no stage-specific data)"
         warnings.append(
-            f"Valuation is above P75 for your vertical. Note that {down_round_pct:.0%} of recent rounds "
-            f"were down rounds{down_round_proxy_note} — "
+            f"Model indication exceeds the inherited upper reference for your vertical. The {down_round_pct:.0%} down-round rate "
+            f"is an inherited assumption{down_round_proxy_note}, not a verified current statistic. "
             "an aggressive cap today raises the next-round bar significantly."
         )
 
     # Dilution modeling — current round priced at the deal-mechanics basis
     # (ask when provided); projected rounds anchored to the model midpoint.
     dilution_scenarios = _build_dilution_scenarios(inp, basis_pre_money, blended)
-    safe_conversion = _build_safe_conversion(inp, basis_pre_money, blended)
+    safe_conversion = _build_safe_conversion(inp, basis_pre_money, blended) if safe_cap is not None else None
+
 
     # An ask above the market-projected next round means the projection is a
     # down round relative to this deal price — flag it plainly.
@@ -1640,7 +1595,19 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
     investor_scorecard = _build_scorecard(inp, blended, vdata)
 
     # Verdict
-    verdict, headline, subtext = _assign_verdict(blended, vdata, warnings)
+    price_ask = inp.fundraise.safe_valuation_cap if inp.fundraise.instrument == InstrumentType.SAFE else ask
+    price_basis = 'safe_cap' if inp.fundraise.instrument == InstrumentType.SAFE else 'pre_money'
+    price_reference = None
+    if price_basis == 'safe_cap' and inp.fundraise.safe_type == 'post_money':
+        match = resolve('safe_cap', 'post_money_safe_cap', stage=stage.value,
+            geography='us' if inp.fundraise.geography.value != 'international' else 'international',
+            size=inp.fundraise.raise_amount)
+        if match['record']:
+            price_reference = match['record']
+    price_data = dict(vdata)
+    if price_reference:
+        price_data['safe_cap_median'] = price_reference.value
+    verdict, headline, subtext = _assign_verdict(blended, price_data, warnings, price_ask, price_basis)
 
     # Percentile label
     p50 = vdata.get("valuation_p50", 0)
@@ -1652,6 +1619,8 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
     elif blended >= (p50 or 9999): pct_label = "top half (P50–P75)"
     elif blended >= (p25 or 9999): pct_label = "bottom half (P25–P50)"
     else: pct_label = "bottom quartile (below P25)"
+
+    pct_label = 'Reference band only — observed market percentile unavailable'
 
     traction_bar = vdata.get("traction_bar", "No traction bar available for this vertical/stage.")
 
@@ -1670,6 +1639,11 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         dilution_basis="preparer_ask" if basis_is_ask else "model_midpoint",
         dilution_basis_pre_money=round(basis_pre_money, 2),
         method_results=method_results,
+        blend_adjustment=round(round(blended, 2)-sum(m.weighted_contribution for m in method_results), 8),
+        price_assessment={'ask': price_ask, 'basis': price_basis, 'status': verdict.value, 'reference_id': price_reference.id if price_reference else None},
+        company_evidence=[f'{inp.traction.paying_customer_count} paying customers reported',
+                          f'Product stage: {inp.product.stage.value}',
+                          'Qualitative inputs are user reported; not independent verification.'],
         benchmark_p25=vdata.get("valuation_p25", 0),
         benchmark_p50=vdata.get("valuation_p50", 0),
         benchmark_p75=vdata.get("valuation_p75", 0),
@@ -1678,7 +1652,7 @@ def run_startup_valuation(inp: StartupInput) -> StartupValuationOutput:
         dilution_scenarios=dilution_scenarios,
         safe_conversion=safe_conversion,
         investor_scorecard=investor_scorecard,
-        traction_bar=traction_bar,
+        traction_bar="Illustrative stage assumptions: " + traction_bar.replace("top quartile", "upper model reference"),
         verdict=verdict,
         verdict_headline=headline,
         verdict_subtext=subtext,
