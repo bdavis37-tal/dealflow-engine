@@ -1,23 +1,33 @@
 # Dealflow Engine
 
-**Open-source deal intelligence platform. Institutional-grade financial modeling for M&A, startup valuation, and venture capital — designed for humans, not just bankers.**
+**Source-available deal intelligence platform. Financial modeling for M&A, startup valuation, and venture capital with visible evidence and assumptions.**
 
 [![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-orange.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![Python 3.11–3.12](https://img.shields.io/badge/python-3.11%20to%203.12-blue.svg)](https://python.org)
 [![React 18](https://img.shields.io/badge/react-18-61dafb.svg)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg)](https://fastapi.tiangolo.com)
 
 ---
+
+![Dealflow Engine application showing M&A, startup valuation, and VC analysis](docs/images/dealflow-engine.png)
+
+*The application running locally, September 2026.*
 
 ## What This Is
 
 Dealflow Engine is a unified platform that covers the three core activities in private-market deal-making:
 
 1. **M&A Deal Modeling** — Full merger model with pro forma statements, sources & uses, contribution analysis, credit metrics, implied valuation multiples, deal returns transparency, PPA, circularity solving, sensitivity analysis, and accretion/dilution verdicts. Includes a Defense & National Security vertical with defense-specific analytics.
-2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, ARR Multiple) for pre-seed through Series A, calibrated against Carta/PitchBook data across 13 verticals including Defense Tech / National Security. Features an AI-Native Valuation Modifier that applies a graduated, vertical-specific premium layer based on a 4-question AI characteristics assessment.
+2. **Startup Valuation** — Four-method valuation engine (Berkus, Scorecard, Risk Factor Summation, ARR Multiple) for pre-seed through Series A, with versioned observations and explicit assumptions across 13 verticals. Company evidence, model indication and actual ask/cap positioning are separate. AI scenarios adjust method parameters before blending.
 3. **VC Fund-Seat Analysis** — Evaluate deals from the investor's chair: ownership math with full dilution stack, 3-scenario return modeling, waterfall analysis, pro-rata decisions, portfolio construction, QSBS eligibility, anti-dilution modeling, bridge round analysis, and auto-generated IC memo financials.
 
 Each module runs a deterministic computation engine underneath. An optional Claude AI co-pilot augments the output with plain-English narratives, bear/base/bull investment theses, scenario explanations, and conversational deal entry — but the computed numbers are always the source of truth.
+
+## September 2026 evidence release
+
+Engine 2.0 uses immutable benchmark releases with record-level provenance, source/cohort checks and explicit assumption status. VC deals without revenue require explicit exit assumptions before return screening. Only specified future rounds dilute ownership; scenario proceeds bridge EV to equity and apply the investor's selected preferred class. Fund vintage quartiles are unavailable without a matching cohort. M&A earnings impact remains separate from strategic and valuation context.
+
+See [benchmark sources, release workflow and model boundaries](docs/BENCHMARKS.md), [implementation and validation](docs/IMPLEMENTATION.md), and [the original plan](ENGINE_IMPROVEMENT_PLAN.md). The empirical outcome dataset is currently empty: passing synthetic tests does not establish market accuracy.
 
 ## Who It's For
 
@@ -175,47 +185,42 @@ Four-method valuation engine for pre-seed through Series A startups across 13 ve
 
 **AI/ML Infrastructure** · **AI-Enabled SaaS** · **B2B SaaS** · **Fintech** · **Healthtech** · **Biotech/Pharma** · **Deep Tech/Hardware** · **Consumer** · **Climate/Energy** · **Marketplace** · **Vertical SaaS** · **Developer Tools** · **Defense Tech / National Security**
 
-Each vertical has its own benchmark dataset (P25/P50/P75 valuations, ARR multiples, traction bars) sourced from Carta, PitchBook, and Equidam Q3 2025. The engine anchors all pre-revenue methods to the vertical-specific P50 baseline rather than a generic market median, so a defense tech pre-seed and a consumer pre-seed produce meaningfully different outputs.
+Each vertical has versioned reference bands, ARR-multiple assumptions and traction assumptions. Inherited cells lack sufficient per-metric sourcing and are explicitly labeled assumptions; selected new observations have linked primary sources. Pre-revenue methods use the same-stage vertical baseline, with an explicit same-stage market fallback where available.
 
 - **Berkus Method** — Qualitative factor scoring (idea, team, prototype, relationships, rollout)
 - **Scorecard Method** — Team, market, product, traction, competition weighted against stage medians
 - **Risk Factor Summation** — 12 risk categories adjusted from a vertical-specific base valuation
-- **ARR Multiple** — Vertical-specific P25/P50/P75 revenue multiples; adjusts for NRR, growth rate, gross margin, and burn multiple
+- **ARR Multiple** — Applicable recurring-software revenue multiples with growth, retention and margin adjustments; excluded for non-recurring business models
 
-Output includes a blended pre-money valuation with confidence range, dilution modeling through future rounds (with step-up floor ensuring each projected round pre-money exceeds current post-money), SAFE conversion mechanics, investor scorecard signals, and a market-calibrated verdict (strong / fair / stretched / at risk).
+Output includes a model-indicated pre-money value and method-dispersion range, transparent method contributions, explicit SAFE-cap mechanics and a separate actual-price assessment. No ask or compatible reference means price is not assessed. Future-round assumptions can imply down rounds.
 
 **Sensitivity analysis** — Tornado chart showing how key inputs (ARR, MoM growth, NRR, TAM, raise amount, repeat founder status) move the valuation needle. Runs the engine multiple times with perturbed inputs and ranks by impact, identifying the single most impactful lever for each startup.
 
-**AI-Native Valuation Modifier** — An optional graduated premium layer on top of the blended valuation. A 4-question AI Characteristics Assessment produces a score (0.0–1.0), which drives a vertical-specific premium:
+**AI parameter scenarios** adjust scorecard weights, Berkus caps, risk steps and applicable ARR multiples before blending. The AI-specific verticals (including defense) receive no additional overlay. These parameters are assumptions, not empirically calibrated premiums. No post-blend multiplier or hidden early-revenue floor is applied.
 
-```
-blended_after_ai = blended × (1 + base_premium × ai_native_score)
-```
-
-Vertical base premiums range from 1.5× (defense_tech) down to 0.3× (marketplace). The `ai_ml_infrastructure` and `ai_enabled_saas` verticals are frozen — the premium is already embedded in their benchmarks. The modifier defaults on for defense_tech, healthtech, biotech_pharma, and developer_tools.
 
 ### VC Fund-Seat Analysis
 
 Evaluates any deal from the investor's perspective, anchored to fund economics:
 
-- **Ownership math** — Entry % through exit % after a full dilution stack (pre-seed → seed → A → B → C → IPO)
+- **Ownership math** — Entry through exit ownership after explicitly selected future financing rounds and incremental pools
 - **3-scenario return model** — Bear/base/bull with probability-weighted expected MOIC and IRR
 - **Waterfall analysis** — Liquidation preference distribution through a multi-class cap table
 - **Pro-rata decision modeling** — Exercise vs. pass expected value comparison
 - **Portfolio construction** — TVPI/DPI/RVPI, concentration analysis, reserve adequacy
 - **GP carry economics** — Full fund waterfall (return of capital → hurdle → catch-up → carry split), per-GP compensation, clawback exposure, European vs. American waterfall
-- **Fund-level IRR & J-curve** — Newton-Raphson solver on irregular cashflows, J-curve visualization data, vintage quartile estimation, gross and net IRR
+- **Fund-level IRR & J-curve** — Irregular cashflows, J-curve data, gross and net IRR; vintage quartiles remain unavailable without a matched cohort
 - **SAFE conversion modeling** — Multi-SAFE stack conversion at a priced round with cap vs. discount determination, MFN clause application, post-money vs. pre-money mechanics, and full post-conversion cap table
 - **Deal comparison** — Side-by-side evaluation of multiple deals with rankings on MOIC, IRR, ownership, and fund returner metrics
 - **QSBS eligibility** — IRC §1202 tax benefit estimation, including 2025 $15M cap changes
 - **Anti-dilution modeling** — Full ratchet vs. broad-based weighted average in down rounds
 - **Bridge round analysis** — Dilution impact and participation recommendation
 - **IC memo auto-generation** — Financial section with investment thesis prompt
-- **Quick screen** — Recommendation output: pass / look_deeper / strong_interest
+- **Quick screen** — pass / look_deeper / strong_interest / insufficient_inputs, conditional on scenario assumptions
 
 ## API Reference
 
-The backend exposes four route groups:
+The backend exposes five route groups:
 
 ```
 # M&A
@@ -223,6 +228,11 @@ POST /api/v1/analyze          — Run M&A deal model (DealInput → DealOutput)
 GET  /api/v1/defaults         — Smart defaults for industry + deal size
 GET  /api/v1/industries       — List supported M&A industry verticals
 GET  /api/v1/health           — Health check
+
+# Benchmark releases
+GET  /api/benchmarks/releases — Available immutable releases
+GET  /api/benchmarks/{version} — Release summary and source gaps
+GET  /api/benchmarks/{version}/vc-defaults — Versioned dilution defaults
 
 # Startup Valuation
 POST /api/startup/value       — Run startup valuation engine
@@ -270,9 +280,9 @@ GET  /docs                    — Interactive Swagger documentation
 | Frontend | React 18, TypeScript, Vite, TailwindCSS |
 | Charts | Recharts |
 | UI Components | Radix UI primitives |
-| Backend | Python 3.11, FastAPI, Pydantic v2 |
+| Backend | Python 3.11–3.12, FastAPI, Pydantic v2 |
 | AI Co-pilot | Claude (Anthropic API), streaming SSE |
-| Testing | pytest (171 tests, backend), Vitest (frontend) |
+| Testing | pytest (678 tests), Vitest (27 tests), benchmark validation and synthetic impact reports |
 | Deployment | Docker, docker-compose |
 
 ## Contributing
@@ -315,9 +325,11 @@ This is a build-in-public project. Contributions are welcome.
 - [ ] Multi-target (roll-up) M&A modeling
 - [ ] Cross-border / multi-currency deals
 - [ ] User accounts + deal history
-- [ ] Real-time collaboration (share a deal link)
+- [x] Versioned share links with input and evidence identity
+- [ ] Real-time collaborative editing
 - [ ] Excel export (structured workbook with tabs)
-- [ ] PDF report generation (board-ready briefing, IC memos)
+- [x] Startup PDF report and VC text memo exports with evidence context
+- [ ] M&A PDF briefing and VC PDF memo
 - [ ] LBO modeling mode (pure PE returns analysis)
 - [ ] Comparable transaction database
 - [ ] Convertible notes and preferred equity in M&A structures

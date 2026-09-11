@@ -1,3 +1,4 @@
+import type { AnalysisEvidence } from '../types/evidence'
 /**
  * shareUtils.ts — URL-based state sharing for Dealflow Engine.
  *
@@ -29,7 +30,7 @@ import type { FundProfile, VCDealInput } from '../types/vc'
 // ---------------------------------------------------------------------------
 
 /** Bump this when input shapes change incompatibly. Old links will be rejected. */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 /** Max safe length for a URL hash fragment (conservative). */
 const MAX_ENCODED_LENGTH = 8000
@@ -41,6 +42,7 @@ const MAX_ENCODED_LENGTH = 8000
 export type ShareModule = 'ma' | 'startup' | 'vc'
 
 export interface MAInputState {
+  benchmark_version?: string
   mode: ModelMode
   acquirer: Partial<AcquirerProfile>
   target: Partial<TargetProfile>
@@ -50,6 +52,7 @@ export interface MAInputState {
 }
 
 export interface StartupInputState {
+  benchmark_version?: string
   company_name: string
   team: Partial<TeamProfile>
   traction: Partial<TractionMetrics>
@@ -68,6 +71,7 @@ export interface VCInputState {
 
 export interface SharePayload {
   v: number
+  provenance?: Omit<AnalysisEvidence, 'records'> & { record_ids: string[] }
   module: ShareModule
   state: MAInputState | StartupInputState | VCInputState
 }
@@ -83,8 +87,13 @@ export interface SharePayload {
 export function encodeState(
   module: ShareModule,
   state: MAInputState | StartupInputState | VCInputState,
+  evidence?: AnalysisEvidence | null,
 ): string {
   const payload: SharePayload = { v: SCHEMA_VERSION, module, state }
+  if (evidence) {
+    const {records, ...metadata} = evidence
+    payload.provenance = {...metadata, record_ids: records.map(r => r.id)}
+  }
   const json = JSON.stringify(payload)
   const encoded = LZString.compressToEncodedURIComponent(json)
 
@@ -124,11 +133,24 @@ export function decodeState(encoded: string): SharePayload | null {
 
     const p = payload as Record<string, unknown>
 
-    if (typeof p.v !== 'number' || p.v <= 0 || p.v !== SCHEMA_VERSION) return null
+    if (typeof p.v !== 'number' || p.v <= 0 || ![1, SCHEMA_VERSION].includes(p.v)) return null
     if (!['ma', 'startup', 'vc'].includes(p.module as string)) return null
     if (typeof p.state !== 'object' || p.state === null) return null
 
-    return payload as SharePayload
+    const shared = payload as SharePayload
+    if (shared.v === 1) {
+      if (shared.module === 'vc') {
+        const state = shared.state as VCInputState
+        const order = ['pre_seed', 'seed', 'series_a', 'series_b', 'series_c', 'ipo']
+        const entry = order.indexOf(state.deal.stage ?? 'seed')
+        state.deal = {...state.deal, benchmark_version: '2026-07-legacy',
+          dilution_source: state.deal.dilution ? 'custom' : 'benchmark',
+          future_rounds: state.deal.future_rounds ?? order.slice(entry + 1)}
+      } else {
+        (shared.state as MAInputState | StartupInputState).benchmark_version = '2026-07-legacy'
+      }
+    }
+    return shared
   } catch {
     return null
   }

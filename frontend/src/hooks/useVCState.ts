@@ -29,6 +29,11 @@ function loadFundFromStorage(): FundProfile {
 
 const DEFAULT_DEAL: Partial<VCDealInput> = {
   company_name: '',
+  stage: 'seed',
+  vertical: 'b2b_saas',
+  dilution_source: 'benchmark',
+  benchmark_version: '2026-09-11',
+  future_rounds: [],
   post_money_valuation: 0,
   check_size: 0,
   arr: 0,
@@ -68,6 +73,16 @@ export function useVCState() {
     }
   }, [state.fund])
 
+  useEffect(() => {
+    if (state.deal.dilution_source !== 'benchmark') return
+    let cancelled = false
+    fetch(`/api/benchmarks/${state.deal.benchmark_version ?? '2026-09-11'}/vc-defaults?vertical=${state.deal.vertical ?? 'b2b_saas'}`)
+      .then(r => { if (!r.ok) throw new Error('Defaults unavailable'); return r.json() })
+      .then(data => { if (!cancelled) setState(s => s.deal.dilution_source === 'benchmark' ? {...s, deal: {...s.deal, dilution: data.dilution}} : s) })
+      .catch(() => { if (!cancelled) setState(s => ({...s, error: 'Benchmark defaults could not load. Evaluation will resolve the selected release on the server.'})) })
+    return () => { cancelled = true }
+  }, [state.deal.vertical, state.deal.benchmark_version, state.deal.dilution_source])
+
   const setStep = useCallback((step: VCFlowStep) => {
     setState(s => ({ ...s, step }))
   }, [])
@@ -77,7 +92,7 @@ export function useVCState() {
   }, [])
 
   const updateDeal = useCallback((updates: Partial<VCDealInput>) => {
-    setState(s => ({ ...s, deal: { ...s.deal, ...updates } }))
+    setState(s => ({ ...s, output: null, deal: { ...s.deal, ...updates, ...(updates.dilution && !updates.dilution_source ? {dilution_source: 'custom' as const} : {}) } }))
   }, [])
 
   const updateDilution = useCallback((updates: Partial<DilutionAssumptions>) => {
@@ -85,6 +100,7 @@ export function useVCState() {
       ...s,
       deal: {
         ...s.deal,
+        dilution_source: 'custom',
         dilution: { ...(s.deal.dilution ?? DEFAULT_DILUTION_ASSUMPTIONS), ...updates },
       },
     }))
@@ -118,6 +134,7 @@ export function useVCState() {
 
     try {
       const fullInput: VCDealInput = {
+        ...deal,
         company_name: deal.company_name ?? '',
         vertical: deal.vertical ?? 'b2b_saas',
         stage: deal.stage ?? 'seed',

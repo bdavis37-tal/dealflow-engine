@@ -24,7 +24,7 @@ export default function StartupStep5_Review({ state, onBack, onRun }: Step5Props
         <h2 className="text-xl font-bold text-slate-100 mb-2">Running your valuation...</h2>
         <p className="text-slate-400 text-sm">
           Applying Berkus, Scorecard, Risk Factor Summation, and ARR multiple methods against
-          live benchmarks from Carta, PitchBook, and Equidam.
+          versioned reference data and explicitly labeled assumptions.
         </p>
         <div className="mt-6 space-y-2 text-xs text-slate-500">
           <p>Calibrating against {VERTICAL_LABELS[fundraise.vertical ?? 'b2b_saas']} benchmarks...</p>
@@ -150,7 +150,7 @@ export default function StartupStep5_Review({ state, onBack, onRun }: Step5Props
           className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-base transition-all shadow-lg shadow-purple-900/30"
         >
           <Zap size={18} />
-          Run Valuation — 4 Methods, Live Benchmarks
+          Run Valuation — Applicable Methods, Versioned Sources
         </button>
       </div>
     </div>

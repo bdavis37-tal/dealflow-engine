@@ -95,6 +95,8 @@ function Metric({ label, value, accent, large }: { label: string; value: string;
 export default function VCReturnScenarios({ output }: Props) {
   const { bear_scenario, base_scenario, bull_scenario, expected_value, expected_moic, expected_irr, fund_size } = output
 
+  if (expected_value == null || expected_moic == null || expected_irr == null) return <div className="text-slate-300 p-5">Return scenarios require more inputs. {output.quick_screen.recommendation_rationale}</div>
+
   return (
     <div className="space-y-5">
       {/* Expected Value Summary */}

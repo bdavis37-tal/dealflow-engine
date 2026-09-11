@@ -18,12 +18,14 @@ All monetary values: USD millions.
 All rates/percentages: decimals (0.20 = 20%).
 """
 from __future__ import annotations
+from .benchmark_registry import BenchmarkView, evidence_analysis, policy
 
-import json
 import logging
 import math
 import os
 from typing import Optional
+
+from .vc_scenarios import build_path, effective_deal, path_ownership
 
 from .vc_fund_models import (
     AntiDilutionInput, AntiDilutionOutput, AntiDilutionType,
@@ -61,17 +63,8 @@ _DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "vc_benchmark
 _BENCHMARKS_CACHE: Optional[dict] = None
 
 
-def _load_benchmarks() -> dict:
-    """Load vc_benchmarks.json once and cache at module level (the file is static)."""
-    global _BENCHMARKS_CACHE
-    if _BENCHMARKS_CACHE is None:
-        try:
-            with open(_DATA_PATH, "r") as f:
-                _BENCHMARKS_CACHE = json.load(f)
-        except Exception:
-            logger.warning("Could not load vc_benchmarks.json — using hardcoded defaults")
-            _BENCHMARKS_CACHE = {}
-    return _BENCHMARKS_CACHE
+def _load_benchmarks():
+    return BenchmarkView("vc")
 
 
 def _irr(investment: float, proceeds: float, years: float) -> float:
@@ -125,6 +118,7 @@ def compute_ownership_math(
     dilution: DilutionAssumptions,
     fund_profile: FundProfile,
     arr: float,
+    future_rounds: Optional[list[str]] = None,
 ) -> OwnershipMath:
     """
     Core ownership calculations. All the math a VC does on a napkin, automated.
@@ -155,11 +149,11 @@ def compute_ownership_math(
         "ipo":      dilution.c_to_ipo,
     }
 
-    future_rounds = stage_sequence.get(stage, [])
+    future_rounds = stage_sequence.get(stage, []) if future_rounds is None else future_rounds
     for rnd in future_rounds:
         d = dilution_map.get(rnd, 0.0)
         # also include option pool expansion
-        effective_dilution = d + dilution.option_pool_expansion
+        effective_dilution = 1 - (1 - d) * (1 - dilution.option_pool_expansion)
         pre_round = current_pct
         current_pct = current_pct * (1 - effective_dilution)
         stack.append({
@@ -252,10 +246,10 @@ def _project_arr(current_arr: float, initial_growth: float, years: int) -> float
     current ARR — an aggressive but bounded guardrail for long horizons.
     """
     arr = current_arr
-    g = max(0.0, initial_growth)
+    g = max(-1.0, initial_growth)
     for _ in range(max(0, years)):
         arr *= (1.0 + g)
-        g = max(TERMINAL_GROWTH_FLOOR, g * GROWTH_DECAY_FACTOR)
+        g = g * policy('growth_decay') if g < 0 else max(TERMINAL_GROWTH_FLOOR, g * policy('growth_decay'))
     return min(arr, current_arr * ARR_PROJECTION_CAP_X)
 
 
@@ -272,146 +266,12 @@ def _stage_scenario_weights(stage: VCStage, benchmarks: dict) -> tuple[float, fl
     Bull is the power-law tail: 25% of the survival mass, capped at 15%.
     Base absorbs the remainder.
     """
-    st = benchmarks.get("stage_transition_probabilities", {})
-    seed_fail = st.get("seed_to_failure", 0.60)
-    if stage == VCStage.SEED:
-        p_fail = seed_fail
-    elif stage == VCStage.PRE_SEED:
-        p_graduate = st.get("pre_seed_to_seed", 0.50)
-        p_fail = 1.0 - p_graduate * (1.0 - seed_fail)
-    elif stage == VCStage.SERIES_A:
-        p_fail = 0.45
-    elif stage == VCStage.SERIES_B:
-        p_fail = 0.30
-    elif stage == VCStage.SERIES_C:
-        p_fail = 0.20
-    else:  # GROWTH
-        p_fail = 0.10
+    p_fail = policy('failure_rates', stage.value)
+
     p_fail = min(0.85, max(0.05, p_fail))
-    p_bull = min(0.15, 0.25 * (1.0 - p_fail))
+    p_bull = min(policy('bull_probability_cap'), policy('bull_survival_share') * (1.0 - p_fail))
     p_base = max(0.0, 1.0 - p_fail - p_bull)
     return p_fail, p_base, p_bull
-
-
-def _build_scenario(
-    label: str,
-    probability: float,
-    exit_multiple_arr: float,
-    arr: float,
-    revenue_ttm: float,
-    exit_year: int,
-    exit_ownership_pct: float,
-    check_size: float,
-    fund_size: float,
-    carry_pct: float,
-    hurdle: float,
-    outcome_description: str,
-    revenue_growth_rate: float = 1.5,
-) -> VCScenario:
-    """Build a single upside (base/bull) scenario.
-
-    Exit EV = exit_multiple × projected_ARR_at_exit_year.
-    ARR is projected with annual growth decay (see _project_arr); the deal's
-    stated growth rate is scenario-adjusted (base: 1.0x, bull: 1.3x).
-    If no ARR/revenue data, uses a $10M ARR placeholder.
-    """
-    # Use ARR if available, fall back to revenue
-    current_revenue = arr if arr > 0 else (revenue_ttm if revenue_ttm > 0 else None)
-
-    if current_revenue and current_revenue > 0:
-        # Scenario-specific growth rate modifier
-        growth_mods = {"Base": 1.0, "Bull": 1.3}
-        mod = growth_mods.get(label, 1.0)
-        effective_growth = max(0.0, revenue_growth_rate * mod)
-        projected_arr = _project_arr(current_revenue, effective_growth, exit_year)
-        exit_ev = exit_multiple_arr * projected_arr
-    else:
-        # No revenue data — use a conservative placeholder
-        exit_ev = exit_multiple_arr * 10.0  # $10M ARR placeholder
-
-    gross_proceeds = exit_ev * exit_ownership_pct
-    net_proceeds = _carry_adj_proceeds(gross_proceeds, check_size, carry_pct, hurdle, exit_year)
-
-    gross_moic = gross_proceeds / check_size if check_size > 0 else 0.0
-    net_moic = net_proceeds / check_size if check_size > 0 else 0.0
-
-    gross_irr = _irr(check_size, gross_proceeds, exit_year)
-    net_irr = _irr(check_size, net_proceeds, exit_year)
-
-    fund_contrib = gross_proceeds / fund_size
-
-    return VCScenario(
-        label=label,
-        probability=probability,
-        exit_year=exit_year,
-        exit_multiple_arr=exit_multiple_arr,
-        exit_enterprise_value=exit_ev,
-        gross_proceeds_to_fund=gross_proceeds,
-        net_proceeds_to_fund=net_proceeds,
-        gross_moic=gross_moic,
-        net_moic=net_moic,
-        gross_irr=gross_irr,
-        net_irr=net_irr,
-        fund_contribution_x=fund_contrib,
-        outcome_description=outcome_description,
-    )
-
-
-def _build_bear_scenario(
-    deal: VCDealInput,
-    fund: FundProfile,
-    exit_ownership_pct: float,
-    probability: float,
-) -> VCScenario:
-    """Build the bear (failure) scenario: write-off / near-total loss.
-
-    By default the bear branch is a full write-off (exit EV = 0). If the user
-    supplies bear_exit_multiple_arr, it is treated as a salvage multiple on
-    CURRENT ARR (no growth projection) — e.g. an acqui-hire or fire sale.
-    """
-    current_revenue = deal.arr if deal.arr > 0 else (deal.revenue_ttm if deal.revenue_ttm > 0 else 10.0)
-    if deal.bear_exit_multiple_arr is not None:
-        bear_mult = deal.bear_exit_multiple_arr
-        exit_ev = bear_mult * current_revenue
-        description = (
-            f"Downside: salvage exit at {bear_mult:.1f}x current ARR "
-            f"(user override). Fire sale / acqui-hire recovery; "
-            "most invested capital is lost."
-        )
-    else:
-        bear_mult = 0.0
-        exit_ev = 0.0
-        description = (
-            "Failure case: company shuts down or exits below the preference "
-            "stack — invested capital is written off. Probability seeded from "
-            "stage transition/failure benchmarks."
-        )
-
-    exit_yr = deal.expected_exit_years
-    gross_proceeds = exit_ev * exit_ownership_pct
-    net_proceeds = _carry_adj_proceeds(gross_proceeds, deal.check_size, fund.carry_pct,
-                                       fund.hurdle_rate, exit_yr)
-    gross_moic = gross_proceeds / deal.check_size if deal.check_size > 0 else 0.0
-    net_moic = net_proceeds / deal.check_size if deal.check_size > 0 else 0.0
-    # Total loss → IRR is -100%, not 0%
-    gross_irr = _irr(deal.check_size, gross_proceeds, exit_yr) if gross_proceeds > 0 else -1.0
-    net_irr = _irr(deal.check_size, net_proceeds, exit_yr) if net_proceeds > 0 else -1.0
-
-    return VCScenario(
-        label="Bear",
-        probability=probability,
-        exit_year=exit_yr,
-        exit_multiple_arr=bear_mult,
-        exit_enterprise_value=exit_ev,
-        gross_proceeds_to_fund=gross_proceeds,
-        net_proceeds_to_fund=net_proceeds,
-        gross_moic=gross_moic,
-        net_moic=net_moic,
-        gross_irr=gross_irr,
-        net_irr=net_irr,
-        fund_contribution_x=gross_proceeds / fund.fund_size,
-        outcome_description=description,
-    )
 
 
 def compute_scenarios(
@@ -431,59 +291,15 @@ def compute_scenarios(
       - Bull = power-law tail of the survival mass
       - Base = the remainder
     """
-    vertical_data = benchmarks.get("verticals", {}).get(deal.vertical.value, {})
-    exit_multiples = vertical_data.get("exit_multiples", {})
-
-    base_mult = deal.base_exit_multiple_arr or exit_multiples.get("base", 5.0)
-    bull_mult = deal.bull_exit_multiple_arr or exit_multiples.get("bull", 12.0)
-
-    p_bear, p_base, p_bull = _stage_scenario_weights(deal.stage, benchmarks)
-
-    exit_yr = deal.expected_exit_years
-
-    bear = _build_bear_scenario(deal, fund, exit_ownership_pct, p_bear)
-
-    base = _build_scenario(
-        label="Base",
-        probability=p_base,
-        exit_multiple_arr=base_mult,
-        arr=deal.arr,
-        revenue_ttm=deal.revenue_ttm,
-        exit_year=exit_yr,
-        exit_ownership_pct=exit_ownership_pct,
-        check_size=deal.check_size,
-        fund_size=fund.fund_size,
-        carry_pct=fund.carry_pct,
-        hurdle=fund.hurdle_rate,
-        revenue_growth_rate=deal.revenue_growth_rate,
-        outcome_description=(
-            f"Expected surviving case: {base_mult:.0f}x ARR at exit. "
-            "Company executes on plan, reaches growth milestones, "
-            "and achieves a strategic M&A exit or IPO at median valuations."
-        ),
-    )
-
-    bull = _build_scenario(
-        label="Bull",
-        probability=p_bull,
-        exit_multiple_arr=bull_mult,
-        arr=deal.arr,
-        revenue_ttm=deal.revenue_ttm,
-        exit_year=exit_yr,
-        exit_ownership_pct=exit_ownership_pct,
-        check_size=deal.check_size,
-        fund_size=fund.fund_size,
-        carry_pct=fund.carry_pct,
-        hurdle=fund.hurdle_rate,
-        revenue_growth_rate=deal.revenue_growth_rate,
-        outcome_description=(
-            f"Power-law outcome: {bull_mult:.0f}x ARR at exit. "
-            "Category-defining company, dominant market position, "
-            "IPO or acquisition at premium valuation. Top-decile result."
-        ),
-    )
-
-    return bear, base, bull
+    deal = effective_deal(deal)
+    multiples = benchmarks.get('verticals', {}).get(deal.vertical.value, {}).get('exit_multiples', {})
+    weights = _stage_scenario_weights(deal.stage, benchmarks)
+    result = []
+    for label, weight, default in zip(['Bear', 'Base', 'Bull'], weights, [0.0, 5.0, 12.0]):
+        override = getattr(deal, label.lower() + '_exit_multiple_arr')
+        multiple = override if override is not None else (0.0 if label == 'Bear' else multiples.get(label.lower(), default))
+        result.append(build_path(label, weight, multiple, deal, fund))
+    return tuple(result)
 
 
 # ---------------------------------------------------------------------------
@@ -617,6 +433,12 @@ def compute_quick_screen(
             "Pass or revisit at better terms."
         )
 
+    if not all(s.available for s in (bear, base, bull)):
+        rec = 'insufficient_inputs'
+        rec_rationale = 'Return-based screening is unavailable. Supply explicit exit assumptions and any missing cap-table ownership.'
+        flags = list(dict.fromkeys(n for scenario in (bear, base, bull) if not scenario.available for n in scenario.notes))
+    elif any(s.illustrative for s in (bear, base, bull)):
+        rec_rationale = 'Illustrative scenarios supplied by the user. ' + rec_rationale
     fr_arr = ownership.required_arr_multiple_for_1x_fund
 
     return QuickScreenResult(
@@ -696,12 +518,13 @@ def compute_waterfall(deal: VCDealInput, exit_ev: float) -> WaterfallDistributio
         """Given convert decisions, return (pref_paid, gets, common_gets)."""
         remaining = exit_ev
         pref_paid = [0.0] * n
-        for i, p in enumerate(stack):  # already in seniority order
-            if convert[i]:
-                continue  # converting class forfeits its preference
-            paid = min(remaining, p.invested_amount * p.preference_multiple)
-            pref_paid[i] = paid
-            remaining -= paid
+        for seniority in sorted({p.seniority for p in stack}):
+            peers = [i for i, p in enumerate(stack) if p.seniority == seniority and not convert[i]]
+            claims = sum(stack[i].invested_amount * stack[i].preference_multiple for i in peers)
+            available = min(remaining, claims)
+            for i in peers:
+                pref_paid[i] = available * stack[i].invested_amount * stack[i].preference_multiple / claims
+            remaining -= available
         residual = max(0.0, remaining)
 
         # Residual pool participants: common + converted classes + participating classes
@@ -712,29 +535,32 @@ def compute_waterfall(deal: VCDealInput, exit_ev: float) -> WaterfallDistributio
             elif p.preference_type in (PreferenceType.PARTICIPATING,
                                        PreferenceType.PARTICIPATING_CAPPED):
                 weights[i] = fracs[i]
-        pool_weight = common_fraction + sum(weights)
-
-        gets = [0.0] * n
-        overflow = 0.0  # participation clipped by caps flows back to common
-        if pool_weight > 0 and residual > 0:
-            for i, p in enumerate(stack):
-                share = residual * weights[i] / pool_weight
-                if convert[i]:
-                    gets[i] = share
-                elif p.preference_type == PreferenceType.PARTICIPATING:
-                    gets[i] = pref_paid[i] + share
-                elif p.preference_type == PreferenceType.PARTICIPATING_CAPPED:
-                    cap_value = p.invested_amount * (p.participation_cap or 3.0)
-                    uncapped = pref_paid[i] + share
-                    gets[i] = min(uncapped, cap_value)
-                    overflow += max(0.0, uncapped - cap_value)
-                else:
-                    gets[i] = pref_paid[i]
-            common_gets = residual * common_fraction / pool_weight + overflow
-        else:
-            for i in range(n):
-                gets[i] = pref_paid[i]
-            common_gets = residual
+        # Allocate residual across all eligible holders, repeatedly redistributing
+        # capped participation to the remaining holders (including preferred).
+        gets = pref_paid.copy()
+        caps = [float('inf')] * n
+        for i, p in enumerate(stack):
+            if not convert[i] and p.preference_type == PreferenceType.PARTICIPATING_CAPPED:
+                caps[i] = p.invested_amount * (p.participation_cap if p.participation_cap is not None else 3.0)
+        common_gets = 0.0
+        active = {i for i, w in enumerate(weights) if w > 0 and gets[i] < caps[i]}
+        while residual > 1e-12:
+            denominator = common_fraction + sum(weights[i] for i in active)
+            if denominator <= 0:
+                common_gets += residual
+                break
+            clipped = {i for i in active if residual * weights[i] / denominator > caps[i] - gets[i] + 1e-12}
+            if clipped:
+                for i in clipped:
+                    payment = max(0.0, caps[i] - gets[i])
+                    gets[i] += payment
+                    residual -= payment
+                active -= clipped
+            else:
+                for i in active:
+                    gets[i] += residual * weights[i] / denominator
+                common_gets += residual * common_fraction / denominator
+                break
         return pref_paid, gets, common_gets
 
     # Fixed-point convert/stay solve (senior → junior each sweep).
@@ -782,8 +608,11 @@ def compute_waterfall(deal: VCDealInput, exit_ev: float) -> WaterfallDistributio
     total_distributed = sum(gets) + common_gets
 
     # Find "our" position (first preferred, or most junior)
-    investor_total = distributions[0]["gets"]
-    investor_moic = investor_total / stack[0].invested_amount if stack[0].invested_amount > 0 else 0.0
+    investor_index = next((i for i, p in enumerate(stack) if p.share_class == deal.investor_share_class), 0)
+    if not deal.investor_share_class:
+        notes.append('Standalone waterfall displays the first preferred class; select investor_share_class for scenario reconciliation.')
+    investor_total = distributions[investor_index]["gets"]
+    investor_moic = investor_total / stack[investor_index].invested_amount if stack[investor_index].invested_amount > 0 else 0.0
 
     return WaterfallDistribution(
         exit_ev=exit_ev,
@@ -792,7 +621,7 @@ def compute_waterfall(deal: VCDealInput, exit_ev: float) -> WaterfallDistributio
         total_distributed=total_distributed,
         investor_total=investor_total,
         investor_moic=investor_moic,
-        conversion_was_optimal=distributions[0]["converted"],
+        conversion_was_optimal=distributions[investor_index]["converted"],
         notes=notes,
     )
 
@@ -827,6 +656,14 @@ def compute_pro_rata(
     Decision rule: exercise if the expected incremental proceeds exceed the
     pro-rata check; partial if positive but below the check; else pass.
     """
+    if next_round_valuation <= 0 or pro_rata_check <= 0:
+        raise ValueError('Positive next-round post-money valuation and follow-on check are required')
+    if deal.liquidation_stack or any(v.exit_cap_table for v in deal.scenario_assumptions.values()):
+        raise ValueError('Pro-rata preference analysis requires separately projected capitalization for each leg; use explicit deal scenarios')
+    if not ownership.dilution_stack:
+        raise ValueError('Select a future financing round before analyzing pro-rata')
+    if any(v.future_rounds is not None and v.future_rounds != deal.future_rounds for v in deal.scenario_assumptions.values()):
+        raise ValueError('Pro-rata requires a common financing path across scenarios')
     exit_pct_pass = ownership.exit_ownership_pct
 
     # Maintain leg: back out the NEXT round's new-money dilution (pro-rata does
@@ -834,14 +671,15 @@ def compute_pro_rata(
     if ownership.dilution_stack:
         next_round = ownership.dilution_stack[0]
         pool = deal.dilution.option_pool_expansion
-        round_only_dilution = max(0.0, next_round["dilution_pct"] - pool)
+        round_only_dilution = 1 - (1 - next_round["dilution_pct"]) / (1 - pool)
     else:
         round_only_dilution = 0.0
-    maintained_pct = (
-        exit_pct_pass / (1 - round_only_dilution)
-        if round_only_dilution < 1.0
-        else exit_pct_pass
-    )
+    later_dilution = 1.0
+    for item in ownership.dilution_stack[1:]:
+        later_dilution *= 1 - item['dilution_pct']
+    maintained_pct = exit_pct_pass + (pro_rata_check / next_round_valuation) * later_dilution
+    if maintained_pct > 1:
+        raise ValueError('Follow-on check implies more than 100% ownership')
 
     reserve_after_pct = (
         (fund.reserve_pool - pro_rata_check) / fund.reserve_pool
@@ -852,16 +690,19 @@ def compute_pro_rata(
     # Reuse the scenario engine for exit EVs and probabilities
     bear0, base0, bull0 = compute_scenarios(deal, fund, exit_pct_pass, benchmarks)
 
+    if not all(s.available for s in (bear0, base0, bull0)):
+        raise ValueError('Explicit exit assumptions are required before pro-rata return analysis')
     exercise_scenarios: list[VCScenario] = []
     pass_scenarios: list[VCScenario] = []
     exit_yr = deal.expected_exit_years
 
     for sc in (bear0, base0, bull0):
         exit_ev = sc.exit_enterprise_value
+        exit_yr = sc.exit_year
 
         # With exercise (maintain ownership through the next round)
         cost_exercise = deal.check_size + pro_rata_check
-        proceeds_exercise = exit_ev * maintained_pct
+        proceeds_exercise = sc.exit_equity_value * maintained_pct
         net_exercise = _carry_adj_proceeds(proceeds_exercise, cost_exercise,
                                            fund.carry_pct, fund.hurdle_rate, exit_yr)
         exercise_scenarios.append(VCScenario(
@@ -881,7 +722,7 @@ def compute_pro_rata(
         ))
 
         # Without exercise (already-diluted exit trajectory as-is)
-        proceeds_pass = exit_ev * exit_pct_pass
+        proceeds_pass = sc.exit_equity_value * exit_pct_pass
         net_pass = _carry_adj_proceeds(proceeds_pass, deal.check_size,
                                        fund.carry_pct, fund.hurdle_rate, exit_yr)
         pass_scenarios.append(VCScenario(
@@ -907,12 +748,12 @@ def compute_pro_rata(
     # Sanity-check the pro-rata check size: it should approximate
     # current ownership % × next-round new money (new money ≈ post-money ×
     # round dilution fraction).
-    size_warning = ""
+    size_warning = " Follow-on ownership is check / next-round post-money, diluted only by later rounds. IRRs conservatively place both checks at time zero."
     if round_only_dilution > 0 and next_round_valuation > 0 and pro_rata_check > 0:
         implied_round_size = next_round_valuation * round_only_dilution
         expected_check = ownership.entry_ownership_pct * implied_round_size
         if expected_check > 0 and abs(pro_rata_check - expected_check) / expected_check > 0.5:
-            size_warning = (
+            size_warning += (
                 f" Note: pro-rata check ${pro_rata_check:.2f}M deviates >50% from the implied "
                 f"pro-rata amount ${expected_check:.2f}M "
                 f"(≈{ownership.entry_ownership_pct:.1%} of an implied ${implied_round_size:.1f}M round)."
@@ -1528,6 +1369,7 @@ def run_bridge_analysis(inp: BridgeRoundInput) -> BridgeRoundOutput:
 # Main Orchestrator
 # ---------------------------------------------------------------------------
 
+@evidence_analysis
 def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput:
     """
     Full VC deal evaluation — the main entry point.
@@ -1540,6 +1382,8 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
     5. IC memo
     6. Power law context
     """
+    deal = effective_deal(deal)
+    path_ownership(deal, deal.future_rounds)  # Validate the explicit path.
     benchmarks = _load_benchmarks()
 
     # 1. Ownership math
@@ -1550,6 +1394,7 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
         dilution=deal.dilution,
         fund_profile=fund,
         arr=deal.arr,
+        future_rounds=deal.future_rounds,
     )
 
     # 2. Scenarios
@@ -1569,27 +1414,25 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
     computation_notes: list[str] = [
         # M8: expected_irr semantics
         "expected_irr is the IRR of the probability-weighted expected proceeds "
-        "(a single blended cashflow), NOT the probability-weighted average of "
+        "at their specified exit dates, NOT the probability-weighted average of "
         "per-scenario IRRs.",
     ]
 
-    # 5. Waterfall (optional)
+    # The displayed waterfall uses exactly the base scenario's distributable
+    # equity and exit capitalization, so its investor proceeds reconcile.
     waterfall = None
-    if deal.liquidation_stack:
-        waterfall = compute_waterfall(deal, base.exit_enterprise_value)
-        # Reconcile waterfall vs scenario proceeds at the base exit EV:
-        # the scenario engine applies the diluted exit ownership % to the whole
-        # EV, while the waterfall distributes through preference mechanics.
-        reconciliation = (
-            f"At the base exit (${base.exit_enterprise_value:.0f}M), the scenario model projects "
-            f"${base.gross_proceeds_to_fund:.1f}M to the fund via {ownership.exit_ownership_pct:.1%} "
-            f"diluted exit ownership, while the cap-table waterfall pays the senior preferred "
-            f"${waterfall.investor_total:.1f}M. They differ because the waterfall reflects "
-            "liquidation preferences and as-converted ownership of today's cap table, not the "
-            "projected diluted stake at exit."
-        )
-        computation_notes.append(reconciliation)
-        waterfall.notes.append(reconciliation)
+    base_override = deal.scenario_assumptions.get('Base')
+    base_stack = (base_override.exit_cap_table if base_override and
+                  base_override.exit_cap_table is not None else deal.liquidation_stack)
+    if base.available and base_stack:
+        common = (base_override.exit_common_pct if base_override and
+                  base_override.exit_common_pct is not None else deal.common_shares_pct)
+        projected = deal.model_copy(update={'liquidation_stack': base_stack, 'common_shares_pct': common})
+        waterfall = compute_waterfall(projected, base.exit_equity_value)
+        waterfall.investor_total = base.gross_proceeds_to_fund
+        waterfall.investor_moic = base.gross_moic
+        waterfall.notes.append('Scenario investor proceeds are the check-size fraction of the selected share class; class payouts remain shown separately.')
+        computation_notes.append('Base scenario proceeds reconcile to the displayed exit-cap-table waterfall.')
 
     # 6. IC Memo
     ic = build_ic_memo(deal, fund, ownership, bear, base, bull, ev, benchmarks)
@@ -1610,7 +1453,7 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
         f"(${base.exit_enterprise_value:.0f}M exits each returning {base_x_fund:.1f}x the fund) "
         f"to return 3x gross. With a {fund.target_initial_check_count}-company portfolio, "
         f"that's {fund_returners_needed/fund.target_initial_check_count:.0%} of deals needing to hit base. "
-        f"Power law: the top 2-3 positions will likely generate 80%+ of returns."
+        f"Portfolio concentration remains an assumption; these scenarios do not forecast its distribution."
     )
 
     # Flags and warnings
@@ -1624,8 +1467,22 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
         )
 
     if deal.arr == 0 and deal.revenue_ttm == 0:
-        warnings.append("No revenue data provided — exit multiple analysis uses $10M revenue placeholder.")
+        warnings.append("No current revenue. Returns require explicit exit assumptions; no revenue placeholder is used.")
 
+    available = all(s.available for s in (bear, base, bull))
+    if not available:
+        ic.expected_value = None
+        ic.financial_summary_text = 'Insufficient inputs for return analysis. ' + quick.recommendation_rationale
+        power_law_note = 'Return-based portfolio context unavailable until exit assumptions are supplied.'
+    # Dated expected proceeds: solve one NPV across the specified scenario dates.
+    if available and len({s.exit_year for s in (bear, base, bull)}) > 1:
+        lo, hi = -.999999, 1000.0
+        for _ in range(160):
+            mid = (lo + hi) / 2
+            npv = sum(s.probability*s.gross_proceeds_to_fund/(1+mid)**s.exit_year for s in (bear,base,bull)) - deal.check_size
+            if npv > 0: lo = mid
+            else: hi = mid
+        expected_irr = (lo + hi) / 2
     return VCDealOutput(
         company_name=deal.company_name,
         stage=deal.stage,
@@ -1637,9 +1494,9 @@ def run_vc_deal_evaluation(deal: VCDealInput, fund: FundProfile) -> VCDealOutput
         bear_scenario=bear,
         base_scenario=base,
         bull_scenario=bull,
-        expected_value=ev,
-        expected_moic=expected_moic,
-        expected_irr=expected_irr,
+        expected_value=ev if available else None,
+        expected_moic=expected_moic if available else None,
+        expected_irr=expected_irr if available else None,
         quick_screen=quick,
         waterfall=waterfall,
         ic_memo=ic,
@@ -1828,6 +1685,7 @@ def run_gp_carry_analysis(inp: GPCarryInput) -> GPCarryOutput:
 # 12. Fund-Level IRR & J-Curve
 # ---------------------------------------------------------------------------
 
+@evidence_analysis
 def run_fund_irr_analysis(inp: FundIRRInput) -> FundIRROutput:
     """
     Compute fund-level IRR and model the J-curve.
@@ -1983,21 +1841,10 @@ def run_fund_irr_analysis(inp: FundIRRInput) -> FundIRROutput:
             trough_val = cumulative
             trough_year = float(yr)
 
-    # Quartile estimate based on TVPI and vintage age
-    # Cambridge Associates benchmarks (approximate)
-    if gross_tvpi >= 2.5:
-        quartile = "top quartile"
-    elif gross_tvpi >= 1.8:
-        quartile = "second quartile"
-    elif gross_tvpi >= 1.3:
-        quartile = "third quartile"
-    else:
-        quartile = "fourth quartile"
-
+    quartile = 'unavailable'
     vintage_context = (
-        f"Fund {fund.fund_name} (vintage {fund.vintage_year}) is {inp.fund_age_years:.0f} years old. "
-        f"At {gross_tvpi:.2f}x gross TVPI, this places it in the {quartile} "
-        f"of comparable vintage funds."
+        f'Fund {fund.fund_name} (vintage {fund.vintage_year}) is {inp.fund_age_years:.0f} years old. '
+        'No matching vintage, age, size and net-metric benchmark is available; no quartile assigned.'
     )
 
     notes = []
@@ -2250,26 +2097,13 @@ def run_deal_comparison(
     to help VCs prioritize which deals to pursue.
     """
     entries: list[DealComparisonEntry] = []
-    benchmarks = _load_benchmarks()
-
     for deal, fund in deals:
-        ownership = compute_ownership_math(
-            check_size=deal.check_size,
-            post_money=deal.post_money_valuation,
-            stage=deal.stage,
-            dilution=deal.dilution,
-            fund_profile=fund,
-            arr=deal.arr,
-        )
-        bear, base, bull = compute_scenarios(deal, fund, ownership.exit_ownership_pct, benchmarks)
-
-        ev = (bear.gross_proceeds_to_fund * bear.probability +
-              base.gross_proceeds_to_fund * base.probability +
-              bull.gross_proceeds_to_fund * bull.probability)
-        expected_moic = ev / deal.check_size if deal.check_size > 0 else 0.0
-        expected_irr = _irr(deal.check_size, ev, deal.expected_exit_years)
-
-        quick = compute_quick_screen(deal, fund, ownership, bear, base, bull, benchmarks)
+        evaluated = run_vc_deal_evaluation(deal, fund)
+        ownership = evaluated.ownership
+        base = evaluated.base_scenario
+        expected_moic = evaluated.expected_moic
+        expected_irr = evaluated.expected_irr
+        quick = evaluated.quick_screen
         runway = _runway_months(deal.cash_on_hand, deal.burn_rate_monthly)
 
         entries.append(DealComparisonEntry(
@@ -2294,8 +2128,8 @@ def run_deal_comparison(
 
     # Rank on key metrics (1 = best)
     if entries:
-        by_moic = sorted(range(len(entries)), key=lambda i: entries[i].expected_moic, reverse=True)
-        by_irr = sorted(range(len(entries)), key=lambda i: entries[i].expected_irr, reverse=True)
+        by_moic = sorted((i for i, e in enumerate(entries) if e.expected_moic is not None), key=lambda i: entries[i].expected_moic, reverse=True)
+        by_irr = sorted((i for i, e in enumerate(entries) if e.expected_irr is not None), key=lambda i: entries[i].expected_irr, reverse=True)
         by_ownership = sorted(range(len(entries)), key=lambda i: entries[i].exit_ownership_pct, reverse=True)
 
         for rank, idx in enumerate(by_moic):
@@ -2305,22 +2139,25 @@ def run_deal_comparison(
         for rank, idx in enumerate(by_ownership):
             entries[idx].rank_ownership = rank + 1
 
-    best_ev = max(entries, key=lambda e: e.expected_moic).company_name if entries else None
+    comparable = [e for e in entries if e.expected_moic is not None]
+    best_ev = max(comparable, key=lambda e: e.expected_moic).company_name if comparable else None
     best_own = max(entries, key=lambda e: e.exit_ownership_pct).company_name if entries else None
 
     # Best fund fit: strong_interest > look_deeper > pass, then by MOIC
     rec_order = {"strong_interest": 3, "look_deeper": 2, "pass": 1}
     best_fit = max(
-        entries,
+        comparable,
         key=lambda e: (rec_order.get(e.recommendation, 0), e.expected_moic)
-    ).company_name if entries else None
+    ).company_name if comparable else None
 
     comp_notes = []
-    if len(entries) >= 2:
-        moic_spread = max(e.expected_moic for e in entries) - min(e.expected_moic for e in entries)
+    if len(comparable) < len(entries):
+        comp_notes.append('Deals with insufficient inputs are excluded from return rankings.')
+    if len(comparable) >= 2:
+        moic_spread = max(e.expected_moic for e in comparable) - min(e.expected_moic for e in comparable)
         comp_notes.append(
-            f"MOIC spread across {len(entries)} deals: {moic_spread:.1f}x "
-            f"({min(e.expected_moic for e in entries):.1f}x to {max(e.expected_moic for e in entries):.1f}x)"
+            f"MOIC spread across {len(comparable)} comparable deals: {moic_spread:.1f}x "
+            f"({min(e.expected_moic for e in comparable):.1f}x to {max(e.expected_moic for e in comparable):.1f}x)"
         )
         strong = [e for e in entries if e.recommendation == "strong_interest"]
         if strong:

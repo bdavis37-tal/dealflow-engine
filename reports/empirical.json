@@ -1,0 +1,8 @@
+{
+  "status": "not_evaluated",
+  "observation_count": 0,
+  "metrics": [],
+  "limitations": [
+    "Synthetic fixtures are excluded. Empty cohorts do not establish accuracy or calibrated probabilities."
+  ]
+}

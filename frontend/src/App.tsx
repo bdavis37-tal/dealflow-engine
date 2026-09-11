@@ -40,10 +40,12 @@ type AppView = 'landing' | 'ma' | 'startup' | 'vc'
 // ---------------------------------------------------------------------------
 export default function App() {
   const [appView, setAppView] = useState<AppView>('landing')
+  const [replayNotice, setReplayNotice] = useState('')
 
   // M&A state
   const {
     state,
+    setBenchmarkVersion: setMABenchmarkVersion,
     setStep,
     setMode,
     updateAcquirer,
@@ -58,6 +60,7 @@ export default function App() {
   // Startup state
   const {
     state: startupState,
+    setBenchmarkVersion: setStartupBenchmarkVersion,
     setStep: setStartupStep,
     goToStep: goToStartupStep,
     setCompanyName,
@@ -69,6 +72,7 @@ export default function App() {
     reset: resetStartup,
     runValuation,
     setAINative,
+    restoreAIState,
     updateAIAnswer,
     reportContext,
     updateReportContext,
@@ -88,6 +92,14 @@ export default function App() {
     runEvaluation,
   } = useVCState()
 
+  const benchmarkVersion = (appView === 'startup' ? startupState.benchmark_version : appView === 'vc' ? vcState.deal.benchmark_version : state.benchmark_version) ?? '2026-09-11'
+  const changeBenchmarkVersion = (version: string) => {
+    if (appView === 'startup') setStartupBenchmarkVersion(version)
+    else if (appView === 'vc') { updateVCDeal({benchmark_version: version}); setVCStep(2) }
+    else setMABenchmarkVersion(version)
+    setReplayNotice('Inputs retained. Run analysis to calculate with the selected dataset.')
+  }
+
   const { step, mode, acquirer, target, structure, ppa, synergies, output } = state
 
   const [aiAvailable, setAiAvailable] = useState(false)
@@ -103,8 +115,13 @@ export default function App() {
     const payload = decodeState(encoded)
     if (!payload) return
 
+    setReplayNotice(payload.v === 1
+      ? 'Older shared inputs loaded with the legacy dataset. Recalculation uses engine 2.0 and may differ from the original result.'
+      : `Shared analysis loaded with its selected dataset. Recalculation uses engine 2.0; original dataset fingerprint: ${payload.provenance?.dataset_hash ?? 'unavailable'}.`)
     if (payload.module === 'ma') {
       const s = payload.state as MAInputState
+      reset()
+      setMABenchmarkVersion(s.benchmark_version ?? '2026-09-11')
       setMode(s.mode)
       updateAcquirer(s.acquirer)
       updateTarget(s.target)
@@ -114,16 +131,19 @@ export default function App() {
       setAppView('ma')
     } else if (payload.module === 'startup') {
       const s = payload.state as StartupInputState
+      resetStartup()
+      setStartupBenchmarkVersion(s.benchmark_version ?? '2026-09-11')
       setCompanyName(s.company_name)
       updateTeam(s.team)
       updateTraction(s.traction)
       updateProduct(s.product)
       updateMarket(s.market)
       updateFundraise(s.fundraise)
-      setAINative(s.is_ai_native)
+      restoreAIState(s.is_ai_native, s.ai_native_score, s.ai_answers ?? [false, false, false, false])
       setAppView('startup')
     } else if (payload.module === 'vc') {
       const s = payload.state as VCInputState
+      resetVCDeal()
       updateFund(s.fund)
       updateVCDeal(s.deal)
       setAppView('vc')
@@ -173,7 +193,7 @@ export default function App() {
   if (appView === 'startup') {
     if (startupState.output && !startupState.isLoading) {
       return (
-        <AppShell
+        <AppShell benchmarkVersion={benchmarkVersion} onBenchmarkChange={changeBenchmarkVersion} replayNotice={replayNotice}
           appMode="startup"
           onAppModeChange={(m: AppMode) => setAppView(m)}
           onHome={() => setAppView('landing')}
@@ -183,12 +203,13 @@ export default function App() {
           <StartupDashboard
             output={startupState.output}
             startupInput={{
+              benchmark_version: startupState.benchmark_version,
               company_name: startupState.company_name,
               team: startupState.team as TeamProfile,
               traction: startupState.traction as TractionMetrics,
               product: startupState.product as ProductProfile,
               market: startupState.market as MarketProfile,
-              fundraise: startupState.fundraise as FundraisingProfile,
+              fundraise: {...startupState.fundraise, is_ai_native: startupState.is_ai_native, ai_native_score: startupState.ai_native_score} as FundraisingProfile,
             }}
             onReset={resetStartup}
             reportContext={reportContext}
@@ -202,7 +223,7 @@ export default function App() {
     }
 
     return (
-      <AppShell
+      <AppShell benchmarkVersion={benchmarkVersion} onBenchmarkChange={changeBenchmarkVersion} replayNotice={replayNotice}
         appMode="startup"
         onAppModeChange={(m: AppMode) => setAppView(m)}
         onHome={() => setAppView('landing')}
@@ -268,8 +289,9 @@ export default function App() {
     // Results view
     if (vcState.output && !vcState.isLoading) {
       return (
-        <AppShell appMode="vc" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
+        <AppShell benchmarkVersion={benchmarkVersion} onBenchmarkChange={changeBenchmarkVersion} replayNotice={replayNotice} appMode="vc" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
           <VCDashboard
+            deal={vcState.deal}
             output={vcState.output}
             fund={vcState.fund}
             onNewDeal={resetVCDeal}
@@ -280,7 +302,7 @@ export default function App() {
     }
 
     return (
-      <AppShell appMode="vc" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} step={vcState.step}>
+      <AppShell benchmarkVersion={benchmarkVersion} onBenchmarkChange={changeBenchmarkVersion} replayNotice={replayNotice} appMode="vc" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} step={vcState.step}>
         {vcState.step === 1 && (
           <VCFundSetup
             fund={vcState.fund}
@@ -308,6 +330,7 @@ export default function App() {
   // ---------------------------------------------------------------------------
   if (output && !state.isLoading) {
     const dealInput: DealInput = {
+      benchmark_version: state.benchmark_version,
       acquirer: acquirer as AcquirerProfile,
       target: target as TargetProfile,
       structure: structure as DealStructure,
@@ -317,7 +340,7 @@ export default function App() {
       projection_years: 5,
     }
     return (
-      <AppShell appMode="ma" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
+      <AppShell benchmarkVersion={benchmarkVersion} onBenchmarkChange={changeBenchmarkVersion} replayNotice={replayNotice} appMode="ma" onAppModeChange={(m: AppMode) => setAppView(m)} onHome={() => setAppView('landing')} isResults>
         <ResultsDashboard output={output} dealInput={dealInput} onReset={reset} mode={mode} />
       </AppShell>
     )
@@ -327,7 +350,7 @@ export default function App() {
   const dealSize = target.acquisition_price ?? 0
 
   return (
-    <AppShell
+    <AppShell benchmarkVersion={benchmarkVersion} onBenchmarkChange={changeBenchmarkVersion} replayNotice={replayNotice}
       appMode="ma"
       onAppModeChange={(m: AppMode) => setAppView(m)}
       onHome={() => setAppView('landing')}

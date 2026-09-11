@@ -66,6 +66,7 @@ function getDefaultAIToggle(vertical: string): boolean {
 }
 
 const defaultState: StartupState = {
+  benchmark_version: '2026-09-11',
   step: 1,
   company_name: '',
   team: {
@@ -133,6 +134,7 @@ function loadFromStorage(): StartupState {
     return {
       ...defaultState,
       ...parsed,
+      benchmark_version: parsed.benchmark_version ?? '2026-07-legacy',
       output: null,
       isLoading: false,
       error: null,
@@ -157,6 +159,10 @@ export function useStartupState() {
   useEffect(() => {
     localStorage.setItem(REPORT_CONTEXT_KEY, JSON.stringify(reportContext))
   }, [reportContext])
+
+  const setBenchmarkVersion = useCallback((benchmark_version: string) => {
+    setState(s => ({...s, benchmark_version, output: null, step: 1}))
+  }, [])
 
   const setStep = useCallback((step: StartupFlowStep) => {
     setState(s => ({ ...s, step }))
@@ -237,6 +243,10 @@ export function useStartupState() {
     setReportContext(c => ({ ...c, notes: c.notes.filter(n => n.id !== id) }))
   }, [])
 
+  const restoreAIState = useCallback((is_ai_native: boolean, ai_native_score: number, ai_answers: [boolean, boolean, boolean, boolean]) => {
+    setState(s => ({...s, is_ai_native, ai_native_score, ai_answers}))
+  }, [])
+
   const setAINative = useCallback((value: boolean) => {
     setState(s => ({
       ...s,
@@ -262,6 +272,7 @@ export function useStartupState() {
 
     try {
       const input: StartupInput = {
+        benchmark_version: state.benchmark_version,
         company_name: company_name || 'My Startup',
         team: team as TeamProfile,
         traction: traction as TractionMetrics,
@@ -290,6 +301,7 @@ export function useStartupState() {
 
   return {
     state,
+    setBenchmarkVersion,
     setStep,
     goToStep,
     setCompanyName,
@@ -301,6 +313,7 @@ export function useStartupState() {
     reset,
     runValuation,
     setAINative,
+    restoreAIState,
     updateAIAnswer,
     reportContext,
     updateReportContext,

@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from .benchmark_registry import BenchmarkView
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -93,7 +94,7 @@ def _load_json(path: str, label: str) -> dict:
 
 
 def _load_config() -> dict:
-    cfg = _load_json(_TOGGLE_PATH, "ai_toggle_config.json")
+    cfg = BenchmarkView("ai")
     if not cfg:
         cfg = {
             "frozen_on": [],
@@ -108,12 +109,12 @@ def _load_config() -> dict:
 
 def _load_standard_scorecard_weights() -> dict[str, float]:
     """Standard scorecard weights come from the startup benchmarks file."""
-    benchmarks = _load_json(_BENCHMARKS_PATH, "startup_valuation_benchmarks.json")
+    benchmarks = BenchmarkView("startup")
     return dict(benchmarks.get("scorecard_weights", {}))
 
 
 def _load_standard_rfs_step() -> float:
-    benchmarks = _load_json(_BENCHMARKS_PATH, "startup_valuation_benchmarks.json")
+    benchmarks = BenchmarkView("startup")
     return float(
         benchmarks.get("risk_factor_summation", {}).get("adjustment_per_step_usd_millions", 0.25)
     )
@@ -160,7 +161,7 @@ _STANDARD_SCORECARD_WEIGHTS = _load_standard_scorecard_weights()
 _STANDARD_RFS_STEP = _load_standard_rfs_step()
 
 _FROZEN_ON_CONTEXT = (
-    "Vertical is AI-native by definition — premium already reflected in benchmarks"
+    "AI-specific reference assumptions already include this vertical; no additional AI adjustment"
 )
 
 
@@ -184,6 +185,12 @@ def get_ai_parameters(is_ai_native: bool, ai_native_score: float, vertical: str)
     Never raises — returns standard parameters (applied=False) on any error.
     """
     try:
+        # Select and trace parameters inside the request's version context.
+        config = BenchmarkView('ai')
+        matrix = config.get('parameter_matrix', {})
+        standard_weights = _load_standard_scorecard_weights()
+        standard_rfs_step = _load_standard_rfs_step()
+        matrix_valid = _validate_ai_native_matrix(matrix)
         score = max(0.0, min(1.0, float(ai_native_score)))
 
         # 1–2. Toggle off or zero score
@@ -191,11 +198,11 @@ def get_ai_parameters(is_ai_native: bool, ai_native_score: float, vertical: str)
             return AIParameterSet()
 
         # 3. Frozen-on verticals — AI pricing already baked into benchmarks
-        if vertical in _CONFIG.get("frozen_on", []):
+        if vertical in config.get("frozen_on", []):
             return AIParameterSet(context=_FROZEN_ON_CONTEXT)
 
         # 4. Matrix missing or failed load-time validation
-        ai = _MATRIX.get("ai_native", {}) if _MATRIX_VALID else {}
+        ai = matrix.get("ai_native", {}) if matrix_valid else {}
         if not ai:
             return AIParameterSet(
                 context="AI parameter matrix unavailable — standard parameters used"
@@ -207,7 +214,7 @@ def get_ai_parameters(is_ai_native: bool, ai_native_score: float, vertical: str)
         # Scorecard weights: w = std + (ai − std) × score, re-normalized
         weights: Optional[dict[str, float]] = None
         ai_weights = ai.get("scorecard_weights") or {}
-        std_weights = _STANDARD_SCORECARD_WEIGHTS
+        std_weights = standard_weights
         if ai_weights and std_weights:
             blended = {
                 k: std_weights.get(k, 0.0) + (ai_weights.get(k, std_weights.get(k, 0.0)) - std_weights.get(k, 0.0)) * score
@@ -232,13 +239,13 @@ def get_ai_parameters(is_ai_native: bool, ai_native_score: float, vertical: str)
         # RFS step values: step = std + (override − std) × score, per category
         rfs_steps: dict[str, float] = {}
         for category, override in (ai.get("rfs_step_value_overrides") or {}).items():
-            rfs_steps[category] = _STANDARD_RFS_STEP + (float(override) - _STANDARD_RFS_STEP) * score
+            rfs_steps[category] = standard_rfs_step + (float(override) - standard_rfs_step) * score
         if rfs_steps:
             context_parts.append("wider RFS steps for volatility categories")
 
         # ARR multiple uplift: vertical premium × score
         uplift = 0.0
-        base_premium = _CONFIG.get("vertical_premiums", {}).get(vertical)
+        base_premium = config.get("vertical_premiums", {}).get(vertical)
         if base_premium is None:
             logger.warning(
                 "Vertical '%s' not found in ai_toggle_config.json vertical_premiums; "
@@ -257,7 +264,7 @@ def get_ai_parameters(is_ai_native: bool, ai_native_score: float, vertical: str)
             arr_multiple_uplift=uplift,
             applied=True,
             context=(
-                "Premium emerges from parameter-level calibration: "
+                "Illustrative parameter adjustments (not empirically calibrated): "
                 + ", ".join(context_parts)
                 + f" (AI-native score {score:.2f}, {vertical})."
             ),

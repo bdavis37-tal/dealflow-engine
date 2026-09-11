@@ -1,3 +1,4 @@
+import type { AnalysisEvidence } from './evidence'
 /**
  * TypeScript interfaces for VC fund-seat analysis.
  * Mirrors backend/app/engine/vc_fund_models.py
@@ -87,6 +88,12 @@ export interface LiquidationPreference {
 }
 
 export interface VCDealInput {
+  future_rounds?: string[]
+  dilution_source?: 'benchmark' | 'custom'
+  scenario_assumptions?: Partial<Record<'Bear' | 'Base' | 'Bull', { exit_revenue?: number; exit_equity_value?: number; exit_year?: number; future_rounds?: string[]; exit_cap_table?: LiquidationPreference[]; exit_common_pct?: number }>>
+  exit_net_debt?: number
+  investor_share_class?: string
+  benchmark_version?: string
   company_name: string
   vertical: VCVertical
   stage: VCStage
@@ -116,6 +123,11 @@ export interface VCDealInput {
 // ---------------------------------------------------------------------------
 
 export interface VCScenario {
+  available?: boolean
+  illustrative?: boolean
+  notes?: string[]
+  exit_equity_value?: number
+  exit_ownership_pct?: number
   label: string
   probability: number
   exit_year: number
@@ -166,7 +178,7 @@ export interface OwnershipMath {
 // Quick Screen
 // ---------------------------------------------------------------------------
 
-export type ScreenRecommendation = 'pass' | 'look_deeper' | 'strong_interest'
+export type ScreenRecommendation = 'pass' | 'look_deeper' | 'strong_interest' | 'insufficient_inputs'
 
 export interface QuickScreenResult {
   company_name: string
@@ -240,7 +252,7 @@ export interface ICMemoFinancials {
   ownership_at_exit: number
   total_dilution_pct: number
   scenarios: VCScenario[]
-  expected_value: number
+  expected_value: number | null
   fund_returner_threshold: number
   fund_contribution_base: number
   arr_multiple_at_entry?: number
@@ -255,6 +267,7 @@ export interface ICMemoFinancials {
 // ---------------------------------------------------------------------------
 
 export interface VCDealOutput {
+  evidence?: AnalysisEvidence | null
   company_name: string
   stage: VCStage
   vertical: VCVertical
@@ -265,9 +278,9 @@ export interface VCDealOutput {
   bear_scenario: VCScenario
   base_scenario: VCScenario
   bull_scenario: VCScenario
-  expected_value: number
-  expected_moic: number
-  expected_irr: number
+  expected_value: number | null
+  expected_moic: number | null
+  expected_irr: number | null
   quick_screen: QuickScreenResult
   waterfall?: WaterfallDistribution
   ic_memo: ICMemoFinancials
@@ -498,7 +511,7 @@ export const DEFAULT_DILUTION_ASSUMPTIONS: DilutionAssumptions = {
   a_to_b: 0.13,
   b_to_c: 0.11,
   c_to_ipo: 0.12,
-  option_pool_expansion: 0.05,
+  option_pool_expansion: 0.0,
 }
 
 export const DEFAULT_FUND_PROFILE: FundProfile = {
@@ -704,8 +717,8 @@ export interface DealComparisonEntry {
 
   entry_ownership_pct: number
   exit_ownership_pct: number
-  expected_moic: number
-  expected_irr: number
+  expected_moic: number | null
+  expected_irr: number | null
   base_case_ev: number
   fund_returner_threshold: number
   recommendation: string

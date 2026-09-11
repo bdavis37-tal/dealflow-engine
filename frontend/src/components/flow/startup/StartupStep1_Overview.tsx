@@ -1,3 +1,4 @@
+import ValuationAssumptions from './ValuationAssumptions'
 /**
  * Step 1: Company name, vertical, stage, geography, raise amount, instrument.
  * The "front door" of the startup valuation flow.
@@ -118,13 +119,14 @@ export default function StartupStep1_Overview({
         </h1>
         <p className="text-slate-400 text-lg">
           Tell us the basics about your company and this fundraising round.
-          We'll use live benchmarks from Carta, PitchBook, and Equidam to give you
+          We'll use versioned reference data and explicitly labeled assumptions to give you
           an institutional-grade valuation range in seconds.
         </p>
       </div>
 
       <div className="space-y-6">
-        {/* Company name */}
+        <ValuationAssumptions value={fundraise} onChange={onUpdateFundraise} />
+      {/* Company name */}
         <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
           <label className="block text-sm font-medium text-slate-300 mb-2">
             Company name <span className="text-red-400">*</span>
@@ -299,7 +301,7 @@ export default function StartupStep1_Overview({
         <div className="rounded-xl border border-slate-700 bg-slate-800/30 p-6">
           <label className="block text-sm font-medium text-slate-300 mb-1">Geography</label>
           <p className="text-slate-500 text-xs mb-3">
-            Location affects the Berkus baseline — Bay Area and NY command a 1.5–1.8x premium on average valuations.
+            Location selects a regional model assumption; regional adjustments are not verified valuation premiums.
           </p>
           <select
             value={fundraise.geography ?? 'other_us'}

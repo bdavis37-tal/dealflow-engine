@@ -36,6 +36,8 @@ from ..engine.vc_fund_models import (
     VCStage,
     WaterfallDistribution,
 )
+from ..engine.vc_scenarios import effective_deal
+from ..engine.benchmark_registry import _version
 from ..engine.vc_return_engine import (
     _load_benchmarks,
     run_vc_deal_evaluation,
@@ -93,7 +95,7 @@ async def evaluate_deal(request: DealEvalRequest) -> VCDealOutput:
         )
         # Extract fund from request and create deal input
         fund = request.fund
-        deal = VCDealInput(**request.model_dump(exclude={"fund"}))
+        deal = VCDealInput(**request.model_dump(exclude={"fund"}, exclude_unset=True))
         return run_vc_deal_evaluation(deal, fund)
     except ValidationError:
         raise HTTPException(status_code=422, detail="Invalid deal or fund inputs.")
@@ -228,7 +230,9 @@ async def analyze_pro_rata(request: ProRataRequest) -> ProRataAnalysis:
     """
     try:
         fund = request.fund
-        deal = VCDealInput(**request.model_dump(exclude={"fund", "next_round_valuation", "pro_rata_check"}))
+        deal = VCDealInput(**request.model_dump(exclude={"fund", "next_round_valuation", "pro_rata_check"}, exclude_unset=True))
+        token = _version.set(deal.benchmark_version)
+        deal = effective_deal(deal)
         ownership = compute_ownership_math(
             check_size=deal.check_size,
             post_money=deal.post_money_valuation,
@@ -236,14 +240,20 @@ async def analyze_pro_rata(request: ProRataRequest) -> ProRataAnalysis:
             dilution=deal.dilution,
             fund_profile=fund,
             arr=deal.arr,
+            future_rounds=deal.future_rounds,
         )
         return compute_pro_rata(
             deal, fund, ownership,
             request.next_round_valuation, request.pro_rata_check, _BENCHMARKS,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception:
         logger.exception("Pro-rata analysis failed")
         raise HTTPException(status_code=500, detail="Pro-rata analysis failed.")
+    finally:
+        if 'token' in locals():
+            _version.reset(token)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,11 @@
+{
+  "current": "2026-09-11",
+  "versions": {
+    "2026-07-legacy": "2026-07-legacy.json",
+    "2026-09-11": "2026-09-11.json"
+  },
+  "hashes": {
+    "2026-07-legacy": "977f46370f72f8849b3cde16f8fabb542e755433d07002ceab20773ff48519d8",
+    "2026-09-11": "f94ed0dc245ee794eb8cb84ca38e015d8b8d3bf39eb040fd9a9de7e3ac109f32"
+  }
+}

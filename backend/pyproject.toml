@@ -9,7 +9,7 @@ packages = ["app"]
 name = "dealflow-engine"
 version = "1.0.0"
 description = "Open-source M&A financial modeling engine"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "fastapi~=0.111.0",
     "uvicorn[standard]~=0.29.0",

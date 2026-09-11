@@ -1,3 +1,4 @@
+import EvidencePanel from '../shared/EvidencePanel'
 import { useState, useEffect } from 'react'
 import { Download, RotateCcw } from 'lucide-react'
 import type { DealInput, DealOutput, ModelMode } from '../../types/deal'
@@ -51,6 +52,7 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
 
   return (
     <div className="animate-fade-in space-y-10 pb-24">
+      <EvidencePanel evidence={output.evidence} analysis={{input: dealInput, output}} />
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -70,9 +72,10 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
               AI co-pilot enabled
             </span>
           )}
-          <ShareButton
+          <ShareButton evidence={output.evidence}
             module="ma"
             inputState={{
+              benchmark_version: output.evidence?.dataset_version,
               mode: dealInput.mode,
               acquirer: dealInput.acquirer,
               target: dealInput.target,
@@ -91,6 +94,17 @@ export default function ResultsDashboard({ output, dealInput, onReset, mode }: R
         </div>
       </div>
 
+      <div className="rounded-xl border border-slate-700 p-5 text-sm text-slate-300">
+        <p>{output.decision_basis}</p>
+        {output.valuation_comparison && <div className="mt-3">
+          <p>{output.valuation_comparison.metric}: {output.valuation_comparison.entry_multiple?.toFixed(1) ?? 'N/M'}{output.valuation_comparison.entry_multiple != null ? 'x' : ''}</p>
+          <p>Size-based cross-check: {output.valuation_comparison.reference ? `${output.valuation_comparison.reference.value.toFixed(1)}x pooled mean (${output.valuation_comparison.reference.observation_period})` : 'No matching observation'}</p>
+          {output.valuation_comparison.limitations.map(note => <p key={note} className="mt-1 text-xs text-slate-400">{note}</p>)}
+        </div>}
+        {!!output.downside_scenarios?.length && <table className="mt-4 w-full text-left"><caption className="text-left mb-2 font-medium">Downside scenarios · Year 1</caption><thead><tr><th>Assumption</th><th>EPS</th><th>Accretion / dilution</th></tr></thead>
+          <tbody>{output.downside_scenarios.map(row => <tr key={row.label}><td className="py-2">{row.label}</td><td>{formatEPS(row.year1_eps)}</td><td>{formatPercentage(row.year1_accretion)}</td></tr>)}</tbody>
+        </table>}
+      </div>
       {/* Verdict — hero section */}
       <Verdict
         verdict={output.deal_verdict}

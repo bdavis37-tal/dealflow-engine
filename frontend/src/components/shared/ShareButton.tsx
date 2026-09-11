@@ -1,3 +1,4 @@
+import type { AnalysisEvidence } from '../../types/evidence'
 /**
  * ShareButton — encodes current module input state into the URL hash
  * and copies the full URL to clipboard.
@@ -8,6 +9,7 @@ import { encodeState } from '../../lib/shareUtils'
 import type { ShareModule, MAInputState, StartupInputState, VCInputState } from '../../lib/shareUtils'
 
 interface ShareButtonProps {
+  evidence?: AnalysisEvidence | null
   module: ShareModule
   inputState: MAInputState | StartupInputState | VCInputState
   colorScheme: 'blue' | 'purple' | 'emerald'
@@ -29,7 +31,7 @@ const COLOR_CLASSES = {
   },
 }
 
-export default function ShareButton({ module, inputState, colorScheme, className = '' }: ShareButtonProps) {
+export default function ShareButton({ module, inputState, evidence, colorScheme, className = '' }: ShareButtonProps) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -38,7 +40,7 @@ export default function ShareButton({ module, inputState, colorScheme, className
   const handleShare = async () => {
     let encoded: string
     try {
-      encoded = encodeState(module, inputState)
+      encoded = encodeState(module, inputState, evidence)
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Failed to encode state.')
       setStatus('error')

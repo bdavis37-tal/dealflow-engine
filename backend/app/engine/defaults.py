@@ -1,12 +1,11 @@
 """
 Smart defaults engine — returns sensible pre-fills based on industry and deal size.
-Benchmarks are sourced from publicly available industry research (Duff & Phelps,
-Damodaran, PitchBook, and sector-specific public comps).
+The versioned registry distinguishes sourced observations from inherited
+assumptions; defaults are editable inputs, not verified financing quotes.
 """
 from __future__ import annotations
+from .benchmark_registry import BenchmarkView, policy
 
-import json
-import os
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -15,10 +14,8 @@ from .models import Industry
 
 # ---------------------------------------------------------------------------
 # Interest rate assumptions (update periodically)
-# Vintage: H1 2026 credit markets (SOFR ~4.3%).
-#   Middle market: unitranche/direct lending at SOFR + 500-700bps
-#     (Capstone Partners / Houlihan Lokey private credit reports, Q1 2026).
-#   Large cap / quality upper-middle-market: SOFR + 425-475bps.
+# Inherited illustrative rate ranges. Active blended defaults come from the
+# selected release's policy records and are explicitly classified as assumptions.
 # NOTE: all deal-size thresholds are in MILLIONS USD per project convention
 # (e.g. 250.0 = $250M).
 # ---------------------------------------------------------------------------
@@ -40,14 +37,8 @@ FEE_TIERS = [
 _BENCHMARKS: Optional[dict] = None
 
 
-def _load_benchmarks() -> dict:
-    global _BENCHMARKS
-    if _BENCHMARKS is None:
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-        path = os.path.join(data_dir, "industry_benchmarks.json")
-        with open(path) as f:
-            _BENCHMARKS = json.load(f)
-    return _BENCHMARKS
+def _load_benchmarks():
+    return BenchmarkView("ma")
 
 
 @dataclass
@@ -101,8 +92,8 @@ def get_interest_rate(deal_size: float) -> float:
         deal_size: Acquisition enterprise value in MILLIONS USD (e.g. 200.0 = $200M).
     """
     if deal_size < LARGE_CAP_DEAL_SIZE_THRESHOLD:
-        return BLENDED_MIDDLE_MARKET_RATE
-    return BLENDED_LARGE_CAP_RATE
+        return policy('financing', 'middle_market')
+    return policy('financing', 'large_cap')
 
 
 def get_defaults(
@@ -123,7 +114,7 @@ def get_defaults(
     """
     benchmarks = _load_benchmarks()
     industry_key = industry.value
-    ind = benchmarks.get(industry_key, benchmarks["Manufacturing"])  # fallback
+    ind = benchmarks[industry_key]  # Exact industry; no unrelated fallback
 
     tax_rate = 0.25  # US federal + blended state
     tx_fee_pct = get_transaction_fee_pct(deal_size)

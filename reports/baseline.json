@@ -1,0 +1,1560 @@
+{
+  "kind": "synthetic_mechanics_only",
+  "cases": [
+    {
+      "id": "ma-00",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Atlas Defense Group",
+          "revenue": 800.0,
+          "ebitda": 120.0,
+          "net_income": 60.0,
+          "total_debt": 200.0,
+          "cash_on_hand": 150.0,
+          "shares_outstanding": 30.0,
+          "share_price": 55.0,
+          "tax_rate": 0.25,
+          "depreciation": 25.0,
+          "capex": 20.0,
+          "working_capital": 80.0,
+          "industry": "Defense & National Security"
+        },
+        "target": {
+          "company_name": "Sentinel AI",
+          "revenue": 40.0,
+          "ebitda": 8.0,
+          "net_income": 3.0,
+          "total_debt": 5.0,
+          "cash_on_hand": 15.0,
+          "tax_rate": 0.25,
+          "depreciation": 2.0,
+          "capex": 3.0,
+          "working_capital": 5.0,
+          "industry": "Defense & National Security",
+          "acquisition_price": 320.0,
+          "revenue_growth_rate": 0.3,
+          "is_ai_native": true,
+          "defense_profile": {
+            "is_ai_native": true,
+            "contract_backlog_total": 100.0,
+            "contract_backlog_funded": 50.0,
+            "idiq_ceiling_value": 200.0,
+            "contract_vehicles": [
+              "OTA (Other Transaction Authority)",
+              "IDIQ (Indefinite Delivery/Indefinite Quantity)",
+              "SBIR/STTR"
+            ],
+            "clearance_level": "secret",
+            "authorization_certifications": [
+              "FedRAMP High",
+              "IL5"
+            ],
+            "customer_concentration_dod_pct": 0.9,
+            "programs_of_record": 1,
+            "deployment_classification": [
+              "cloud_il5",
+              "edge_tactical"
+            ],
+            "software_type": [
+              "Decision Support",
+              "ISR Processing"
+            ],
+            "ip_ownership": "company_owned"
+          }
+        },
+        "structure": {
+          "cash_percentage": 0.5,
+          "stock_percentage": 0.3,
+          "debt_percentage": 0.2,
+          "debt_tranches": [
+            {
+              "name": "Term Loan A",
+              "amount": 64.0,
+              "interest_rate": 0.07,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            }
+          ],
+          "transaction_fees_pct": 0.02,
+          "advisory_fees": 0.0
+        },
+        "ppa": {
+          "asset_writeup": 5.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 80.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Shared infrastructure and clearance facilities",
+              "annual_amount": 3.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 1.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": [
+            {
+              "category": "Cross-sell AI capabilities to acquirer programs",
+              "annual_amount": 8.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 2.0,
+              "is_revenue": true
+            }
+          ]
+        },
+        "mode": "quick",
+        "projection_years": 5
+      },
+      "value": 1.5197650327565433,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-01",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Alpha Holdings",
+          "revenue": 300.0,
+          "ebitda": 45.0,
+          "net_income": 20.0,
+          "total_debt": 10.0,
+          "cash_on_hand": 50.0,
+          "shares_outstanding": 20.0,
+          "share_price": 30.0,
+          "tax_rate": 0.25,
+          "depreciation": 8.0,
+          "capex": 7.0,
+          "working_capital": 25.0,
+          "industry": "Software / SaaS"
+        },
+        "target": {
+          "company_name": "Target SaaS Inc",
+          "revenue": 50.0,
+          "ebitda": 8.0,
+          "net_income": 4.0,
+          "total_debt": 0.0,
+          "cash_on_hand": 5.0,
+          "tax_rate": 0.25,
+          "depreciation": 1.0,
+          "capex": 0.8,
+          "working_capital": 5.0,
+          "industry": "Software / SaaS",
+          "acquisition_price": 80.0,
+          "revenue_growth_rate": 0.08
+        },
+        "structure": {
+          "cash_percentage": 0.0,
+          "stock_percentage": 1.0,
+          "debt_percentage": 0.0,
+          "debt_tranches": [],
+          "transaction_fees_pct": 0.02,
+          "advisory_fees": 0.5
+        },
+        "ppa": {
+          "asset_writeup": 1.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 10.0,
+          "intangible_useful_life": 7
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "R&D consolidation",
+              "annual_amount": 3.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 1.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": []
+        },
+        "mode": "quick",
+        "projection_years": 5
+      },
+      "value": 1.012436974789916,
+      "verdict": "yellow",
+      "evidence": null
+    },
+    {
+      "id": "ma-02",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Sentinel Defense Corp",
+          "revenue": 2000.0,
+          "ebitda": 280.0,
+          "net_income": 140.0,
+          "total_debt": 500.0,
+          "cash_on_hand": 400.0,
+          "shares_outstanding": 50.0,
+          "share_price": 85.0,
+          "tax_rate": 0.25,
+          "depreciation": 60.0,
+          "capex": 50.0,
+          "working_capital": 200.0,
+          "industry": "Defense & National Security"
+        },
+        "target": {
+          "company_name": "Vanguard AI Systems",
+          "revenue": 120.0,
+          "ebitda": 15.0,
+          "net_income": 5.0,
+          "total_debt": 10.0,
+          "cash_on_hand": 30.0,
+          "tax_rate": 0.25,
+          "depreciation": 5.0,
+          "capex": 8.0,
+          "working_capital": 12.0,
+          "industry": "Defense & National Security",
+          "acquisition_price": 1800.0,
+          "revenue_growth_rate": 0.25,
+          "defense_profile": {
+            "is_ai_native": true,
+            "contract_backlog_total": 500.0,
+            "contract_backlog_funded": 200.0,
+            "idiq_ceiling_value": 800.0,
+            "contract_vehicles": [
+              "OTA (Other Transaction Authority)",
+              "IDIQ (Indefinite Delivery/Indefinite Quantity)",
+              "Prime Contract",
+              "SBIR/STTR"
+            ],
+            "clearance_level": "ts_sci",
+            "authorization_certifications": [
+              "FedRAMP High",
+              "IL5",
+              "CMMC Level 3"
+            ],
+            "customer_concentration_dod_pct": 0.85,
+            "programs_of_record": 2,
+            "deployment_classification": [
+              "cloud_il5",
+              "edge_tactical",
+              "ddil"
+            ],
+            "software_type": [
+              "C2 (Command & Control)",
+              "Decision Support",
+              "Autonomous Systems"
+            ],
+            "ip_ownership": "company_owned"
+          }
+        },
+        "structure": {
+          "cash_percentage": 0.4,
+          "stock_percentage": 0.4,
+          "debt_percentage": 0.2,
+          "debt_tranches": [
+            {
+              "name": "Term Loan A",
+              "amount": 360.0,
+              "interest_rate": 0.065,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            }
+          ],
+          "transaction_fees_pct": 0.015,
+          "advisory_fees": 0.0
+        },
+        "ppa": {
+          "asset_writeup": 20.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 400.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Combine contract vehicles to pursue larger opportunities",
+              "annual_amount": 15.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 5.0,
+              "is_revenue": false
+            },
+            {
+              "category": "Leverage combined clearance portfolio",
+              "annual_amount": 10.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 2.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": [
+            {
+              "category": "Cross-sell AI platform to acquirer program offices",
+              "annual_amount": 30.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 8.0,
+              "is_revenue": true
+            },
+            {
+              "category": "Combine past performance for competitive bids",
+              "annual_amount": 20.0,
+              "phase_in_years": 4,
+              "cost_to_achieve": 3.0,
+              "is_revenue": true
+            }
+          ]
+        },
+        "mode": "deep",
+        "projection_years": 5
+      },
+      "value": 1.1123976828518425,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-03",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Leverage Partners",
+          "revenue": 150.0,
+          "ebitda": 25.0,
+          "net_income": 10.0,
+          "total_debt": 30.0,
+          "cash_on_hand": 40.0,
+          "shares_outstanding": 15.0,
+          "share_price": 20.0,
+          "tax_rate": 0.25,
+          "depreciation": 4.0,
+          "capex": 3.0,
+          "working_capital": 12.0,
+          "industry": "Professional Services / Consulting"
+        },
+        "target": {
+          "company_name": "ServiceCo",
+          "revenue": 80.0,
+          "ebitda": 12.0,
+          "net_income": 5.0,
+          "total_debt": 5.0,
+          "cash_on_hand": 3.0,
+          "tax_rate": 0.25,
+          "depreciation": 2.0,
+          "capex": 1.5,
+          "working_capital": 6.0,
+          "industry": "Professional Services / Consulting",
+          "acquisition_price": 300.0,
+          "revenue_growth_rate": 0.03
+        },
+        "structure": {
+          "cash_percentage": 0.05,
+          "stock_percentage": 0.05,
+          "debt_percentage": 0.9,
+          "debt_tranches": [
+            {
+              "name": "First Lien",
+              "amount": 135.0,
+              "interest_rate": 0.075,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            },
+            {
+              "name": "Second Lien",
+              "amount": 90.0,
+              "interest_rate": 0.1,
+              "term_years": 7,
+              "amortization_type": "interest_only"
+            },
+            {
+              "name": "Mezzanine",
+              "amount": 45.0,
+              "interest_rate": 0.14,
+              "term_years": 5,
+              "amortization_type": "bullet"
+            }
+          ],
+          "transaction_fees_pct": 0.025,
+          "advisory_fees": 2.0
+        },
+        "ppa": {
+          "asset_writeup": 3.0,
+          "asset_writeup_useful_life": 15,
+          "identifiable_intangibles": 20.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Back office",
+              "annual_amount": 5.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 2.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": []
+        },
+        "mode": "deep",
+        "projection_years": 7
+      },
+      "value": -0.9807482993197278,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-04",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "PE Sponsor Corp",
+          "revenue": 1000.0,
+          "ebitda": 200.0,
+          "net_income": 100.0,
+          "total_debt": 150.0,
+          "cash_on_hand": 80.0,
+          "shares_outstanding": 50.0,
+          "share_price": 30.0,
+          "tax_rate": 0.25,
+          "depreciation": 30.0,
+          "capex": 25.0,
+          "working_capital": 80.0,
+          "industry": "Manufacturing"
+        },
+        "target": {
+          "company_name": "Industrial Target Co",
+          "revenue": 250.0,
+          "ebitda": 45.0,
+          "net_income": 22.0,
+          "total_debt": 30.0,
+          "cash_on_hand": 10.0,
+          "tax_rate": 0.25,
+          "depreciation": 8.0,
+          "capex": 6.0,
+          "working_capital": 25.0,
+          "industry": "Manufacturing",
+          "acquisition_price": 500.0,
+          "revenue_growth_rate": 0.04
+        },
+        "structure": {
+          "cash_percentage": 0.1,
+          "stock_percentage": 0.1,
+          "debt_percentage": 0.8,
+          "debt_tranches": [
+            {
+              "name": "First Lien Term Loan",
+              "amount": 250.0,
+              "interest_rate": 0.07,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            },
+            {
+              "name": "Second Lien",
+              "amount": 100.0,
+              "interest_rate": 0.095,
+              "term_years": 7,
+              "amortization_type": "interest_only"
+            },
+            {
+              "name": "Mezzanine",
+              "amount": 50.0,
+              "interest_rate": 0.12,
+              "term_years": 5,
+              "amortization_type": "bullet"
+            }
+          ],
+          "transaction_fees_pct": 0.015,
+          "advisory_fees": 3.0
+        },
+        "ppa": {
+          "asset_writeup": 20.0,
+          "asset_writeup_useful_life": 15,
+          "identifiable_intangibles": 50.0,
+          "intangible_useful_life": 12
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Manufacturing consolidation",
+              "annual_amount": 15.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 20.0,
+              "is_revenue": false
+            },
+            {
+              "category": "G&A elimination",
+              "annual_amount": 10.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 5.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": []
+        },
+        "mode": "deep",
+        "projection_years": 7
+      },
+      "value": 1.780793386516753,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-05",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Turnaround Corp",
+          "revenue": 100.0,
+          "ebitda": 2.0,
+          "net_income": -10.0,
+          "total_debt": 40.0,
+          "cash_on_hand": 60.0,
+          "shares_outstanding": 10.0,
+          "share_price": 5.0,
+          "tax_rate": 0.25,
+          "depreciation": 8.0,
+          "capex": 3.0,
+          "working_capital": 10.0,
+          "industry": "Manufacturing"
+        },
+        "target": {
+          "company_name": "Cash Cow LLC",
+          "revenue": 30.0,
+          "ebitda": 7.5,
+          "net_income": 4.5,
+          "total_debt": 0.0,
+          "cash_on_hand": 1.0,
+          "tax_rate": 0.25,
+          "depreciation": 0.5,
+          "capex": 0.4,
+          "working_capital": 3.0,
+          "industry": "Manufacturing",
+          "acquisition_price": 40.0,
+          "revenue_growth_rate": 0.05
+        },
+        "structure": {
+          "cash_percentage": 1.0,
+          "stock_percentage": 0.0,
+          "debt_percentage": 0.0,
+          "debt_tranches": [],
+          "transaction_fees_pct": 0.02,
+          "advisory_fees": 0.0
+        },
+        "ppa": {
+          "asset_writeup": 0.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 0.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [],
+          "revenue_synergies": []
+        },
+        "mode": "quick",
+        "projection_years": 5
+      },
+      "value": -0.9953333333333344,
+      "verdict": "green",
+      "evidence": null
+    },
+    {
+      "id": "ma-06",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "GlobalTech Inc",
+          "revenue": 500.0,
+          "ebitda": 90.0,
+          "net_income": 50.0,
+          "total_debt": 60.0,
+          "cash_on_hand": 120.0,
+          "shares_outstanding": 25.0,
+          "share_price": 40.0,
+          "tax_rate": 0.25,
+          "depreciation": 12.0,
+          "capex": 10.0,
+          "working_capital": 45.0,
+          "industry": "Professional Services / Consulting"
+        },
+        "target": {
+          "company_name": "NicheCo",
+          "revenue": 80.0,
+          "ebitda": 14.0,
+          "net_income": 7.5,
+          "total_debt": 5.0,
+          "cash_on_hand": 3.0,
+          "tax_rate": 0.25,
+          "depreciation": 2.0,
+          "capex": 1.5,
+          "working_capital": 8.0,
+          "industry": "Professional Services / Consulting",
+          "acquisition_price": 200.0,
+          "revenue_growth_rate": 0.07
+        },
+        "structure": {
+          "cash_percentage": 0.5,
+          "stock_percentage": 0.3,
+          "debt_percentage": 0.2,
+          "debt_tranches": [
+            {
+              "name": "Term Loan A",
+              "amount": 40.0,
+              "interest_rate": 0.075,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            }
+          ],
+          "transaction_fees_pct": 0.02,
+          "advisory_fees": 1.0
+        },
+        "ppa": {
+          "asset_writeup": 5.0,
+          "asset_writeup_useful_life": 15,
+          "identifiable_intangibles": 20.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Back-office consolidation",
+              "annual_amount": 8.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 5.0,
+              "is_revenue": false
+            },
+            {
+              "category": "Facility consolidation",
+              "annual_amount": 4.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 2.0,
+              "is_revenue": false
+            },
+            {
+              "category": "Procurement savings",
+              "annual_amount": 3.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 0.5,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": []
+        },
+        "mode": "deep",
+        "projection_years": 5
+      },
+      "value": 1.9547169811320761,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-07",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Acme Corp",
+          "revenue": 200.0,
+          "ebitda": 30.0,
+          "net_income": 15.0,
+          "total_debt": 20.0,
+          "cash_on_hand": 80.0,
+          "shares_outstanding": 10.0,
+          "share_price": 25.0,
+          "tax_rate": 0.25,
+          "depreciation": 5.0,
+          "capex": 4.0,
+          "working_capital": 18.0,
+          "industry": "Manufacturing"
+        },
+        "target": {
+          "company_name": "Beta LLC",
+          "revenue": 40.0,
+          "ebitda": 6.0,
+          "net_income": 3.0,
+          "total_debt": 0.0,
+          "cash_on_hand": 2.0,
+          "tax_rate": 0.25,
+          "depreciation": 0.8,
+          "capex": 0.6,
+          "working_capital": 4.0,
+          "industry": "Manufacturing",
+          "acquisition_price": 50.0,
+          "revenue_growth_rate": 0.04
+        },
+        "structure": {
+          "cash_percentage": 1.0,
+          "stock_percentage": 0.0,
+          "debt_percentage": 0.0,
+          "debt_tranches": [],
+          "transaction_fees_pct": 0.025,
+          "advisory_fees": 0.0
+        },
+        "ppa": {
+          "asset_writeup": 2.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 5.0,
+          "intangible_useful_life": 8
+        },
+        "synergies": {
+          "cost_synergies": [],
+          "revenue_synergies": []
+        },
+        "mode": "quick",
+        "projection_years": 5
+      },
+      "value": 1.5401249999999997,
+      "verdict": "yellow",
+      "evidence": null
+    },
+    {
+      "id": "ma-08",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Atlas Defense Group",
+          "revenue": 800.0,
+          "ebitda": 120.0,
+          "net_income": 60.0,
+          "total_debt": 200.0,
+          "cash_on_hand": 150.0,
+          "shares_outstanding": 30.0,
+          "share_price": 55.0,
+          "tax_rate": 0.25,
+          "depreciation": 25.0,
+          "capex": 20.0,
+          "working_capital": 80.0,
+          "industry": "Defense & National Security"
+        },
+        "target": {
+          "company_name": "Sentinel AI",
+          "revenue": 40.0,
+          "ebitda": 8.0,
+          "net_income": 3.0,
+          "total_debt": 5.0,
+          "cash_on_hand": 15.0,
+          "tax_rate": 0.25,
+          "depreciation": 2.0,
+          "capex": 3.0,
+          "working_capital": 5.0,
+          "industry": "Defense & National Security",
+          "acquisition_price": 480.0,
+          "revenue_growth_rate": 0.3,
+          "is_ai_native": true,
+          "defense_profile": {
+            "is_ai_native": true,
+            "contract_backlog_total": 100.0,
+            "contract_backlog_funded": 50.0,
+            "idiq_ceiling_value": 200.0,
+            "contract_vehicles": [
+              "OTA (Other Transaction Authority)",
+              "IDIQ (Indefinite Delivery/Indefinite Quantity)",
+              "SBIR/STTR"
+            ],
+            "clearance_level": "secret",
+            "authorization_certifications": [
+              "FedRAMP High",
+              "IL5"
+            ],
+            "customer_concentration_dod_pct": 0.9,
+            "programs_of_record": 1,
+            "deployment_classification": [
+              "cloud_il5",
+              "edge_tactical"
+            ],
+            "software_type": [
+              "Decision Support",
+              "ISR Processing"
+            ],
+            "ip_ownership": "company_owned"
+          }
+        },
+        "structure": {
+          "cash_percentage": 0.5,
+          "stock_percentage": 0.3,
+          "debt_percentage": 0.2,
+          "debt_tranches": [
+            {
+              "name": "Term Loan A",
+              "amount": 64.0,
+              "interest_rate": 0.07,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            }
+          ],
+          "transaction_fees_pct": 0.02,
+          "advisory_fees": 0.0
+        },
+        "ppa": {
+          "asset_writeup": 5.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 80.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Shared infrastructure and clearance facilities",
+              "annual_amount": 3.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 1.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": [
+            {
+              "category": "Cross-sell AI capabilities to acquirer programs",
+              "annual_amount": 8.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 2.0,
+              "is_revenue": true
+            }
+          ]
+        },
+        "mode": "quick",
+        "projection_years": 5
+      },
+      "value": 1.3223110742187898,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-09",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Alpha Holdings",
+          "revenue": 300.0,
+          "ebitda": 45.0,
+          "net_income": 20.0,
+          "total_debt": 10.0,
+          "cash_on_hand": 50.0,
+          "shares_outstanding": 20.0,
+          "share_price": 30.0,
+          "tax_rate": 0.25,
+          "depreciation": 8.0,
+          "capex": 7.0,
+          "working_capital": 25.0,
+          "industry": "Software / SaaS"
+        },
+        "target": {
+          "company_name": "Target SaaS Inc",
+          "revenue": 50.0,
+          "ebitda": 8.0,
+          "net_income": 4.0,
+          "total_debt": 0.0,
+          "cash_on_hand": 5.0,
+          "tax_rate": 0.25,
+          "depreciation": 1.0,
+          "capex": 0.8,
+          "working_capital": 5.0,
+          "industry": "Software / SaaS",
+          "acquisition_price": 120.0,
+          "revenue_growth_rate": 0.08
+        },
+        "structure": {
+          "cash_percentage": 0.0,
+          "stock_percentage": 1.0,
+          "debt_percentage": 0.0,
+          "debt_tranches": [],
+          "transaction_fees_pct": 0.02,
+          "advisory_fees": 0.5
+        },
+        "ppa": {
+          "asset_writeup": 1.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 10.0,
+          "intangible_useful_life": 7
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "R&D consolidation",
+              "annual_amount": 3.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 1.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": []
+        },
+        "mode": "quick",
+        "projection_years": 5
+      },
+      "value": 0.9311904761904763,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-10",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Sentinel Defense Corp",
+          "revenue": 2000.0,
+          "ebitda": 280.0,
+          "net_income": 140.0,
+          "total_debt": 500.0,
+          "cash_on_hand": 400.0,
+          "shares_outstanding": 50.0,
+          "share_price": 85.0,
+          "tax_rate": 0.25,
+          "depreciation": 60.0,
+          "capex": 50.0,
+          "working_capital": 200.0,
+          "industry": "Defense & National Security"
+        },
+        "target": {
+          "company_name": "Vanguard AI Systems",
+          "revenue": 120.0,
+          "ebitda": 15.0,
+          "net_income": 5.0,
+          "total_debt": 10.0,
+          "cash_on_hand": 30.0,
+          "tax_rate": 0.25,
+          "depreciation": 5.0,
+          "capex": 8.0,
+          "working_capital": 12.0,
+          "industry": "Defense & National Security",
+          "acquisition_price": 2700.0,
+          "revenue_growth_rate": 0.25,
+          "defense_profile": {
+            "is_ai_native": true,
+            "contract_backlog_total": 500.0,
+            "contract_backlog_funded": 200.0,
+            "idiq_ceiling_value": 800.0,
+            "contract_vehicles": [
+              "OTA (Other Transaction Authority)",
+              "IDIQ (Indefinite Delivery/Indefinite Quantity)",
+              "Prime Contract",
+              "SBIR/STTR"
+            ],
+            "clearance_level": "ts_sci",
+            "authorization_certifications": [
+              "FedRAMP High",
+              "IL5",
+              "CMMC Level 3"
+            ],
+            "customer_concentration_dod_pct": 0.85,
+            "programs_of_record": 2,
+            "deployment_classification": [
+              "cloud_il5",
+              "edge_tactical",
+              "ddil"
+            ],
+            "software_type": [
+              "C2 (Command & Control)",
+              "Decision Support",
+              "Autonomous Systems"
+            ],
+            "ip_ownership": "company_owned"
+          }
+        },
+        "structure": {
+          "cash_percentage": 0.4,
+          "stock_percentage": 0.4,
+          "debt_percentage": 0.2,
+          "debt_tranches": [
+            {
+              "name": "Term Loan A",
+              "amount": 360.0,
+              "interest_rate": 0.065,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            }
+          ],
+          "transaction_fees_pct": 0.015,
+          "advisory_fees": 0.0
+        },
+        "ppa": {
+          "asset_writeup": 20.0,
+          "asset_writeup_useful_life": 10,
+          "identifiable_intangibles": 400.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Combine contract vehicles to pursue larger opportunities",
+              "annual_amount": 15.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 5.0,
+              "is_revenue": false
+            },
+            {
+              "category": "Leverage combined clearance portfolio",
+              "annual_amount": 10.0,
+              "phase_in_years": 2,
+              "cost_to_achieve": 2.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": [
+            {
+              "category": "Cross-sell AI platform to acquirer program offices",
+              "annual_amount": 30.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 8.0,
+              "is_revenue": true
+            },
+            {
+              "category": "Combine past performance for competitive bids",
+              "annual_amount": 20.0,
+              "phase_in_years": 4,
+              "cost_to_achieve": 3.0,
+              "is_revenue": true
+            }
+          ]
+        },
+        "mode": "deep",
+        "projection_years": 5
+      },
+      "value": 0.6819855782181576,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "ma-11",
+      "engine": "ma",
+      "input": {
+        "acquirer": {
+          "company_name": "Leverage Partners",
+          "revenue": 150.0,
+          "ebitda": 25.0,
+          "net_income": 10.0,
+          "total_debt": 30.0,
+          "cash_on_hand": 40.0,
+          "shares_outstanding": 15.0,
+          "share_price": 20.0,
+          "tax_rate": 0.25,
+          "depreciation": 4.0,
+          "capex": 3.0,
+          "working_capital": 12.0,
+          "industry": "Professional Services / Consulting"
+        },
+        "target": {
+          "company_name": "ServiceCo",
+          "revenue": 80.0,
+          "ebitda": 12.0,
+          "net_income": 5.0,
+          "total_debt": 5.0,
+          "cash_on_hand": 3.0,
+          "tax_rate": 0.25,
+          "depreciation": 2.0,
+          "capex": 1.5,
+          "working_capital": 6.0,
+          "industry": "Professional Services / Consulting",
+          "acquisition_price": 450.0,
+          "revenue_growth_rate": 0.03
+        },
+        "structure": {
+          "cash_percentage": 0.05,
+          "stock_percentage": 0.05,
+          "debt_percentage": 0.9,
+          "debt_tranches": [
+            {
+              "name": "First Lien",
+              "amount": 135.0,
+              "interest_rate": 0.075,
+              "term_years": 7,
+              "amortization_type": "straight_line"
+            },
+            {
+              "name": "Second Lien",
+              "amount": 90.0,
+              "interest_rate": 0.1,
+              "term_years": 7,
+              "amortization_type": "interest_only"
+            },
+            {
+              "name": "Mezzanine",
+              "amount": 45.0,
+              "interest_rate": 0.14,
+              "term_years": 5,
+              "amortization_type": "bullet"
+            }
+          ],
+          "transaction_fees_pct": 0.025,
+          "advisory_fees": 2.0
+        },
+        "ppa": {
+          "asset_writeup": 3.0,
+          "asset_writeup_useful_life": 15,
+          "identifiable_intangibles": 20.0,
+          "intangible_useful_life": 10
+        },
+        "synergies": {
+          "cost_synergies": [
+            {
+              "category": "Back office",
+              "annual_amount": 5.0,
+              "phase_in_years": 3,
+              "cost_to_achieve": 2.0,
+              "is_revenue": false
+            }
+          ],
+          "revenue_synergies": []
+        },
+        "mode": "deep",
+        "projection_years": 7
+      },
+      "value": -1.2104983388704318,
+      "verdict": "red",
+      "evidence": null
+    },
+    {
+      "id": "startup-00",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic b2b_saas 0",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "b2b_saas",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": false,
+          "annual_recurring_revenue": 0
+        }
+      },
+      "value": 13.65,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-00",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic b2b_saas 0",
+        "vertical": "b2b_saas",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0
+      },
+      "value": 0.5609059407000003,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-01",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic b2b_saas 0.2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "b2b_saas",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 0.2
+        }
+      },
+      "value": 13.79,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-01",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic b2b_saas 0.2",
+        "vertical": "b2b_saas",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0.2
+      },
+      "value": 0.4402160480612686,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-02",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic b2b_saas 2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "b2b_saas",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 2
+        }
+      },
+      "value": 15.36,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-02",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic b2b_saas 2",
+        "vertical": "b2b_saas",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 2
+      },
+      "value": 4.402160480612686,
+      "verdict": "look_deeper",
+      "evidence": null
+    },
+    {
+      "id": "startup-03",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic defense_tech 0",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "defense_tech",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": false,
+          "annual_recurring_revenue": 0
+        }
+      },
+      "value": 20.47,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-03",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic defense_tech 0",
+        "vertical": "defense_tech",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0
+      },
+      "value": 1.2464576460000005,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-04",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic defense_tech 0.2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "defense_tech",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 0.2
+        }
+      },
+      "value": 20.69,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-04",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic defense_tech 0.2",
+        "vertical": "defense_tech",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0.2
+      },
+      "value": 1.0164606694011868,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-05",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic defense_tech 2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "defense_tech",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 2
+        }
+      },
+      "value": 36.49,
+      "verdict": "strong",
+      "evidence": null
+    },
+    {
+      "id": "vc-05",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic defense_tech 2",
+        "vertical": "defense_tech",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 2
+      },
+      "value": 10.16460669401187,
+      "verdict": "look_deeper",
+      "evidence": null
+    },
+    {
+      "id": "startup-06",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic deep_tech_hardware 0",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "deep_tech_hardware",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": false,
+          "annual_recurring_revenue": 0
+        }
+      },
+      "value": 15.12,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-06",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic deep_tech_hardware 0",
+        "vertical": "deep_tech_hardware",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0
+      },
+      "value": 0.4570344702000002,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-07",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic deep_tech_hardware 0.2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "deep_tech_hardware",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 0.2
+        }
+      },
+      "value": 15.28,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-07",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic deep_tech_hardware 0.2",
+        "vertical": "deep_tech_hardware",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0.2
+      },
+      "value": 0.36124141000092486,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-08",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic deep_tech_hardware 2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "deep_tech_hardware",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 2
+        }
+      },
+      "value": 22.9,
+      "verdict": "strong",
+      "evidence": null
+    },
+    {
+      "id": "vc-08",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic deep_tech_hardware 2",
+        "vertical": "deep_tech_hardware",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 2
+      },
+      "value": 3.6124141000092487,
+      "verdict": "look_deeper",
+      "evidence": null
+    },
+    {
+      "id": "startup-09",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic biotech_pharma 0",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "biotech_pharma",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": false,
+          "annual_recurring_revenue": 0
+        }
+      },
+      "value": 18.19,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-09",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic biotech_pharma 0",
+        "vertical": "biotech_pharma",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0
+      },
+      "value": 0.6232288230000003,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-10",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic biotech_pharma 0.2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "biotech_pharma",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 0.2
+        }
+      },
+      "value": 18.38,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-10",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic biotech_pharma 0.2",
+        "vertical": "biotech_pharma",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 0.2
+      },
+      "value": 0.5082303347005934,
+      "verdict": "pass",
+      "evidence": null
+    },
+    {
+      "id": "startup-11",
+      "engine": "startup",
+      "input": {
+        "company_name": "Synthetic biotech_pharma 2",
+        "market": {
+          "tam_usd_billions": 5,
+          "sam_usd_millions": 500
+        },
+        "fundraise": {
+          "stage": "seed",
+          "vertical": "biotech_pharma",
+          "raise_amount": 2
+        },
+        "traction": {
+          "has_revenue": true,
+          "annual_recurring_revenue": 2
+        }
+      },
+      "value": 18.38,
+      "verdict": "fair",
+      "evidence": null
+    },
+    {
+      "id": "vc-11",
+      "engine": "vc",
+      "input": {
+        "company_name": "Synthetic biotech_pharma 2",
+        "vertical": "biotech_pharma",
+        "stage": "seed",
+        "post_money_valuation": 20,
+        "check_size": 2,
+        "arr": 2
+      },
+      "value": 5.082303347005935,
+      "verdict": "look_deeper",
+      "evidence": null
+    }
+  ],
+  "data_hashes": {
+    "ai_toggle_config.json": "740f66f3f274f70a95f3cfa42c70559a75878140f38a840f798d966b2caf4fec",
+    "industry_benchmarks.json": "c86fbb3f8a0d66b7f5da7831fbdc2810a034d0f514e0e90327bdc3282d227baa",
+    "startup_valuation_benchmarks.json": "496051f3aff530f86eaf43ea35a44c50123527b0ef80aed2d55682ae20289055",
+    "vc_benchmarks.json": "24bed51e4da35f292fbde28e57b7457a785c1380d0ea62f104727ac0c8370987"
+  }
+}

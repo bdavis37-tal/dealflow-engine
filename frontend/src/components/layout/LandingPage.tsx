@@ -22,7 +22,7 @@ const MODE_CARDS = [
     title: 'Startup Valuation',
     emoji: '🚀',
     description:
-      'Four-method valuation engine for pre-seed through Series A, calibrated against market data.',
+      'Four-method valuation engine with versioned sources, applicability checks, and explicit assumptions.',
     borderColor: 'border-purple-500/50',
     hoverBorder: 'hover:border-purple-400',
     accentBar: 'from-purple-500 to-purple-600',

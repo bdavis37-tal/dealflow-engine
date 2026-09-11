@@ -1,3 +1,4 @@
+import ExitAssumptions from './ExitAssumptions'
 /**
  * VCQuickScreen — Step 2 of the VC flow.
  * Single-screen deal input: 60-second screener.
@@ -227,10 +228,8 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
     ? deal.check_size / deal.post_money_valuation
     : null
 
-  // Rough exit ownership after default dilution (all rounds from seed onward)
-  const exitPct = entryPct
-    ? entryPct * (1 - dilution.pre_seed_to_seed) * (1 - dilution.seed_to_a) * (1 - dilution.a_to_b) * (1 - dilution.b_to_c) * (1 - dilution.c_to_ipo)
-    : null
+  const dilutionByRound: Record<string, number> = {seed:dilution.pre_seed_to_seed, series_a:dilution.seed_to_a, series_b:dilution.a_to_b, series_c:dilution.b_to_c, ipo:dilution.c_to_ipo}
+  const exitPct = entryPct == null ? null : (deal.future_rounds ?? []).reduce((ownership, round) => ownership * (1 - (dilutionByRound[round] ?? 0)) * (1 - dilution.option_pool_expansion), entryPct)
 
   const frThreshold = exitPct && exitPct > 0 ? fund.fund_size / exitPct : null
 
@@ -242,7 +241,7 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
     ? deal.cash_on_hand / deal.burn_rate_monthly
     : null
 
-  const canRun = !!(deal.company_name && deal.post_money_valuation && deal.check_size && deal.vertical && deal.stage)
+  const canRun = !!(deal.company_name && deal.post_money_valuation && deal.check_size)
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -395,7 +394,7 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
               Dilution Assumptions
             </h3>
             <span className="text-xs text-slate-500">
-              {showDilution ? '▲ Hide' : '▼ Edit (defaults: Carta 2025 medians)'}
+              {showDilution ? '▲ Hide' : '▼ Edit (selected release or custom assumptions)'}
             </span>
           </button>
 
@@ -420,6 +419,8 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
             </div>
           )}
         </div>
+
+        <ExitAssumptions deal={deal} onUpdate={onUpdate} />
 
         {/* Cap Table / Liquidation Stack (collapsible, optional) */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
@@ -533,11 +534,11 @@ export default function VCQuickScreen({ deal, fund, onUpdate, onBack, onRun, isL
                 flagText="Below target"
               />
               <PreviewRow
-                label="Exit ownership (est.)"
+                label="Ownership after selected rounds"
                 value={exitPct ? `${(exitPct * 100).toFixed(1)}%` : '—'}
               />
               <PreviewRow
-                label="Fund-returner threshold"
+                label="Pro rata equity threshold"
                 value={frThreshold ? `$${frThreshold.toFixed(0)}M exit` : '—'}
               />
               {arrMultipleAtEntry !== null && (

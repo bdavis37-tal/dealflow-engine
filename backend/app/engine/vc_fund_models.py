@@ -8,10 +8,11 @@ These models answer the question every VC asks before writing a check:
    the probability it gets there?"
 """
 from __future__ import annotations
+from .benchmark_registry import AnalysisEvidence, VersionedInput, dilution_defaults
 
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Literal, Optional
+from pydantic import model_validator, BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -174,11 +175,26 @@ class DilutionAssumptions(BaseModel):
                            description="Dilution at Series C (Carta FY2025 median: 11%)")
     c_to_ipo: float = Field(default=0.12, ge=0, le=0.40,
                              description="Dilution from C to IPO (lockup/pool median: 12%)")
-    option_pool_expansion: float = Field(default=0.05, ge=0, le=0.20,
-                                          description="Option pool refresh per round (typical 5-8%)")
+    option_pool_expansion: float = Field(default=0.0, ge=0, le=0.20,
+                                          description="Incremental pool dilution beyond financing dilution")
 
 
-class VCDealInput(BaseModel):
+class ScenarioAssumption(BaseModel):
+    exit_revenue: Optional[float] = Field(default=None, ge=0)
+    exit_equity_value: Optional[float] = Field(default=None, ge=0)
+    exit_year: Optional[int] = Field(default=None, ge=1, le=20)
+    future_rounds: Optional[list[Literal['seed','series_a','series_b','series_c','ipo']]] = None
+    exit_cap_table: Optional[list[LiquidationPreference]] = None
+    exit_common_pct: Optional[float] = Field(default=None, ge=0, le=1)
+
+
+class VCDealInput(VersionedInput):
+    future_rounds: list[Literal['seed','series_a','series_b','series_c','ipo']] = Field(default_factory=list)
+    scenario_assumptions: dict[Literal['Bear','Base','Bull'], ScenarioAssumption] = Field(default_factory=dict)
+    exit_net_debt: float = 0.0
+    investor_share_class: Optional[str] = None
+    dilution_source: Literal['benchmark','custom'] = 'benchmark'
+
     """
     Complete VC deal evaluation input.
 
@@ -196,7 +212,7 @@ class VCDealInput(BaseModel):
     # Company metrics
     arr: float = Field(default=0.0, ge=0, description="Current ARR, USD millions (0 if pre-revenue)")
     revenue_ttm: float = Field(default=0.0, ge=0, description="Trailing 12-month revenue if not pure SaaS, USD millions")
-    revenue_growth_rate: float = Field(default=1.50, ge=0,
+    revenue_growth_rate: float = Field(default=1.50, ge=-1,
                                         description="Projected annual revenue growth rate (1.50 = 150%)")
     gross_margin: float = Field(default=0.70, ge=0, le=1.0)
     burn_rate_monthly: float = Field(default=0.0, ge=0, description="Monthly cash burn, USD millions")
@@ -211,7 +227,7 @@ class VCDealInput(BaseModel):
                                       description="Common + ESOP as fraction of fully diluted (0.30 = 30%)")
 
     # Timing
-    expected_exit_years: int = Field(default=7, ge=3, le=15,
+    expected_exit_years: int = Field(default=7, ge=1, le=15,
                                       description="Expected years from now to exit")
 
     # Deal notes
@@ -225,12 +241,35 @@ class VCDealInput(BaseModel):
     base_exit_multiple_arr: Optional[float] = Field(default=None, ge=0)
     bull_exit_multiple_arr: Optional[float] = Field(default=None, ge=0)
 
+    @model_validator(mode='after')
+    def validate_exit_inputs(self):
+        if self.check_size > self.post_money_valuation:
+            raise ValueError('Check size cannot exceed post-money valuation')
+        if len({p.share_class for p in self.liquidation_stack}) != len(self.liquidation_stack):
+            raise ValueError('Share class names must be unique')
+        from .vc_scenarios import path_ownership
+        path_ownership(self, self.future_rounds)
+        for assumption in self.scenario_assumptions.values():
+            if assumption.exit_cap_table is not None and len({p.share_class for p in assumption.exit_cap_table}) != len(assumption.exit_cap_table):
+                raise ValueError('Projected exit share class names must be unique')
+            if assumption.future_rounds is not None:
+                path_ownership(self, assumption.future_rounds)
+            if assumption.exit_revenue is not None and assumption.exit_equity_value is not None:
+                raise ValueError('Specify exit revenue or equity value, not both')
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Scenario definitions
 # ---------------------------------------------------------------------------
 
 class VCScenario(BaseModel):
+    available: bool = True
+    illustrative: bool = False
+    exit_equity_value: float = 0.0
+    exit_ownership_pct: float = 0.0
+    notes: list[str] = Field(default_factory=list)
+
     """One scenario (bear/base/bull) for a deal."""
     label: str                              # "Bear", "Base", "Bull"
     probability: float = Field(ge=0, le=1)
@@ -441,7 +480,7 @@ class ICMemoFinancials(BaseModel):
 
     # Return scenarios
     scenarios: list[VCScenario]
-    expected_value: float
+    expected_value: Optional[float]
 
     # Fund context
     fund_returner_threshold: float
@@ -458,6 +497,7 @@ class ICMemoFinancials(BaseModel):
 
 
 class VCDealOutput(BaseModel):
+    evidence: AnalysisEvidence | None = None
     """
     Complete VC deal analysis output.
 
@@ -480,9 +520,9 @@ class VCDealOutput(BaseModel):
     bear_scenario: VCScenario
     base_scenario: VCScenario
     bull_scenario: VCScenario
-    expected_value: float                # Probability-weighted gross proceeds
-    expected_moic: float
-    expected_irr: float                  # IRR of the expected proceeds (single blended
+    expected_value: Optional[float]                # Probability-weighted gross proceeds
+    expected_moic: Optional[float]
+    expected_irr: Optional[float]                  # IRR of the expected proceeds (single blended
                                          # cashflow) — NOT the probability-weighted
                                          # average of per-scenario IRRs
 
@@ -799,7 +839,7 @@ class FundCashflow(BaseModel):
     description: str = Field(default="")
 
 
-class FundIRRInput(BaseModel):
+class FundIRRInput(VersionedInput):
     """Inputs for fund-level IRR and J-curve computation."""
     fund_profile: FundProfile
     cashflows: list[FundCashflow] = Field(default_factory=list,
@@ -813,6 +853,7 @@ class FundIRRInput(BaseModel):
 
 
 class FundIRROutput(BaseModel):
+    evidence: AnalysisEvidence | None = None
     """Fund-level IRR and J-curve analysis."""
     fund_size: float
     fund_age_years: float
@@ -935,8 +976,8 @@ class DealComparisonEntry(BaseModel):
     # Computed from engine
     entry_ownership_pct: float
     exit_ownership_pct: float
-    expected_moic: float
-    expected_irr: float
+    expected_moic: Optional[float]
+    expected_irr: Optional[float]
     base_case_ev: float
     fund_returner_threshold: float
     recommendation: str                          # pass / look_deeper / strong_interest

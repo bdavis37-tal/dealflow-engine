@@ -27,6 +27,7 @@ const LOADING_MESSAGES = [
 ]
 
 const defaultState: DealState = {
+  benchmark_version: '2026-09-11',
   step: 1,
   mode: 'quick',
   acquirer: {},
@@ -66,6 +67,7 @@ function loadFromStorage(): DealState {
     return {
       ...defaultState,
       ...parsed,
+      benchmark_version: parsed.benchmark_version ?? '2026-07-legacy',
       output: null,        // Never persist output — always re-compute
       isLoading: false,
       loadingMessage: '',
@@ -103,6 +105,10 @@ export function useDealState() {
     const { output: _output, isLoading: _isLoading, loadingMessage: _loadingMessage, error: _error, ...persistable } = state
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable))
   }, [state])
+
+  const setBenchmarkVersion = useCallback((benchmark_version: string) => {
+    setState(s => ({...s, benchmark_version, output: null, step: 1}))
+  }, [])
 
   const setStep = useCallback((step: FlowStep) => {
     setState(s => ({ ...s, step }))
@@ -169,6 +175,7 @@ export function useDealState() {
 
     try {
       const input: DealInput = {
+        benchmark_version: state.benchmark_version,
         acquirer: acquirer as AcquirerProfile,
         target: target as TargetProfile,
         structure: structure as DealStructure,
@@ -206,6 +213,7 @@ export function useDealState() {
 
   return {
     state,
+    setBenchmarkVersion,
     setStep,
     setMode,
     updateAcquirer,

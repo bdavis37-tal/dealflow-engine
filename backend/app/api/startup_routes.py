@@ -11,6 +11,7 @@ import os
 from fastapi import APIRouter, HTTPException
 
 from ..engine import round_financial_output
+from ..engine.benchmark_registry import BenchmarkView
 from ..engine.startup_models import StartupInput, StartupValuationOutput, StartupVertical, StartupStage
 from ..engine.startup_engine import run_startup_valuation, run_startup_sensitivity
 
@@ -21,9 +22,8 @@ router = APIRouter(prefix="/api/startup")
 _DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "startup_valuation_benchmarks.json")
 
 
-def _load_benchmark_data() -> dict:
-    with open(_DATA_PATH, "r") as f:
-        return json.load(f)
+def _load_benchmark_data():
+    return BenchmarkView("startup")
 
 
 # Benchmark data is static — load once at module import instead of per request.

@@ -1,3 +1,4 @@
+import EvidencePanel from '../../shared/EvidencePanel'
 /**
  * Main startup valuation results dashboard.
  * Renders all output panels from StartupValuationOutput.
@@ -74,18 +75,21 @@ function VerdictBanner({ verdict, headline, subtext }: { verdict: ValuationVerdi
     fair: 'border-blue-600 bg-blue-900/20',
     stretched: 'border-amber-500 bg-amber-900/20',
     at_risk: 'border-red-600 bg-red-900/20',
+    not_assessed: 'border-slate-600 bg-slate-900/20',
   }
   const dots: Record<ValuationVerdict, string> = {
     strong: 'bg-green-400',
     fair: 'bg-blue-400',
     stretched: 'bg-amber-400',
     at_risk: 'bg-red-400',
+    not_assessed: 'bg-slate-400',
   }
   const labels: Record<ValuationVerdict, string> = {
     strong: 'Well Positioned',
-    fair: 'Market Rate',
+    fair: 'Within Reference',
     stretched: 'Stretched',
     at_risk: 'Needs Work',
+    not_assessed: 'Price Not Assessed',
   }
   return (
     <div className={`rounded-xl border p-6 ${styles[verdict]}`}>
@@ -116,13 +120,13 @@ function AIModifierBanner({ output }: { output: StartupValuationOutput }) {
     <div className="rounded-xl border border-purple-600/50 bg-purple-900/20 p-5">
       <div className="flex items-center gap-2 mb-3">
         <TrendingUp size={16} className="text-purple-400" />
-        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI-Native Calibration</span>
+        <span className="text-xs font-semibold text-purple-400 uppercase tracking-wider">AI Parameter Scenario</span>
       </div>
       <p className="text-2xl font-bold text-purple-300 mb-2">
-        {sign}{premiumPct.toFixed(0)}% Emergent AI-Native Premium
+        {sign}{premiumPct.toFixed(0)}% Change Under AI Assumptions
       </p>
       <p className="text-sm text-slate-400 leading-relaxed mb-1">
-        This premium emerges from parameter-level calibration of the valuation methods
+        This change comes from assumed parameters within the valuation methods
         (ARR multiple uplift, scorecard weight shift toward product/IP, Berkus cap
         re-apportionment) — it is not a multiplier applied to the blended value.
       </p>
@@ -133,7 +137,7 @@ function AIModifierBanner({ output }: { output: StartupValuationOutput }) {
         <span className="text-slate-500">Standard Parameters:</span>
         <span className="text-slate-300 font-medium">{fmt(output.blended_before_ai)}</span>
         <span className="text-slate-600">→</span>
-        <span className="text-slate-500">AI-Calibrated:</span>
+        <span className="text-slate-500">AI Assumptions:</span>
         <span className="text-purple-300 font-semibold">{fmt(output.blended_valuation)}</span>
       </div>
     </div>
@@ -163,13 +167,13 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
 
       {/* Main number — the range is the deliverable */}
       <div className="text-center mb-6">
-        <p className="text-slate-500 text-xs mb-1">Calibrated Valuation Range (pre-money)</p>
+        <p className="text-slate-500 text-xs mb-1">Model-Indicated Range (pre-money)</p>
         <p className="text-4xl font-bold text-slate-100">
           {fmt(valuation_range_low)} – {fmt(valuation_range_high)}
         </p>
         {output.dilution_basis === 'preparer_ask' && (
           <p className="text-purple-300 text-sm mt-2 font-medium">
-            Preparer's ask: {fmt(output.dilution_basis_pre_money)} pre-money
+            Deal-mechanics pre-money equivalent: {fmt(output.dilution_basis_pre_money)} pre-money
           </p>
         )}
         <p className="text-slate-400 text-sm mt-2">Model midpoint: {fmt(blended_valuation)}</p>
@@ -206,9 +210,9 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         </div>
       </div>
       <div className="flex justify-between text-xs text-slate-500 mb-5">
-        <span>P25 {fmt(benchmark_p25)}</span>
-        <span>P50 {fmt(benchmark_p50)}</span>
-        <span>P75 {fmt(benchmark_p75)}</span>
+        <span>Lower ref. {fmt(benchmark_p25)}</span>
+        <span>Central ref. {fmt(benchmark_p50)}</span>
+        <span>Upper ref. {fmt(benchmark_p75)}</span>
       </div>
 
       {/* Key metrics */}
@@ -224,9 +228,9 @@ function ValuationRangePanel({ output }: { output: StartupValuationOutput }) {
         </div>
         {recommended_safe_cap && (
           <div className="bg-purple-900/20 border border-purple-700/30 rounded-lg p-3">
-            <p className="text-xs text-slate-500 mb-1">Suggested SAFE Cap</p>
+            <p className="text-xs text-slate-500 mb-1">Specified SAFE Cap</p>
             <p className="text-lg font-bold text-purple-300">{fmt(recommended_safe_cap)}</p>
-            <p className="text-2xs text-slate-600 mt-0.5">Blended value × 1.15x</p>
+            <p className="text-2xs text-slate-600 mt-0.5">User-specified cap; not a model recommendation</p>
           </div>
         )}
       </div>
@@ -263,6 +267,7 @@ function MethodBreakdownPanel({ methods }: { methods: ValuationMethodResult[] })
                 <div className={`w-2.5 h-2.5 rounded-full ${colors[m.method_name] ?? 'bg-slate-500'}`} />
                 <div>
                   <p className="text-sm font-medium text-slate-200">{m.method_label}</p>
+                  {m.applicable && <p className="text-xs text-slate-500">Weight {((m.blend_weight ?? 0) * 100).toFixed(1)}% · Contribution {fmt(m.weighted_contribution ?? 0)}</p>}
                   {!m.applicable && (
                     <p className="text-xs text-slate-600">Not applicable at this stage</p>
                   )}
@@ -466,6 +471,7 @@ export default function StartupDashboard({
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <EvidencePanel evidence={output.evidence} analysis={{input: startupInput, output}} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -474,9 +480,10 @@ export default function StartupDashboard({
         </div>
         <div className="flex items-center gap-2">
           <PDFExportButton output={output} input={startupInput} reportContext={reportContext} />
-          <ShareButton
+          <ShareButton evidence={output.evidence}
             module="startup"
             inputState={{
+              benchmark_version: output.evidence?.dataset_version,
               company_name: startupInput.company_name,
               team: startupInput.team,
               traction: startupInput.traction,
@@ -511,6 +518,10 @@ export default function StartupDashboard({
       {/* Verdict */}
       <VerdictBanner verdict={output.verdict} headline={output.verdict_headline} subtext={output.verdict_subtext} />
 
+      <div className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
+        <p>{output.range_basis}</p>
+        <p className="mt-2">Company evidence (user reported): {output.company_evidence?.join(' · ')}</p>
+      </div>
       {/* AI modifier banner — only renders when ai_modifier_applied=true */}
       <AIModifierBanner output={output} />
 
@@ -545,7 +556,7 @@ export default function StartupDashboard({
 
       {/* Data source footer */}
       <div className="text-center text-xs text-slate-600 pt-4 border-t border-slate-800">
-        Benchmarks sourced from Carta State of Private Markets Q4 2025 / Q1 2026, Carta State of Pre-Seed Q1 2026, PitchBook-NVCA Venture Monitor FY2025, Aventis Advisors SaaS Multiples 2026, SaaS Capital Index Q1 2026.
+        Per-record sources and remaining assumptions appear in the evidence panel. The range is method dispersion, not a statistical confidence interval.
         <br />Not financial advice — consult a qualified advisor before making fundraising decisions.
       </div>
     </div>

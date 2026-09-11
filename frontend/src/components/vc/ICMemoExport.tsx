@@ -1,3 +1,5 @@
+import type { AnalysisEvidence } from '../../types/evidence'
+import EvidencePanel from '../shared/EvidencePanel'
 /**
  * ICMemoExport — Auto-populated IC memo financial section.
  * Copy-to-clipboard export for deal memos and investment committee presentations.
@@ -8,6 +10,7 @@ import type { ICMemoFinancials, VCScenario } from '../../types/vc'
 import { VC_VERTICAL_LABELS, VC_STAGE_LABELS } from '../../types/vc'
 
 interface Props {
+  evidence?: AnalysisEvidence | null
   memo: ICMemoFinancials
   fundName: string
 }
@@ -55,12 +58,17 @@ function ScenarioRow({ scenario }: { scenario: VCScenario }) {
   )
 }
 
-export default function ICMemoExport({ memo, fundName }: Props) {
+export default function ICMemoExport({ memo, fundName, evidence }: Props) {
   const [activeTab, setActiveTab] = useState<'financial' | 'thesis'>('financial')
 
-  const financialText = buildFinancialText(memo, fundName)
+  const sourceText = evidence ? `
+Dataset ${evidence.dataset_version}; engine ${evidence.engine_version}; fingerprint ${evidence.dataset_hash}
+${evidence.observed_count} observed / ${evidence.assumed_count} assumed records
+` + evidence.records.filter(r => r.source_url).map(r => `${r.id}: ${r.source_url}`).join('\n') : ''
+  const financialText = buildFinancialText(memo, fundName) + sourceText
   const thesisText = memo.investment_thesis_prompt
 
+  if (memo.scenarios.some(s => s.available === false)) return <div className="text-slate-300 p-5 space-y-3"><p>{memo.financial_summary_text}</p><CopyButton text={financialText} /><EvidencePanel evidence={evidence} /></div>
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -149,7 +157,7 @@ export default function ICMemoExport({ memo, fundName }: Props) {
                 <MemoField label="Total Dilution" value={pct(memo.total_dilution_pct)} />
                 <MemoField
                   label="Expected Value"
-                  value={`$${fmt(memo.expected_value)}M`}
+                  value={`$${memo.expected_value == null ? "Unavailable" : fmt(memo.expected_value)}M`}
                   sub="Probability-weighted, incl. failure case"
                   highlight
                 />
@@ -240,6 +248,9 @@ function MemoField({
 }
 
 function buildFinancialText(memo: ICMemoFinancials, fundName: string): string {
+  if (memo.scenarios.some(s => s.available === false)) return `${fundName} — ${memo.company_name}
+${memo.financial_summary_text}
+Entry ownership: ${pct(memo.entry_ownership_pct)}. Return estimates unavailable.`
   const lines = [
     `INVESTMENT COMMITTEE MEMO — FINANCIAL SECTION`,
     `${fundName} | ${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
@@ -276,7 +287,7 @@ function buildFinancialText(memo: ICMemoFinancials, fundName: string): string {
       `  ${s.label.padEnd(9)} | ${(s.probability * 100).toFixed(0).padStart(5)}%  | ${fmtEV(s.exit_enterprise_value).padStart(12)} | ${fmt(s.gross_moic).padStart(5)}x | ${(s.gross_irr * 100).toFixed(0).padStart(4)}% | $${fmt(s.gross_proceeds_to_fund)}M`
     ),
     ``,
-    `Expected Value (probability-weighted, incl. failure case): $${fmt(memo.expected_value)}M`,
+    `Expected Value (probability-weighted, incl. failure case): $${memo.expected_value == null ? "Unavailable" : fmt(memo.expected_value)}M`,
     ``,
     `FINANCIAL SUMMARY`,
     memo.financial_summary_text,

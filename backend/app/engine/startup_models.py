@@ -3,11 +3,12 @@ Pydantic models for startup valuation inputs and outputs.
 All monetary values in USD millions. Percentages as decimals.
 """
 from __future__ import annotations
+from .benchmark_registry import AnalysisEvidence, VersionedInput
 
 import logging
 from enum import Enum
 from typing import Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import model_validator, BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,8 @@ class MarketProfile(BaseModel):
 
 
 class FundraisingProfile(BaseModel):
+    safe_valuation_cap: Optional[float] = Field(default=None, gt=0, description="Explicit SAFE cap; never a pre-money ask")
+    business_model: Literal["auto", "recurring_software", "hardware", "services", "biotech", "mixed"] = "auto"
     """Current round details."""
     stage: StartupStage
     vertical: StartupVertical
@@ -154,8 +157,14 @@ class FundraisingProfile(BaseModel):
     is_ai_native: bool = Field(default=False, description="AI-native toggle — enables graduated premium layer")
     ai_native_score: float = Field(default=0.0, ge=0.0, le=1.0, description="Score from 4-question AI assessment [0.0–1.0]")
 
+    @model_validator(mode='after')
+    def validate_safe_cap(self):
+        if self.safe_type == 'post_money' and self.safe_valuation_cap is not None and self.safe_valuation_cap <= self.raise_amount:
+            raise ValueError('Post-money SAFE cap must exceed the raise amount')
+        return self
 
-class StartupInput(BaseModel):
+
+class StartupInput(VersionedInput):
     """Complete startup valuation input — the single input to the engine."""
     company_name: str
     team: TeamProfile = Field(default_factory=TeamProfile)
@@ -185,6 +194,8 @@ class StartupInput(BaseModel):
 
 class ValuationMethodResult(BaseModel):
     """Output from a single valuation method."""
+    blend_weight: float = 0.0
+    weighted_contribution: float = 0.0
     method_name: str
     method_label: str
     indicated_value: Optional[float]  # pre-money in USD millions; None if method not applicable
@@ -262,15 +273,21 @@ class ValuationVerdict(str, Enum):
     STRONG = "strong"        # P50–P75: top half; founder has pricing power
     FAIR = "fair"            # P25–P50: below median; standard market terms
     STRETCHED = "stretched"  # >= P75: top quartile; growth must accelerate to sustain
+    NOT_ASSESSED = "not_assessed"
     AT_RISK = "at_risk"      # < P25: below market; re-examine fundamentals before raising
 
 
 class StartupValuationOutput(BaseModel):
+    evidence: AnalysisEvidence | None = None
     """Complete startup valuation engine output."""
     company_name: str
     stage: StartupStage
     vertical: StartupVertical
 
+    range_basis: str = "Method dispersion; not a statistical confidence interval"
+    blend_adjustment: float = 0.0
+    price_assessment: dict = Field(default_factory=dict)
+    company_evidence: list[str] = Field(default_factory=list)
     # Core outputs
     blended_valuation: float              # Weighted average of applicable methods, USD millions
     valuation_range_low: float           # P25 of applicable methods
